@@ -117,6 +117,13 @@ pub(crate) const REPEAT_TRANSACTION_DDL: &str =
      END_DATE INTEGER, NEXT_DATE INTEGER, DO_TYPE INTEGER, REPEAT_TYPE INTEGER, assetUid TEXT, \
      toAssetUid TEXT, ctgUid TEXT, currencyUid TEXT, AMOUNT_SUB REAL, MEMO TEXT, PAYEE TEXT)";
 
+/// `REPEAT_TRANSACTION_DDL`과 짝을 이루는 INSERT 컬럼 목록(픽스처가 위치 인자로 넣는다).
+/// DDL 옆에 둬야 컬럼을 추가할 때 둘이 같이 바뀐다.
+#[cfg(test)]
+pub(crate) const REPEAT_TRANSACTION_COLUMNS: &str =
+    "(uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, assetUid, \
+     toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE)";
+
 // ── Mapped output ──────────────────────────────────────────────────────────────────────────────
 
 /// 매핑된 거래 방향. models 레이어를 import하지 않기 위한 로컬 미러(순수 모듈 유지).
@@ -183,13 +190,14 @@ pub struct MappedMmRecurring {
     /// MEMO → (비면) PAYEE → (비면) 카테고리 라벨. NOT NULL + nonempty CHECK 충족.
     pub name: String,
     pub merchant: Option<String>,
-    /// 통화 최소단위 정수. 매핑에서 1..=i32::MAX 보장.
-    pub amount_minor: i64,
+    /// 통화 최소단위 정수. `scale_amount`가 1..=i32::MAX를 보장하므로 그대로 바인딩된다.
+    pub amount_minor: i32,
     pub currency: String,
     /// 상위 카테고리 NAME(2단계면 parent) — 거래의 `category` 컬럼과 같은 시맨틱스.
     pub category_label: String,
-    /// NEXT_DATE의 Seoul 로컬 day-of-month(1..=31).
-    pub schedule_day: i64,
+    /// NEXT_DATE의 Seoul 로컬 day-of-month. `Datelike::day()`라 항상 1..=31 —
+    /// 스키마 CHECK(1..=31)를 타입 수준에서 만족한다.
+    pub schedule_day: u32,
     /// USETIME의 Seoul 로컬 'YYYY-MM' — **최초 삽입 시에만** 반영한다.
     pub start_month: String,
     /// END_DATE의 Seoul 로컬 'YYYY-MM'. 종료 없음이면 None.
@@ -200,8 +208,8 @@ pub struct MappedMmRecurring {
 
 /// REPEATTRANSACTION 한 행의 매핑 결과. IS_DEL 행은 `Deleted`로 분리해 임포터가 기존
 /// 고정비를 archived로 미러링할 수 있게 한다.
-#[derive(Debug, Clone, PartialEq)]
-pub enum MmRepeatOutcome {
+#[derive(Debug)]
+enum MmRepeatOutcome {
     Mapped(Box<MappedMmRecurring>),
     Deleted { uid: String },
     Skipped { uid: String, reason: &'static str },
@@ -482,11 +490,12 @@ fn resolve_currency(currency_uid: &str, currencies: &HashMap<String, MmCurrency>
 }
 
 /// 금액 × 10^exponent → 최소단위 정수. 0/음수/NaN/i32::MAX 초과는 스키마 CHECK
-/// (amount_minor > 0 AND <= i32::MAX) 위반이라 None.
+/// (amount_minor > 0 AND <= i32::MAX) 위반이라 None. 반환 타입이 i32라 호출자가
+/// 방어적으로 다시 좁힐 필요가 없다.
 #[allow(clippy::cast_possible_truncation)]
-fn scale_amount(money: f64, exponent: i64) -> Option<i64> {
+fn scale_amount(money: f64, exponent: i64) -> Option<i32> {
     let scaled = (money * 10f64.powi(exponent as i32)).round();
-    (scaled >= 1.0 && scaled <= i32::MAX as f64).then_some(scaled as i64)
+    (scaled >= 1.0 && scaled <= i32::MAX as f64).then_some(scaled as i32)
 }
 
 /// 트림 후 비어 있지 않은 값만.
@@ -605,22 +614,18 @@ pub fn map_inoutcome_row(
 
     // 메모: ZDATA 트림, 비면 None. '0' 센티널 관례는 참조 컬럼 전용이라 적용하지 않는다
     // (메모 "0"도 유효한 사용자 텍스트).
-    let note = {
-        let trimmed = row.zdata.trim();
-        (!trimmed.is_empty()).then(|| trimmed.to_string())
-    };
+    let note = nonblank(&row.zdata);
 
     let account = nonempty_ref(&row.asset_uid)
         .and_then(|uid| assets.get(uid))
-        .map(|asset| asset.nic_name.trim().to_string())
-        .filter(|name| !name.is_empty());
+        .and_then(|asset| nonblank(&asset.nic_name));
 
     MmRowOutcome::Mapped(Box::new(MappedMmTransaction {
         source_ref: uid,
         direction,
         ctg_uid: row.ctg_uid.trim().to_string(),
         merchant,
-        amount_minor,
+        amount_minor: i64::from(amount_minor),
         currency,
         spent_at,
         spent_at_time,
@@ -680,7 +685,7 @@ const REPEAT_TYPE_MONTHLY: i64 = 1;
 ///
 /// 지출·월반복만 고정비로 본다. 수입 반복(DO_TYPE=0), 이체 반복(toAssetUid), 월이 아닌
 /// 주기는 앱 스키마에 대응물이 없어 스킵하고 사유를 보고한다(조용한 누락 금지).
-pub fn map_repeat_row(
+fn map_repeat_row(
     row: &MmRepeatRow,
     categories: &HashMap<String, MmCategory>,
     assets: &HashMap<String, MmAsset>,
@@ -722,13 +727,13 @@ pub fn map_repeat_row(
             reason: "amount_out_of_range",
         };
     };
-    // 결제일: NEXT_DATE의 로컬 day-of-month. day()는 항상 1..=31이라 스키마 CHECK를 만족한다.
+    // 결제일: NEXT_DATE의 로컬 day-of-month.
     //
     // 한계: REPEATTRANSACTION엔 결제일 컬럼이 없어 "다음 예정일"에서 역산한다. 말일(31일)
     // 규칙이 짧은 달을 다음 예정일로 가리키면 그 달의 말일(28/30)로 읽힌다. 앱 쪽
     // `due_date_for_month`가 매월 말일로 clamp하므로 청구일이 틀어지진 않지만, 저장된
     // schedule_day는 백업을 뜬 시점에 따라 28↔31로 흔들릴 수 있다.
-    let Some(schedule_day) = seoul_local(row.next_date_ms).map(|dt| i64::from(dt.day())) else {
+    let Some(schedule_day) = seoul_local(row.next_date_ms).map(|dt| dt.day()) else {
         return MmRepeatOutcome::Skipped {
             uid,
             reason: "invalid_next_date",
@@ -1034,9 +1039,6 @@ mod tests {
         (repeats, cats, assets, currencies)
     }
 
-    const REPEAT_COLUMNS: &str = "(uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, \
-         REPEAT_TYPE, assetUid, toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE)";
-
     #[tokio::test]
     async fn maps_monthly_expense_repeats_to_recurring_rules() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1045,14 +1047,14 @@ mod tests {
         let usetime = kst_millis(2026, 6, 23, 13, 49, 21);
         let next = kst_millis(2026, 7, 22, 18, 53, 57);
         insert_row(&path, &format!(
-            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-1',0,{usetime},0,0,{next},1,1,'a1','','11','KRW_KRW',100000.0,'주택청약','청약(49)')"
+            "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES ('rep-1',0,{usetime},0,0,{next},1,1,'a1','','11','KRW_KRW',100000.0,'주택청약','청약(49)')"
         )).await;
         // MEMO 없음 → PAYEE가 이름. 종료일 있음.
         let usetime2 = kst_millis(2026, 6, 21, 14, 8, 59);
         let next2 = kst_millis(2026, 7, 21, 15, 1, 14);
         let end2 = kst_millis(2027, 3, 21, 0, 0, 0);
         insert_row(&path, &format!(
-            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-2',0,{usetime2},0,{end2},{next2},1,1,'a1','','20','KRW_KRW',17050.0,'','DB손')"
+            "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES ('rep-2',0,{usetime2},0,{end2},{next2},1,1,'a1','','20','KRW_KRW',17050.0,'','DB손')"
         )).await;
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;
@@ -1096,7 +1098,7 @@ mod tests {
             ("zero-1", 0, 1, 1, "", 0.0),      // 금액 0
         ] {
             insert_row(&path, &format!(
-                "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('{uid}',{is_del},{usetime},0,0,{next},{do_type},{repeat_type},'a1','{to_asset}','10','KRW_KRW',{amount},'','')"
+                "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES ('{uid}',{is_del},{usetime},0,0,{next},{do_type},{repeat_type},'a1','{to_asset}','10','KRW_KRW',{amount},'','')"
             )).await;
         }
 
@@ -1116,6 +1118,25 @@ mod tests {
         );
     }
 
+    /// 고정비도 거래와 같은 `scale_amount`를 타므로 소수 통화(USD exp 2)가 최소단위로 스케일된다.
+    #[tokio::test]
+    async fn repeat_scales_foreign_currency_to_minor_units() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = fixture_db(&dir).await;
+        let usetime = kst_millis(2026, 6, 1, 0, 0, 0);
+        let next = kst_millis(2026, 7, 9, 9, 0, 0);
+        insert_row(&path, &format!(
+            "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES ('rep-usd',0,{usetime},0,0,{next},1,1,'a1','','10','USD_USD',12.34,'Netflix','')"
+        )).await;
+
+        let (rows, cats, assets, curs) = load_repeats(&path).await;
+        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        assert_eq!(mapped.recurring.len(), 1);
+        assert_eq!(mapped.recurring[0].amount_minor, 1234);
+        assert_eq!(mapped.recurring[0].currency, "USD");
+        assert_eq!(mapped.recurring[0].schedule_day, 9);
+    }
+
     #[tokio::test]
     async fn repeat_falls_back_to_category_label_when_memo_and_payee_blank() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1124,7 +1145,7 @@ mod tests {
         let next = kst_millis(2026, 7, 5, 9, 0, 0);
         // MEMO/PAYEE 공백 + 미지 카테고리/자산 → 이름은 폴백 라벨, merchant/account 없음.
         insert_row(&path, &format!(
-            "INSERT INTO REPEATTRANSACTION {REPEAT_COLUMNS} VALUES ('rep-blank',0,{usetime},0,0,{next},1,1,'missing','','missing','KRW_KRW',5000.0,'  ','  ')"
+            "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES ('rep-blank',0,{usetime},0,0,{next},1,1,'missing','','missing','KRW_KRW',5000.0,'  ','  ')"
         )).await;
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;

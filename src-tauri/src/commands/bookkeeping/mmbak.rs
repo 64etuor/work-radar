@@ -990,26 +990,19 @@ mod tests {
         let db = pool().await;
         let dir = tempfile::tempdir().expect("tempdir");
         let path = fixture_mmbak(&dir).await;
-        exec_fixture(&path, crate::moneymanager::REPEAT_TRANSACTION_DDL).await;
+        use crate::moneymanager::{REPEAT_TRANSACTION_COLUMNS, REPEAT_TRANSACTION_DDL};
+        exec_fixture(&path, REPEAT_TRANSACTION_DDL).await;
         // 지출 월반복 1건 + 수입 반복 1건(스킵 대상). USETIME=2026-06-23, NEXT_DATE=2026-07-22 KST.
-        exec_fixture(
-            &path,
-            "INSERT INTO REPEATTRANSACTION \
-             (uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, assetUid, \
-              toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE) \
-             VALUES ('rep-1',0,1782190161300,0,0,1784714037425,1,1,'a1','','11','KRW_KRW',\
-                     100000.0,'주택청약','청약(49)')",
-        )
-        .await;
-        exec_fixture(
-            &path,
-            "INSERT INTO REPEATTRANSACTION \
-             (uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, assetUid, \
-              toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE) \
-             VALUES ('rep-inc',0,1782190161300,0,0,1784714037425,0,1,'a1','','20','KRW_KRW',\
-                     3000000.0,'월급','회사')",
-        )
-        .await;
+        for values in [
+            "('rep-1',0,1782190161300,0,0,1784714037425,1,1,'a1','','11','KRW_KRW',100000.0,'주택청약','청약(49)')",
+            "('rep-inc',0,1782190161300,0,0,1784714037425,0,1,'a1','','20','KRW_KRW',3000000.0,'월급','회사')",
+        ] {
+            exec_fixture(
+                &path,
+                &format!("INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES {values}"),
+            )
+            .await;
+        }
 
         let summary = import_bookkeeping_mmbak_inner(&db, mmbak_input(&path))
             .await

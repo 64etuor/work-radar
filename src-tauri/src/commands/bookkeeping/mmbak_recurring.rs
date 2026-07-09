@@ -20,14 +20,14 @@ use crate::error::AppError;
 use crate::moneymanager::{map_repeats, MmAsset, MmCategory, MmCurrency, MmRepeatRow};
 
 /// 고정비 미러링 1회의 집계.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct MmRecurringSyncCounts {
     /// 새로 만들어졌거나 백업 값으로 갱신된 규칙 수.
-    pub upserted: u32,
+    pub(crate) upserted: u32,
     /// 백업에서 삭제 표시돼 archived로 바뀐 규칙 수.
-    pub archived: u32,
+    pub(crate) archived: u32,
     /// 고정비로 매핑하지 않은 규칙 수(수입 반복·이체·월 아닌 주기·불량 금액).
-    pub skipped: u32,
+    pub(crate) skipped: u32,
 }
 
 /// REPEATTRANSACTION 전체를 고정비로 미러링한다. 커서 없이 매번 full-scan —
@@ -47,15 +47,9 @@ pub(crate) async fn sync_mm_recurring(
     };
 
     for rule in &mapped.recurring {
-        // amount_minor는 매핑에서 1..=i32::MAX 보장 — 방어적 재확인만(범위 밖이면 스킵).
-        let Ok(amount_minor) = i32::try_from(rule.amount_minor) else {
-            counts.skipped += 1;
-            continue;
-        };
-        let Ok(schedule_day) = i32::try_from(rule.schedule_day) else {
-            counts.skipped += 1;
-            continue;
-        };
+        // 범위 재확인이 없는 이유: `amount_minor`(i32)와 `schedule_day`(u32, day-of-month)는
+        // 매핑 단계에서 이미 스키마 CHECK 범위로 좁혀져 나온다.
+        let schedule_day = i64::from(rule.schedule_day);
 
         // 1) 원자적 신규 삽입. 앱 소유 필드(project_id·expense_kind·결제수단·start_month)는
         //    여기서만 기록된다. 이미 있으면 DO NOTHING → rows_affected 0.
@@ -72,7 +66,7 @@ pub(crate) async fn sync_mm_recurring(
         .bind(project_id)
         .bind(&rule.name)
         .bind(rule.merchant.as_deref())
-        .bind(amount_minor)
+        .bind(rule.amount_minor)
         .bind(&rule.currency)
         .bind(&rule.category_label)
         .bind(rule.account.as_deref())
@@ -104,7 +98,7 @@ pub(crate) async fn sync_mm_recurring(
         .bind(&rule.source_ref)
         .bind(&rule.name)
         .bind(rule.merchant.as_deref())
-        .bind(amount_minor)
+        .bind(rule.amount_minor)
         .bind(&rule.currency)
         .bind(&rule.category_label)
         .bind(schedule_day)
@@ -142,10 +136,14 @@ mod tests {
         BookkeepingRecurringExpenseStatus, BookkeepingSource,
         CreateBookkeepingRecurringExpenseInput,
     };
-    use crate::moneymanager::{MoneyManagerBackup, REPEAT_TRANSACTION_DDL};
+    use crate::moneymanager::{
+        MoneyManagerBackup, REPEAT_TRANSACTION_COLUMNS, REPEAT_TRANSACTION_DDL,
+    };
     use chrono::TimeZone;
     use sqlx::{sqlite::SqliteConnectOptions, Connection, SqliteConnection};
 
+    // 이 모듈 본체는 부모의 공유 헬퍼를 쓰지 않는다(Db/AppError를 직접 import) — 테스트만
+    // 필요하므로 모듈 레벨 `use super::*` 대신 여기서 명시적으로 가져온다.
     use super::super::{
         create_bookkeeping_recurring_expense_inner, RECURRING_EXPENSE_RETURNING_COLUMNS,
     };
@@ -200,15 +198,12 @@ mod tests {
         path
     }
 
-    const COLS: &str = "(uid, IS_DEL, USETIME, MARK, END_DATE, NEXT_DATE, DO_TYPE, REPEAT_TYPE, \
-         assetUid, toAssetUid, ctgUid, currencyUid, AMOUNT_SUB, MEMO, PAYEE)";
-
     /// 기본 픽스처 행: 주택청약 100,000원 / 22일 / 무기한.
     fn cheongyak_row(amount: f64, is_del: i64, end_date_ms: i64) -> String {
         let usetime = kst_millis(2026, 6, 23, 13, 49, 21);
         let next = kst_millis(2026, 7, 22, 18, 53, 57);
         format!(
-            "INSERT INTO REPEATTRANSACTION {COLS} VALUES \
+            "INSERT INTO REPEATTRANSACTION {REPEAT_TRANSACTION_COLUMNS} VALUES \
              ('rep-1',{is_del},{usetime},0,{end_date_ms},{next},1,1,'a1','','36','KRW_KRW',\
               {amount},'주택청약','청약(49)')"
         )
@@ -401,14 +396,13 @@ mod tests {
         assert_eq!(rule.amount_minor, 120_000);
     }
 
-    #[tokio::test]
-    async fn manual_rules_are_never_touched() {
-        let db = pool().await;
+    /// 앱에서 직접 만든 고정비(source='manual', source_ref=NULL).
+    async fn create_manual_rule(db: &Db, name: &str) {
         create_bookkeeping_recurring_expense_inner(
-            &db,
+            db,
             CreateBookkeepingRecurringExpenseInput {
                 project_id: None,
-                name: "넷플릭스".to_string(),
+                name: name.to_string(),
                 merchant: None,
                 amount_minor: 17_000,
                 currency: "KRW".to_string(),
@@ -425,6 +419,12 @@ mod tests {
         )
         .await
         .expect("manual rule");
+    }
+
+    #[tokio::test]
+    async fn manual_rules_are_never_touched() {
+        let db = pool().await;
+        create_manual_rule(&db, "넷플릭스").await;
 
         let dir = tempfile::tempdir().expect("tempdir");
         // 백업이 통째로 비어도(모든 규칙 삭제) manual 규칙은 그대로다.
@@ -443,27 +443,7 @@ mod tests {
     async fn manual_rules_do_not_collide_on_null_source_ref() {
         let db = pool().await;
         for name in ["넷플릭스", "왓챠"] {
-            create_bookkeeping_recurring_expense_inner(
-                &db,
-                CreateBookkeepingRecurringExpenseInput {
-                    project_id: None,
-                    name: name.to_string(),
-                    merchant: None,
-                    amount_minor: 10_000,
-                    currency: "KRW".to_string(),
-                    category: "구독".to_string(),
-                    payment_method_kind: BookkeepingPaymentMethodKind::Card,
-                    payment_method_label: None,
-                    payment_method_last4: None,
-                    expense_kind: BookkeepingExpenseKind::Subscription,
-                    schedule_day: 5,
-                    start_month: "2026-01".to_string(),
-                    end_month: None,
-                    note: None,
-                },
-            )
-            .await
-            .expect("manual rule");
+            create_manual_rule(&db, name).await;
         }
         // 부분 UNIQUE 인덱스(WHERE source_ref IS NOT NULL)라 NULL 여러 개가 공존한다.
         assert_eq!(rules(&db).await.len(), 2);
