@@ -1,0 +1,23 @@
+docs/adr/0012-mcp-local-writes-and-calendar-read.md
+  s_65a1a90da09826::t_611ec8d1f84542 1-125
+docs/superpowers/specs/2026-07-10-mcp-surface-expansion-design.md
+  s_65a1a90da09826::t_6ce363a542bb03 148-149
+  s_65a1a90da09826::t_73c3b05a47e8ff 1-147,150-152,154-155,161-164,167-169,171-269
+  s_65a1a90da09826::t_5bc642adeacc3f 153,156-160,165-166,170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5246192049a18a1ee0ee6b992e056b0aa8f8cbf8",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
