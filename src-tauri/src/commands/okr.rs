@@ -249,7 +249,15 @@ fn is_percent_kr(unit: Option<&str>, target: Option<f64>) -> bool {
 }
 
 /// 루틴 연결 KR의 진행을 분기 창 기준으로 **쿼리타임 파생**해 채운다(저장 없음 — 입력은 루틴
-/// 체크 한 곳으로 수렴; 체크 자체가 사람 행동이고 여기는 그 집계 표시라 결정 레일 무침범).
+/// 체크 한 곳으로 수렴).
+///
+/// 결정 레일 무침범인 이유(2026-07-10 갱신): **"체크 자체가 사람 행동"이라서가 아니다.** MCP
+/// `wr_toggle_routine_check`가 전 caller에 열려 있어 에이전트도 체크를 남길 수 있다(ADR-0012).
+/// 무침범인 진짜 이유는 **사실→progress 규칙을 사람만 정하기 때문**이다: 어떤 루틴이 어떤 KR을
+/// 먹이는지(`set_key_result_routine`)는 MCP 표면에 없고, 에이전트는 "했다"는 사실만 준다.
+/// 파생을 우회해 결과값을 직접 쓰는 `update_key_result`는 그래서 MCP에서 금지다.
+/// 결합 자체는 `mcp::surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`이 고정한다.
+///
 /// 창=[분기 시작, min(오늘, 분기 끝)], expected=루틴 due 발생 수(패턴 ∧ 활성 구간 —
 /// tracking.rs와 동일 술어), completed=창 내 완료 체크 수.
 /// %형은 completed/expected, 그 외 metric은 completed/target. 루틴 소멸 시 조용히 스킵(수동 값 유지).

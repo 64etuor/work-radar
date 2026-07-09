@@ -5,7 +5,7 @@ use tauri::State;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    BookkeepingBulkItemResult, BookkeepingReviewStatus, BookkeepingTransaction,
+    BookkeepingBulkItemResult, BookkeepingReviewStatus, BookkeepingSource, BookkeepingTransaction,
     CreateBookkeepingTransactionInput, OverrideBookkeepingCategoryInput,
     UpdateBookkeepingTransactionInput,
 };
@@ -435,6 +435,23 @@ pub(crate) async fn insert_bookkeeping_transaction_from_ingest_if_absent_inner(
     .await?;
     tx.commit().await?;
     Ok(Some(row))
+}
+
+/// `(source, source_ref)`로 기존 행 id를 찾는다. insert-if-absent가 conflict로 `None`을 반환했을 때
+/// "이미 있음"을 호출자에게 알려주기 위한 조회 — 소프트 삭제된 행도 unique 인덱스를 점유하므로
+/// 함께 잡는다(그래야 "왜 안 들어갔는지"가 설명된다).
+pub(crate) async fn find_transaction_id_by_source_ref(
+    db: &Db,
+    source: BookkeepingSource,
+    source_ref: &str,
+) -> Result<Option<String>, AppError> {
+    Ok(sqlx::query_scalar(
+        "SELECT id FROM bookkeeping_transactions WHERE source = ?1 AND source_ref = ?2",
+    )
+    .bind(source)
+    .bind(source_ref)
+    .fetch_optional(db)
+    .await?)
 }
 
 pub(crate) async fn list_bookkeeping_transactions_inner(

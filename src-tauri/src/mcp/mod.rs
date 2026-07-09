@@ -99,11 +99,17 @@ pub(crate) fn enum_wire_string<T: Serialize>(value: &T) -> String {
 
 /// 사용자 자유 텍스트를 read 툴 표면에 실을 때의 상한(§6: tool output에 장문 echo 금지 —
 /// output도 다음 툴의 injection 입력이 될 수 있다). char 경계에서 자른다(바이트 슬라이스 금지).
+///
+/// 반환 길이는 **항상 `max_chars` 이하**다 — 잘릴 때는 말줄임표까지 포함해서 센다.
+/// (예전엔 `max_chars`개를 취한 뒤 "…"를 덧붙여 `max_chars + 1`이 나왔고, 필드 doc의 "≤N"이 거짓이었다.)
 pub(crate) fn truncate_preview(text: &str, max_chars: usize) -> String {
     if text.chars().count() <= max_chars {
         return text.to_string();
     }
-    text.chars().take(max_chars).collect::<String>() + "…"
+    if max_chars == 0 {
+        return String::new();
+    }
+    text.chars().take(max_chars - 1).collect::<String>() + "…"
 }
 
 /// ProjectKind → 안정 라벨 문자열(MCP 표면 전용 — serde 태그와 동일 의미).
@@ -127,4 +133,33 @@ pub(crate) fn mcp_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::Er
         e.code, e.trace_id
     );
     rmcp::ErrorData::internal_error(format!("tool error ({})", e.code), None)
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::truncate_preview;
+
+    #[test]
+    fn preview_never_exceeds_the_advertised_char_budget() {
+        assert_eq!(truncate_preview("abc", 5), "abc", "짧으면 그대로");
+        assert_eq!(truncate_preview("abcde", 5), "abcde", "경계는 무손실");
+        assert_eq!(truncate_preview("abcdef", 5), "abcd…", "말줄임표 포함 5자");
+        assert_eq!(truncate_preview("abcdef", 5).chars().count(), 5);
+        assert_eq!(truncate_preview("", 0), "");
+        assert_eq!(
+            truncate_preview("a", 0),
+            "",
+            "0 예산이면 빈 문자열(패닉 금지)"
+        );
+    }
+
+    /// 멀티바이트에서 바이트 슬라이스로 패닉하지 않고 char 단위로 자른다.
+    #[test]
+    fn preview_cuts_on_char_boundaries() {
+        let korean = "가나다라마";
+        assert_eq!(truncate_preview(korean, 3), "가나…");
+        assert_eq!(truncate_preview(korean, 3).chars().count(), 3);
+        let emoji = "👩‍🚀🚀🚀🚀";
+        assert!(truncate_preview(emoji, 2).chars().count() <= 2);
+    }
 }

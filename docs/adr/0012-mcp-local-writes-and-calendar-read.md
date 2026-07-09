@@ -105,9 +105,30 @@ end, all_day, project_id`. 제외: `location`, `url`(htmlLink), `project_color`,
 
 **나빠지는 것 / 잔여 위험**
 
-- **로컬 write blast radius.** 악성/오작동 MCP 호스트가 신호를 대량 생성할 수 있다. `dedup_key`가
-  동일 제목 반복은 흡수하지만 서로 다른 제목은 못 막는다. 수용 근거: 로컬·가역·감사 가능하고,
-  **삭제 툴이 표면에 없어 파괴적이지 않다.**
+- **"삭제 툴이 없으니 파괴적이지 않다"는 불충분한 근거였다(보안 리뷰 M1이 적발).** 게이트가
+  떠받치던 건 삭제 금지가 아니라 **덮어쓰기 금지**였다. 공유 ingest upsert는
+  `(source, source_ref)` 충돌 시 merchant/amount/spent_at/category를 덮어쓰고, `save_receipt`는
+  `source='ocr'`을 하드코딩하며 `source_ref`는 caller가 준다 — 게다가 목록 DTO가 `source_ref`를
+  실어 보낸다. 즉 게이트 제거 직후에는 **아무 MCP caller나 남의 영수증 금액을 조작**할 수 있었다.
+  그 안전성은 "Hermes가 source_ref 프리체크로 재저장을 건너뛴다"는 **행위 전제**에 기대고 있었고,
+  `require_hermes`가 그 전제를 조용히 강제하고 있었다.
+  → **수정:** MCP `save_receipt`는 `ON CONFLICT DO NOTHING`(insert-if-absent)을 쓴다. 충돌이면
+  기존 행을 건드리지 않고 `status="already_exists"` + 기존 id를 돌려준다. 값 정정은 사람이 앱에서
+  한다. gmail/mmbak 임포터가 쓰는 공유 upsert는 그대로다.
+  회귀 가드: `save_receipt_never_overwrites_an_existing_transaction`.
+  **일반 교훈: 게이트를 없앨 때는 그 게이트가 떠받치던 *행위 전제*를 전부 찾아 코드로 옮겨라.**
+- **로컬 write blast radius(수정 후).** 악성/오작동 MCP 호스트가 신호·영수증을 **새로 만들** 수는
+  있다. `dedup_key`/`source_ref`가 동일 입력 반복은 흡수하지만 서로 다른 내용은 못 막는다.
+  수용 근거: 로컬·가역·감사 가능하고, **기존 행을 수정하거나 삭제하는 툴이 표면에 없다**
+  (유일한 예외는 `wr_upsert_timeline_note`의 빈 본문=메모 삭제 — 자유 주석이고 아래에 명시).
+  새로 만든 행은 전부 `needs_review`로 들어와 사람이 본다.
+- **`wr_toggle_routine_check`는 루틴 연결 KR의 진행률을 움직인다(의도).** 위 §2의 기준 참조 —
+  사실 기록이고, 사실→progress 규칙은 사람이 건 링크다. 가역이며 `wr_list_today_routines`/Today
+  뷰에 그대로 보인다. `surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`.
+- **Hermes 예외의 잔여(이 ADR이 만든 게 아님).** `WORK_RADAR_MCP_CALLER=hermes`는 흉내낼 수 있으므로,
+  그 env를 세팅한 호스트는 GitHub/Notion/Gmail/Calendar write를 승인 큐 없이 **직접 실행**한다.
+  전제는 "그 호스트에 진짜 per-call 사람 게이트가 있다"이다. 이 전제가 깨지는 호스트 설정
+  (예: 무인 자동 승인)에서는 외부 write를 신뢰할 수 없다. 이 ADR은 그 경계를 넓히지도 좁히지도 않는다.
 - **캘린더 read 지연·rate limit.** MCP 프로세스는 캐시가 콜드라 첫 호출이 Google 라운드트립이다.
   같은 프로세스 내 반복 호출은 `calendar_events_cache()`(`OnceLock` static)가 60초 흡수한다.
   완전한 해소는 로컬 캐시 테이블 트랙(별도 ADR).

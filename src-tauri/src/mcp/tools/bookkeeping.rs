@@ -25,6 +25,61 @@ use crate::models::{
 /// 고정비 노트 preview 상한(§6 — 장문 echo 금지).
 const NOTE_PREVIEW_CHARS: usize = 280;
 
+/// `save_receipt`의 자유 문자열 상한(§2 — 자유 문자열은 길이를 좁힌다). 로컬 DB 팽창 방지.
+const RECEIPT_TEXT_MAX_CHARS: usize = 500;
+/// 컬렉션 원소 수 상한(§2 — payload 크기 상한). 한 영수증에 이보다 많은 품목/사유는 비현실적이다.
+const RECEIPT_COLLECTION_MAX: usize = 200;
+
+/// 문자열 길이 상한 검사. `None`/짧은 값은 통과.
+#[allow(clippy::result_large_err)]
+fn check_len(field: &str, value: Option<&str>) -> Result<(), rmcp::ErrorData> {
+    if value.is_some_and(|v| v.chars().count() > RECEIPT_TEXT_MAX_CHARS) {
+        return Err(rmcp::ErrorData::invalid_params(
+            format!("{field} exceeds {RECEIPT_TEXT_MAX_CHARS} characters"),
+            None,
+        ));
+    }
+    Ok(())
+}
+
+/// `save_receipt` 입력의 크기 상한을 **트랜잭션 밖에서** 전부 검증한다(§4).
+#[allow(clippy::result_large_err)]
+fn validate_receipt_bounds(p: &BookkeepingSaveReceiptParams) -> Result<(), rmcp::ErrorData> {
+    check_len("merchant", Some(&p.merchant))?;
+    for (field, value) in [
+        ("source_ref", &p.source_ref),
+        ("currency", &p.currency),
+        ("category", &p.category),
+        ("description", &p.description),
+        ("note", &p.note),
+        ("account", &p.account),
+        ("subcategory", &p.subcategory),
+        ("category_code", &p.category_code),
+        ("subcategory_code", &p.subcategory_code),
+        ("raw_category", &p.raw_category),
+        ("order_no", &p.order_no),
+        ("payment_no", &p.payment_no),
+    ] {
+        check_len(field, value.as_deref())?;
+    }
+    for (field, len) in [
+        ("line_items", p.line_items.as_ref().map(Vec::len)),
+        ("review_reasons", p.review_reasons.as_ref().map(Vec::len)),
+        (
+            "field_confidence",
+            p.field_confidence.as_ref().map(|m| m.len()),
+        ),
+    ] {
+        if len.is_some_and(|n| n > RECEIPT_COLLECTION_MAX) {
+            return Err(rmcp::ErrorData::invalid_params(
+                format!("{field} exceeds {RECEIPT_COLLECTION_MAX} entries"),
+                None,
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// One receipt line item (`wr_bookkeeping_save_receipt`). Closed schema — deny_unknown_fields does
 /// not inherit to nested structs. amount_minor is the per-line minor-unit amount; quantity defaults 1.
 #[derive(Deserialize, JsonSchema)]
@@ -168,6 +223,10 @@ pub struct BookkeepingDuplicateCandidateDto {
 #[derive(Serialize, JsonSchema)]
 pub struct BookkeepingTransactionListDto {
     pub transactions: Vec<BookkeepingTransactionDto>,
+    /// limit 적용 전 전체 건수.
+    pub total: u32,
+    /// `transactions`가 limit에 잘렸는지. 무신호 절단 금지(§7 — `wr_list_pending_actions`와 동일 계약).
+    pub truncated: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -334,11 +393,19 @@ fn to_transaction_dto(t: crate::models::BookkeepingTransaction) -> BookkeepingTr
 
 #[tool_router(router = tool_router_bookkeeping, vis = "pub(crate)")]
 impl WrServer {
-    /// OCR receipt save — a local bookkeeping row insert/upsert, not an external service mutation.
+    /// OCR receipt save — a local bookkeeping row **insert**, not an external service mutation.
     /// Open to any MCP caller (ADR-0012): the human gate is the calling host's own approval UI.
+    ///
+    /// **Insert-if-absent, never clobber.** 공유 ingest upsert(`upsert_..._from_ingest_inner`)는
+    /// `(source, source_ref)` 충돌 시 merchant/amount/spent_at/category를 덮어쓴다 — 그 안전성은
+    /// "Hermes가 source_ref 중복 프리체크로 재저장을 건너뛴다"는 전제에 기대고 있었고, 그 전제는
+    /// `require_hermes` 게이트가 조용히 떠받치던 것이다(ADR-0012 §1이 그 게이트를 없앴다).
+    /// 지금 표면은 전 caller 개방이므로, 여기서는 `..._if_absent_inner`(`ON CONFLICT DO NOTHING`)를
+    /// 써서 **기존 재무 행을 절대 수정하지 않는다** — 충돌이면 기존 id + `status="already_exists"`.
+    /// 값 정정은 사람이 앱에서 한다. gmail/mmbak 임포터가 쓰는 공유 upsert는 건드리지 않는다.
     #[tool(
         name = "wr_bookkeeping_save_receipt",
-        description = "Save normalized receipt fields into local bookkeeping. Returns only transaction id/status; accepts no raw image, file path, email body, token, or credential fields."
+        description = "Insert a normalized receipt into local bookkeeping (enters the review queue). If a transaction with the same source_ref already exists it is left untouched and its id is returned with status=already_exists; this tool never modifies an existing transaction. Accepts no raw image, file path, email body, token, or credential fields."
     )]
     pub async fn bookkeeping_save_receipt(
         &self,
@@ -351,6 +418,8 @@ impl WrServer {
         &self,
         p: BookkeepingSaveReceiptParams,
     ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        validate_receipt_bounds(&p)?;
+
         if let Some(project_id) = p.project_id.as_deref() {
             let project = projects::fetch_project(&self.db, project_id)
                 .await
@@ -401,43 +470,86 @@ impl WrServer {
                 .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
         }
 
-        let row = bookkeeping_commands::upsert_bookkeeping_transaction_from_ingest_inner(
-            &self.db,
-            CreateBookkeepingTransactionInput {
-                project_id: p.project_id,
-                source: BookkeepingSource::Ocr,
-                source_ref: p.source_ref,
-                merchant: p.merchant,
-                description: p.description,
-                amount_minor: p.amount_minor,
-                currency: p.currency.unwrap_or_else(|| "KRW".to_string()),
-                spent_at: p.spent_at,
-                category: p.category.unwrap_or_else(|| "uncategorized".to_string()),
-                note: p.note,
-                payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
-                payment_method_label: None,
-                payment_method_last4: None,
-                expense_kind: BookkeepingExpenseKind::Variable,
-                recurring_expense_id: None,
-                recurring_occurrence_id: None,
-                direction,
-                account: p.account,
-                subcategory: p.subcategory,
-                category_code: p.category_code,
-                subcategory_code: p.subcategory_code,
-                raw_category: p.raw_category,
-                spent_at_time: p.spent_at_time,
-                confidence: p.confidence,
-                field_confidence_json,
-                review_reasons_json,
-                order_no: p.order_no,
-                payment_no: p.payment_no,
-            },
-            "transaction.ocr_ingested",
-            "OCR 영수증이 리뷰큐에 추가됨",
-        )
-        .await
-        .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+        let has_source_ref = p
+            .source_ref
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|s| !s.is_empty());
+        let source_ref = p.source_ref.clone();
+        let input = CreateBookkeepingTransactionInput {
+            project_id: p.project_id,
+            source: BookkeepingSource::Ocr,
+            source_ref: p.source_ref,
+            merchant: p.merchant,
+            description: p.description,
+            amount_minor: p.amount_minor,
+            currency: p.currency.unwrap_or_else(|| "KRW".to_string()),
+            spent_at: p.spent_at,
+            category: p.category.unwrap_or_else(|| "uncategorized".to_string()),
+            note: p.note,
+            payment_method_kind: BookkeepingPaymentMethodKind::Unknown,
+            payment_method_label: None,
+            payment_method_last4: None,
+            expense_kind: BookkeepingExpenseKind::Variable,
+            recurring_expense_id: None,
+            recurring_occurrence_id: None,
+            direction,
+            account: p.account,
+            subcategory: p.subcategory,
+            category_code: p.category_code,
+            subcategory_code: p.subcategory_code,
+            raw_category: p.raw_category,
+            spent_at_time: p.spent_at_time,
+            confidence: p.confidence,
+            field_confidence_json,
+            review_reasons_json,
+            order_no: p.order_no,
+            payment_no: p.payment_no,
+        };
+
+        // source_ref 없으면 dedup 키가 없으니 평범한 insert. 있으면 insert-if-absent —
+        // conflict가 기존 행을 **건드리지 않는다**(모듈/핸들러 doc 참조).
+        let row = if has_source_ref {
+            let inserted =
+                bookkeeping_commands::insert_bookkeeping_transaction_from_ingest_if_absent_inner(
+                    &self.db,
+                    input,
+                    "transaction.ocr_ingested",
+                    "OCR 영수증이 리뷰큐에 추가됨",
+                )
+                .await
+                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+
+            match inserted {
+                Some(row) => row,
+                None => {
+                    // 이미 있는 행 — 아무것도 쓰지 않았다. line item도 덮지 않는다.
+                    let source_ref = source_ref.unwrap_or_default();
+                    let existing = bookkeeping_commands::find_transaction_id_by_source_ref(
+                        &self.db,
+                        BookkeepingSource::Ocr,
+                        source_ref.trim(),
+                    )
+                    .await
+                    .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?
+                    .ok_or_else(|| {
+                        // conflict였는데 못 찾는다면 그 사이에 사람이 지운 것 — 삼키지 않고 올린다.
+                        rmcp::ErrorData::internal_error(
+                            "tool error (bookkeeping.source_ref_race)",
+                            None,
+                        )
+                    })?;
+                    return Ok(Json(BookkeepingSaveReceiptResult {
+                        transaction_id: existing,
+                        status: "already_exists".to_string(),
+                    }));
+                }
+            }
+        } else {
+            bookkeeping_commands::create_bookkeeping_transaction_inner(&self.db, input)
+                .await
+                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?
+        };
 
         if let Some(items) = line_item_inputs {
             bookkeeping_commands::set_bookkeeping_line_items_inner(
@@ -496,12 +608,18 @@ impl WrServer {
         )
         .await
         .map_err(|e| mcp_tool_error("wr_bookkeeping_list", &e))?;
+        let total = rows.len() as u32;
+        let truncated = rows.len() > limit as usize;
         let transactions = rows
             .into_iter()
             .take(limit as usize)
             .map(to_transaction_dto)
             .collect();
-        Ok(Json(BookkeepingTransactionListDto { transactions }))
+        Ok(Json(BookkeepingTransactionListDto {
+            transactions,
+            total,
+            truncated,
+        }))
     }
 
     #[tool(
@@ -1040,6 +1158,78 @@ mod tests {
         assert_eq!(dto.account.as_deref(), Some("하나카드"));
         assert_eq!(dto.spent_at_time.as_deref(), Some("13:05:00"));
         assert_eq!(dto.payment_method_kind, "unknown");
+    }
+
+    /// **보안 회귀 가드(security review M1).** 공유 ingest upsert는 `(source, source_ref)` 충돌 시
+    /// merchant/amount/spent_at/category를 덮어쓴다. `save_receipt`는 `source='ocr'`을 하드코딩하고
+    /// `source_ref`는 caller가 준다 — 게다가 `source_ref`는 목록 DTO에 실려 나간다. 따라서
+    /// `require_hermes`를 없앤 뒤에는 아무 MCP caller나 (1) 목록에서 남의 source_ref를 읽고
+    /// (2) 같은 source_ref로 save_receipt를 불러 **기존 재무 행의 금액을 조작**할 수 있었다.
+    ///
+    /// 지금 MCP 경로는 insert-if-absent다 — 충돌이면 기존 행을 건드리지 않고 `already_exists`를 낸다.
+    #[tokio::test]
+    async fn save_receipt_never_overwrites_an_existing_transaction() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let receipt = |merchant: &str, amount: i32| BookkeepingSaveReceiptParams {
+            project_id: None,
+            source_ref: Some("victim-ref".into()),
+            merchant: merchant.into(),
+            amount_minor: amount,
+            currency: Some("KRW".into()),
+            spent_at: "2026-06-12".into(),
+            category: None,
+            description: None,
+            note: None,
+            direction: None,
+            account: None,
+            subcategory: None,
+            category_code: None,
+            subcategory_code: None,
+            raw_category: None,
+            spent_at_time: None,
+            confidence: None,
+            field_confidence: None,
+            review_reasons: None,
+            order_no: None,
+            payment_no: None,
+            line_items: None,
+        };
+
+        let original = server
+            .bookkeeping_save_receipt_inner(receipt("정직한 가게", 59_010))
+            .await
+            .expect("first save")
+            .0;
+        assert_eq!(original.status, "saved");
+
+        // 공격: 같은 source_ref로 금액/상호를 바꿔 재저장 시도.
+        let attack = server
+            .bookkeeping_save_receipt_inner(receipt("조작된 가게", 1))
+            .await
+            .expect("second save is accepted but must not mutate")
+            .0;
+        assert_eq!(
+            attack.status, "already_exists",
+            "덮어쓰지 않고 기존 행을 알려준다"
+        );
+        assert_eq!(attack.transaction_id, original.transaction_id);
+
+        let (merchant, amount): (String, i32) = sqlx::query_as(
+            "SELECT merchant, amount_minor FROM bookkeeping_transactions WHERE id = ?1",
+        )
+        .bind(&original.transaction_id)
+        .fetch_one(&db)
+        .await
+        .expect("row");
+        assert_eq!(merchant, "정직한 가게", "기존 재무 행은 불변");
+        assert_eq!(amount, 59_010, "금액 조작 불가");
+
+        let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM bookkeeping_transactions")
+            .fetch_one(&db)
+            .await
+            .expect("count");
+        assert_eq!(rows, 1, "중복 행도 만들지 않는다(멱등)");
     }
 
     /// ADR-0012 개방의 **긍정** 증거: caller env 없이도 로컬 review-queue write가 실제로 행을 바꾼다

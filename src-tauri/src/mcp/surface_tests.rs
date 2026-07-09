@@ -206,12 +206,70 @@ fn registered_tool_set_is_locked() {
     }
 }
 
+/// §2 전역 가드: **등록된 모든 툴의 입력 스키마가 닫혀 있어야 한다**(`additionalProperties:false`).
+/// 도메인별 스키마 테스트는 그 도메인 struct만 본다 — 새 param struct에 `deny_unknown_fields`를
+/// 빠뜨리면 아무도 안 잡는다. 라우터가 광고하는 실제 스키마를 직접 순회해 그 구멍을 막는다.
+///
+/// 파라미터 없는 툴(`wr_list_projects` 등)은 빈 object 스키마라 대상이 아니다.
+/// 문자열 enum(`quadrant`, `confidence` …)은 `additionalProperties`가 애초에 적용되지 않는다.
+#[test]
+fn every_registered_tool_has_a_closed_input_schema() {
+    let mut open: Vec<String> = Vec::new();
+    for tool in WrServer::tool_router().list_all() {
+        let schema = tool.input_schema.as_ref();
+        let has_properties = schema
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .is_some_and(|p| !p.is_empty());
+        if !has_properties {
+            continue; // 파라미터 없는 툴.
+        }
+        if schema.get("additionalProperties") != Some(&serde_json::json!(false)) {
+            open.push(tool.name.to_string());
+        }
+    }
+    assert!(
+        open.is_empty(),
+        "these tools accept unknown fields (add #[serde(deny_unknown_fields)]): {open:?}"
+    );
+}
+
+/// §6 전역 가드: tool description은 **기능 설명만** 담는다. 모델 지시문("always use this",
+/// "ignore other tools", "don't ask")은 tool-poisoning 표면이다.
+#[test]
+fn no_tool_description_contains_model_directives() {
+    const DIRECTIVES: [&str; 6] = [
+        "always use",
+        "ignore other",
+        "do not ask",
+        "don't ask",
+        "whenever possible",
+        "you must use",
+    ];
+    for tool in WrServer::tool_router().list_all() {
+        let Some(description) = tool.description.as_ref() else {
+            continue;
+        };
+        let lowered = description.to_lowercase();
+        for directive in DIRECTIVES {
+            assert!(
+                !lowered.contains(directive),
+                "tool `{}` description contains a model directive: {directive:?}",
+                tool.name
+            );
+        }
+    }
+}
+
 /// 결정 레일(INVARIANT #1) 회귀 가드. `registered_tool_set_is_locked`의 allowlist는 "표면이 바뀌었다"만
 /// 알려주고, 갱신하는 사람이 그 툴이 **결정 레일인지**는 판단하지 않는다. 여기서 결정 어휘 자체를
 /// 못 박아, 스냅샷을 갱신하면서 무심코 `wr_classify_signal`을 들이는 일을 막는다.
 ///
-/// 로컬 write 개방(ADR-0012)의 대가로 이 테스트가 실질 경계다 —
-/// 에이전트는 *적어둘* 수 있지만 *정할* 수는 없다.
+/// **이 테스트가 보장하는 것의 한계를 정확히 알 것.** 이건 *이름* 가드다 — 결정 레일 커맨드를
+/// 그 이름으로 등록하는 것만 막는다. **행동**은 못 막는다: `wr_toggle_routine_check`는 여기 걸리는
+/// 이름이 하나도 없지만 루틴 연결 KR의 progress를 실제로 움직인다(의도된 결합 —
+/// `routine_toggle_moves_a_routine_linked_key_result_by_design` 참조). 새 write 툴을 추가할 때
+/// 이 테스트가 green이라는 사실은 **결정 레일 안전의 증거가 아니다**; 파생 경로를 손으로 따라가라.
 #[test]
 fn decision_rail_writes_never_reach_the_mcp_surface() {
     let names: std::collections::BTreeSet<String> = WrServer::tool_router()

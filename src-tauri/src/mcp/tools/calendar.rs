@@ -121,6 +121,11 @@ impl WrServer {
         p: CalendarListEventsParams,
     ) -> Result<Json<CalendarEventListDto>, rmcp::ErrorData> {
         let (start_date, end_date) = clean_window(&p.start_date, &p.end_date)?;
+        // 캐시 키는 `{time_min}|{time_max}|{정렬된 project_ids}`(commands/calendar.rs). project_id를
+        // 지정한 조회는 그 프로젝트만 담긴 키를 쓰므로 다른 프로젝트의 캐시 엔트리를 못 읽는다.
+        // 이 격리는 project id가 32자 hex라 `|`/`,`로 키를 위조할 수 없다는 데 기댄다 — id 형식이
+        // 바뀌면 키 인코딩을 함께 손봐야 한다.
+        //
         // force_refresh=false — 같은 프로세스 안 반복 호출은 60초 TTL 캐시가 흡수한다(rate limit 방어).
         let events = fetch_calendar_events_range_inner(
             &self.db,

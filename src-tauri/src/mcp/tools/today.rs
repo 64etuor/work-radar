@@ -376,7 +376,7 @@ impl WrServer {
 mod tests {
     use super::{
         TimelineNoteTargetParam, TodayDateParams, ToggleRoutineCheckParams,
-        UpsertTimelineNoteParams,
+        UpsertTimelineNoteParams, NOTE_PREVIEW_CHARS,
     };
     use crate::commands::routines::insert_routine;
     use crate::commands::shared::test_support::fresh_db;
@@ -636,8 +636,8 @@ mod tests {
         assert!(listed.notes[0].body_truncated, "잘렸음을 명시 신호");
         assert_eq!(
             listed.notes[0].body_preview.chars().count(),
-            1001,
-            "1000자 + 말줄임표"
+            NOTE_PREVIEW_CHARS,
+            "말줄임표까지 포함해 상한 이하"
         );
 
         // 입력 상한 초과는 거부.
