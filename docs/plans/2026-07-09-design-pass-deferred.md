@@ -29,7 +29,7 @@
   한 프레임 깜빡인다. `usePresence`는 전이를 **렌더 중에** 반영해(React "prop 변화에 state 맞추기")
   이를 피한다. `act()`가 effect를 동기로 흘리므로 일반 렌더 테스트로는 안 잡히고,
   자식 마운트 카운터가 있어야 보인다(`usePresence.dom.test.tsx`).
-  ⚠️ `HermesPanel.tsx`의 인라인 컨트롤러는 아직 effect 방식 = 같은 깜빡임이 있다(별건).
+  `HermesPanel.tsx`도 같은 구멍이 있었고 후속 커밋에서 `usePresence`로 이관했다(아래 §7).
 - **exit 유예 동안 노드가 살아 있으므로 재오픈해도 자식이 언마운트되지 않는다** — `autoFocus` 같은
   마운트 전용 효과가 안 돌고 내부 state(팔레트 검색어)가 남는다. `usePresence.openKey`를 자식 `key`로.
 - **`exitMs`는 effect deps에 넣지 말 것.** 닫힌 동안 값이 바뀌면 cleanup이 타이머만 지우고 재예약을
@@ -112,6 +112,26 @@
   `ease-in-out`이라 시각 변화 0. duration은 루프 주기라 개별 유지.
   **대상 아님**: `linear` 루프(`wr-spin`/`cr-spin`/`cr-flow-dash`/`hbl-*`/news 마퀴 — 회전·마퀴는
   등속이어야 한다), `BrainDumpToggle`의 `wr-pulse-ring`(커스텀 베지어 — 토큰화하면 느낌이 바뀐다).
+
+## 7. 런북 밖에서 발견해 함께 고친 것 (2026-07-09)
+
+이 런북을 진행하다 드러난 **기존 버그** 3건. 셋 다 이 패스가 만든 게 아니다.
+
+- **Mission 기반 탭 / Guardrail** — `LifeOsAdvisorPanel`이 생성 UI가 사라진 `가드레일 N` 배지를
+  계속 렌더해 신규 사용자에겐 영구 0 지표가 됐다. 배지 제거. **백엔드/DB teardown은 미완**
+  (마이그 0067 테이블 · 0068 컬럼 · 0069 CHECK enum → SQLite 테이블 rebuild 3건). 별도 PR.
+- **`CleanupPanel` 클래스 이어붙기** — `` `wt-cleanup-row${can ? "" : "wt-cleanup-locked"}` `` 가
+  `can=false`일 때 단일 토큰 `wt-cleanup-rowwt-cleanup-locked`를 만들어 **두 클래스 모두** 죽였다.
+  ⚠️ **분기 문자열 앞 공백은 수정이 못 된다** — `prettier-plugin-tailwindcss`가 지운다(실측).
+  `cn()`을 쓰거나 공백을 리터럴 쪽(`${` 앞)에 둔다. `check-classname-regression` 가드가 이 케이스
+  (true 분기가 빈 문자열)를 놓치고 있었고, 헤더 주석이 자멸적 수정법을 "올바른 모양"이라 적어뒀다.
+  → 가드를 양쪽 분기 검사 + lookbehind + 주석 스킵으로 고치고 `scripts/*.test.mjs` 신설.
+- **HermesPanel** — ① 위 §1의 언마운트 깜빡임 ② `data-state="closed"`에 `pointer-events: none`
+  누락 → 닫는 220ms 동안 `fixed z-50` 720×780 패널이 클릭을 삼켰다(다른 오버레이 4곳엔 전부 있음).
+  `usePresence` 이관 + `pointer-events: none` + `inert`.
+
+**남은 것**: `HermesPanel.tsx`의 `animate-[hermesDot_1.2s_ease-in-out_infinite]` — §6의 루프 easing
+전수 조사는 CSS 파일만 훑었다(TSX arbitrary 값은 미포함). 토큰화 가치는 낮다.
 
 ## 함정 (메모리 `work-radar-design-system-pass`와 동일 — 코드에 주석으로도 박혀 있음)
 
