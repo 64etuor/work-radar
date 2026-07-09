@@ -10,6 +10,9 @@
  *   - action(백엔드 AppError) 또는 actionUrl(프런트)이 있으면 action 버튼 렌더
  *   - retryable(transient): onRetry가 있으면 "재시도" 버튼(클릭→refetch+dismiss), 없으면 절제된 힌트
  * success/info 토스트: 간단 메시지 + auto-dismiss (2500ms, 스토어에서 처리).
+ *
+ * 퇴장: dismiss(수동/자동 공통)는 즉시 제거가 아니라 `leaving` 마킹 → `data-leaving`
+ * fade-out → 스토어가 실제 제거. 하드 컷을 없애기 위한 것이며 auto-dismiss도 같은 경로다.
  */
 import "./ToastHost.css";
 
@@ -37,6 +40,9 @@ export function ToastHost() {
         <div
           key={t.id}
           className={`toast-item toast-${t.kind}`}
+          // dismiss 후 fade-out 동안만 붙는다(스토어가 TOAST_EXIT_MS 뒤 실제 제거).
+          // CSS가 pointer-events를 끊어 나가는 토스트의 버튼이 클릭을 삼키지 않게 한다.
+          data-leaving={t.leavingSeq !== undefined ? "" : undefined}
           role={t.kind === "error" ? "alert" : "status"}
         >
           <span className="toast-msg">

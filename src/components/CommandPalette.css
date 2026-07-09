@@ -29,9 +29,33 @@
   transform-origin: top center;
 }
 
+/* exit — App.tsx의 usePresence 래퍼가 closed 동안 노드를 유지한다(radix Presence 부재).
+ * closed 상태는 반드시 pointer-events: none — exit 중인 전면 스크림(fixed inset-0)이
+ * 닫힘 직후의 빠른 클릭을 삼키면 click-shield가 된다. 포커스 해제는 래퍼의 inert가 맡는다.
+ * 키프레임은 신설하지 않는다: 패널 enter(wr-panel-pop-in)는 wr-dialog-pop-in과 동형이라
+ * 그 짝인 wr-dialog-pop-out을 그대로 쓴다. */
+.cmdk-presence {
+  display: contents;
+}
+
+.cmdk-presence[data-state="closed"] .cmdk-overlay {
+  pointer-events: none;
+  animation: wr-fade-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
+.cmdk-presence[data-state="closed"] .cmdk-panel {
+  pointer-events: none;
+  animation: wr-dialog-pop-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cmdk-overlay,
   .cmdk-panel {
     animation: none;
+  }
+  /* 애니메이션을 끄면 closed 노드가 exit 유지시간 동안 *그대로 보인 채* 남는다 — 즉시 감춘다.
+   * (hermes-panel-root[data-state="closed"]와 같은 처리.) */
+  .cmdk-presence[data-state="closed"] .cmdk-overlay {
+    opacity: 0;
   }
 }

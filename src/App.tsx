@@ -27,10 +27,15 @@ import { WorktreeView } from "@/components/WorktreeView";
 import { type AppAction } from "@/lib/appActions";
 import { fontFamilyFor } from "@/lib/fontPresets";
 import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
+import { WR_MOTION } from "@/lib/motion";
 import { adjacentView } from "@/lib/nav";
 import { useNavKeymap } from "@/lib/query";
+import { usePresence } from "@/lib/usePresence";
 import { useViewShortcuts } from "@/lib/useViewShortcuts";
 import { useUIStore, type View } from "@/store";
+
+/** 팔레트 exit 유지 시간 — `.cmdk-*` closed 애니메이션(--wr-motion-fast)보다 살짝 길게. */
+const PALETTE_EXIT_MS = Math.round(WR_MOTION.fast * 1000) + 40;
 
 type ViewMotion = "forward" | "back";
 type ViewSnapshot = {
@@ -164,6 +169,10 @@ export default function App() {
   const keymap = useNavKeymap();
   useViewShortcuts(keymap.data, !paletteOpen, dispatchAction);
 
+  // 팔레트는 radix가 아니라 Presence가 없다 — 닫힘 직후 노드를 잠깐 유지해 exit을 재생한다.
+  // 단축키/Esc 게이트는 계속 논리 상태(paletteOpen)를 본다. exit 중에는 이미 "닫힌" 것이다.
+  const palette = usePresence(paletteOpen, PALETTE_EXIT_MS);
+
   useEffect(() => {
     // 셸 하드코딩 키(Cmd+K 팔레트, Esc 계층) — keydown 버스 shell 우선순위(ADR-0011 후속 ②).
     return registerKeydown(KEYDOWN_PRIORITY.shell, (e) => {
@@ -218,7 +227,19 @@ export default function App() {
       <div className="news-ticker-slot" aria-label="전역 뉴스 배너">
         <NewsTicker />
       </div>
-      {paletteOpen && <CommandPalette />}
+      {/* presence 래퍼 — display:contents라 레이아웃엔 없다. closed 동안 inert:
+          pointer-events 차단(click-shield 방지) + cmdk 입력의 포커스/키 캡처 해제. */}
+      {palette.mounted && (
+        <div
+          className="cmdk-presence"
+          data-state={palette.state}
+          inert={palette.state === "closed"}
+        >
+          {/* key = 열림 세대. exit 유예 중 재오픈해도 언마운트가 없어 입력 autoFocus와
+              검색어 초기화가 건너뛰어진다 — 키를 갈아 열 때마다 새로 마운트한다. */}
+          <CommandPalette key={palette.openKey} />
+        </div>
+      )}
       {/* 전역 캘린더 드로어 — 에이전트 바 우측 아이콘 / ⌘⇧C 로 토글, 모든 뷰 위에 슬라이드. */}
       <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       {/* 글로벌 에이전트 결과 모달 — 에이전트 바 박스 클릭으로만 열림(자동 오픈 없음). */}

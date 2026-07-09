@@ -16,20 +16,30 @@
 - [ ] 다크 모드 한 바퀴(헤더/EmptyState/스켈레톤/배지 sm).
 - [ ] 루틴/가계부 체크박스 체크 시 스프링 팝 1회, 뷰 전환 시 팝 폭풍 없음.
 
-## 1. CommandPalette · ToastHost exit 애니메이션 (언마운트 지연 기계 필요)
+## 1. CommandPalette · ToastHost exit 애니메이션 — ✅ DONE (2026-07-09)
 
-현황: 두 표면 모두 enter만 있고 close는 하드 컷(`{paletteOpen && …}` 즉시 언마운트 / 토스트 store 즉시 제거).
-radix가 아니라 Presence가 없어서 exit을 붙이려면 지연 언마운트가 필요.
+`src/lib/usePresence.ts` 신설, 팔레트는 `.cmdk-presence` 래퍼(`display: contents`, closed 동안 `inert`),
+토스트는 `leavingSeq` 기반 지연 제거. `CommandPalette.tsx`는 무접촉. exit 키프레임은 신설 없이
+기존 `wr-fade-out`/`wr-dialog-pop-out` 재사용. 계약은 `src/lib/overlayExit.test.ts`가 고정.
 
-- **Palette**: `App.tsx`의 조건부 렌더를 소형 presence 훅(예: `usePresence(open, ms)` — closed 후
-  `var(--wr-motion-fast)`=120ms 유지)으로 감싸고 `data-state="open|closed"` 부여,
-  `motion.css`에 `.cmdk-overlay[data-state="closed"]`/`.cmdk-panel[data-state="closed"]` exit 추가.
-  **주의**: ① `CommandPalette.tsx`는 "변경 시 신중"(frontend-shell.md) — 열림/포커스/Esc 계약 무변경,
-  래퍼에서만 해결. ② closed 동안 `pointer-events: none` 필수(click-shield 금지).
-  ③ 팔레트 Esc는 App.tsx가 직접 처리(overlay 마커 아님)라 툴팁 같은 마커-수명 문제는 없음.
-  ④ reduced-motion: closed 즉시 언마운트(1ms) 또는 opacity 0.
-- **Toast**: `src/lib/toast.ts` store에 `leaving: true` 마킹 → 120ms 후 실제 제거.
-  `ToastHost`에서 `.toast-item[data-leaving]`에 fade-out. auto-dismiss(2500ms) 경로도 동일 경유.
+구현하며 드러난 것 — **다음 presence 소비처가 반드시 알아야 한다**:
+
+- **전이를 effect에서 켜면 닫힘 첫 커밋에 서브트리가 언마운트됐다 되살아난다.** `mounted = open || closing`
+  인데 effect가 아직 안 돌아 `closing=false`이기 때문. 노드가 갈리므로 exit이 새 노드에서 재시작되고
+  한 프레임 깜빡인다. `usePresence`는 전이를 **렌더 중에** 반영해(React "prop 변화에 state 맞추기")
+  이를 피한다. `act()`가 effect를 동기로 흘리므로 일반 렌더 테스트로는 안 잡히고,
+  자식 마운트 카운터가 있어야 보인다(`usePresence.dom.test.tsx`).
+  ⚠️ `HermesPanel.tsx`의 인라인 컨트롤러는 아직 effect 방식 = 같은 깜빡임이 있다(별건).
+- **exit 유예 동안 노드가 살아 있으므로 재오픈해도 자식이 언마운트되지 않는다** — `autoFocus` 같은
+  마운트 전용 효과가 안 돌고 내부 state(팔레트 검색어)가 남는다. `usePresence.openKey`를 자식 `key`로.
+- **`exitMs`는 effect deps에 넣지 말 것.** 닫힌 동안 값이 바뀌면 cleanup이 타이머만 지우고 재예약을
+  못 해 영구히 mounted로 남는다(ref로 고정).
+- **exit 타이머는 애니메이션 길이보다 길어야 한다(+40ms).** 타이머는 dismiss 호출 시각에 출발하지만
+  애니메이션은 커밋·페인트 후 시작 → 같은 값이면 마지막 프레임이 잘린다.
+- 토스트 id는 백엔드 traceId라 **재사용된다**. 지연 제거를 붙이면 ① 중복 가드가 fade 중인 토스트를
+  살아 있는 중복으로 오인해 새 에러를 삼키고 ② 묵은 타이머가 자리를 넘겨받은 새 토스트를 지운다.
+  → 가드는 `leavingSeq === undefined`만 중복으로 보고, 타이머는 자기 seq만 제거.
+- reduced-motion: `animation: none`만으론 closed 노드가 유예 동안 **그대로 보인다** → `opacity: 0` 필수.
 
 ## 2. skills/\*.tsx 기본 사이즈 pill ~22곳 (결정 필요했던 것)
 

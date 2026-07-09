@@ -30,6 +30,13 @@
   box-shadow: var(--wr-shadow-toast);
 }
 
+/* dismiss 후 실제 제거까지의 fade-out(스토어가 leaving 을 마킹). pointer-events를 끊어
+ * 나가는 토스트의 버튼이 그 아래 UI로 향하는 클릭을 삼키지 않게 한다. */
+.toast-item[data-leaving] {
+  pointer-events: none;
+  animation: wr-fade-out var(--wr-motion-fast) var(--wr-ease-in) both;
+}
+
 .toast-error {
   background: var(--color-wr-near-black);
   color: var(--color-wr-on-dark-btn);
@@ -120,5 +127,9 @@
 @media (prefers-reduced-motion: reduce) {
   .toast-item {
     animation: none;
+  }
+  /* 애니메이션을 끄면 나가는 토스트가 제거 유예(TOAST_EXIT_MS) 동안 그대로 보인다 — 즉시 감춘다. */
+  .toast-item[data-leaving] {
+    opacity: 0;
   }
 }

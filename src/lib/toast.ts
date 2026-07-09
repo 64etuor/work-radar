@@ -8,6 +8,21 @@
 import { create } from "zustand";
 
 import { type AppError, commands } from "@/bindings";
+import { WR_MOTION } from "@/lib/motion";
+
+/**
+ * dismiss → 실제 제거까지의 유예. `.toast-item[data-leaving]` fade-out(--wr-motion-fast)보다
+ * 살짝 길게: 타이머는 dismiss 호출 시각에 출발하지만 애니메이션은 커밋·페인트 후에야 시작하므로,
+ * 정확히 같은 값이면 마지막 한 프레임이 잘린다(App.tsx PALETTE_EXIT_MS도 같은 이유로 +40).
+ */
+export const TOAST_EXIT_MS = Math.round(WR_MOTION.fast * 1000) + 40;
+
+/**
+ * 퇴장 일련번호. 에러 토스트의 id는 백엔드 traceId라 **재사용된다** — 제거 타이머가
+ * id만 보고 지우면, 같은 traceId가 fade 중에 다시 들어와 자리를 넘겨받았을 때
+ * 묵은 타이머가 새 토스트를 지운다. 타이머는 자기가 표시한 퇴장(seq)만 지운다.
+ */
+let leaveSeq = 0;
 
 // ── trace id 생성 ─────────────────────────────────────────────────────────────
 
@@ -58,6 +73,12 @@ export interface ToastItem {
   onUndo?: () => void;
   /** Undo 버튼 라벨(기본: "되돌리기"). */
   undoLabel?: string;
+  /**
+   * dismiss 됐지만 fade-out 재생을 위해 아직 스택에 남아 있음을 표시하는 퇴장 일련번호.
+   * 정의돼 있으면 "나가는 중"이다. ToastHost가 `data-leaving`으로 내보내고,
+   * 이 seq를 건 타이머만이 TOAST_EXIT_MS 후 해당 토스트를 실제로 제거한다.
+   */
+  leavingSeq?: number;
 }
 
 /** AppError 판별(IpcError.app 또는 backend 결과). traceId + kind로 식별. */
@@ -90,7 +111,7 @@ interface ToastState {
       undoLabel?: string;
     },
   ) => void;
-  /** 토스트 dismiss. */
+  /** 토스트 dismiss — 즉시 제거하지 않고 leaving 마킹 후 TOAST_EXIT_MS 뒤에 제거한다. */
   dismiss: (id: string) => void;
 }
 
@@ -113,10 +134,13 @@ export const useToastStore = create<ToastState>((set, get) => ({
 
       set((s) => {
         // 동일 traceId 재유입(중복 토스트/키 충돌) 방지 — append-only 가드.
-        if (s.toasts.some((t) => t.id === traceId)) return s;
+        // fade-out 중인 동명 토스트는 "살아 있는" 토스트가 아니다: 그걸 이유로 새 에러를
+        // 삼키면 토스트가 통째로 유실된다. 대신 즉시 걷어내고 새로 쌓는다
+        // (묵은 제거 타이머는 자기 seq만 지우므로 새 토스트를 건드리지 않는다).
+        if (s.toasts.some((t) => t.id === traceId && t.leavingSeq === undefined)) return s;
         return {
           toasts: [
-            ...s.toasts,
+            ...s.toasts.filter((t) => t.id !== traceId),
             {
               id: traceId,
               kind: "error" as ToastKind,
@@ -172,6 +196,18 @@ export const useToastStore = create<ToastState>((set, get) => ({
   },
 
   dismiss(id) {
-    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    const target = get().toasts.find((t) => t.id === id);
+    // 이미 나가는 중이면 no-op — 타이머를 두 번 걸지 않는다(× 연타).
+    if (!target || target.leavingSeq !== undefined) return;
+
+    const seq = ++leaveSeq;
+    set((s) => ({
+      toasts: s.toasts.map((t) => (t.id === id ? { ...t, leavingSeq: seq } : t)),
+    }));
+    window.setTimeout(() => {
+      // 이 타이머가 표시한 퇴장만 제거한다 — id로 지우면, 같은 traceId로 다시 들어와
+      // 자리를 넘겨받은 뒤 스스로 dismiss된 새 토스트의 fade를 잘라먹는다.
+      set((s) => ({ toasts: s.toasts.filter((t) => t.leavingSeq !== seq) }));
+    }, TOAST_EXIT_MS);
   },
 }));
