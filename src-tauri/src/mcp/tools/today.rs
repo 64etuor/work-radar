@@ -7,6 +7,11 @@
 //! write는 관측 기록 둘뿐이다: 루틴 완료 토글("했다/안 했다")과 타임라인 메모.
 //! Today 승격/해제/완료(`promote_today`·`unpromote_today`·`toggle_today_done`)는 결정 레일이라
 //! 표면에 **없다**.
+//!
+//! ⚠️ `wr_toggle_routine_check`는 순수 로컬 사실 기록처럼 보이지만, 루틴이 KR에 연결돼 있으면
+//! 그 KR의 progress가 `routine_checks`에서 파생되므로 **OKR 배지를 간접적으로 움직인다**.
+//! 의도된 결합이다(사실→progress 규칙은 사람이 건 링크) — `mcp/tools/okr.rs` 모듈 doc과
+//! `surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design` 참조.
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};

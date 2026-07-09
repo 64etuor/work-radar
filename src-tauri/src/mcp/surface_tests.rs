@@ -256,3 +256,129 @@ fn decision_rail_writes_never_reach_the_mcp_surface() {
         );
     }
 }
+
+/// **의도된 결합을 문서화하는 테스트.** 루틴에 연결된 KR은 progress를 `routine_checks`에서
+/// 쿼리타임 파생한다(`commands/okr.rs` attach_routine_progress). 따라서 MCP
+/// `wr_toggle_routine_check`는 OKR 진행률 배지를 **간접적으로 움직인다**.
+///
+/// 이것은 결정 레일 위반이 아니다. 에이전트가 준 것은 "했다"는 **사실**이고, 그 사실이 progress로
+/// 흘러드는 규칙(어떤 루틴이 어떤 KR을 먹이는지)은 **사람이 만든 링크**다 —
+/// `set_key_result_routine`은 MCP 표면에 없다. 반면 `update_key_result`는 그 파생을 우회해
+/// 결과값을 직접 덮어쓰므로 차단된다.
+///
+/// 이 테스트가 깨진다면 결합이 사라졌거나(=이 주석이 거짓) 파생 규칙이 바뀐 것이다. 둘 다
+/// 결정-레일 논증을 다시 검토해야 한다는 신호다.
+#[tokio::test]
+async fn routine_toggle_moves_a_routine_linked_key_result_by_design() {
+    use crate::commands::okr as okr_commands;
+    use crate::commands::routines::insert_routine;
+    use crate::mcp::tools::okr::OkrQuarterParams;
+    use crate::mcp::tools::today::ToggleRoutineCheckParams;
+    use crate::models::{
+        CreateKeyResultInput, CreateObjectiveInput, CreateRoutineInput, KeyResultKind, RoutineFreq,
+    };
+
+    // 완전히 지난 분기를 쓴다 — 파생 창은 `min(분기끝, 오늘)`이라 미래 분기는 시간 의존이 된다.
+    const PAST_QUARTER: &str = "2024-Q1";
+    const DAY_IN_QUARTER: &str = "2024-01-15";
+
+    let db = fresh_db().await;
+    let objective = okr_commands::create_objective_inner(
+        &db,
+        CreateObjectiveInput {
+            quarter: PAST_QUARTER.into(),
+            title: "습관 만들기".into(),
+            description: None,
+            sort_rank: 0,
+            linked_area_keys: vec![],
+            linked_project_ids: vec![],
+        },
+    )
+    .await
+    .expect("objective");
+    let kr = okr_commands::create_key_result_inner(
+        &db,
+        CreateKeyResultInput {
+            objective_id: objective.id,
+            title: "스트레칭 10회".into(),
+            kind: KeyResultKind::Metric,
+            target_value: Some(10.0),
+            current_value: Some(0.0),
+            unit: None,
+            milestones: vec![],
+            sort_rank: 0,
+        },
+    )
+    .await
+    .expect("key result");
+    let routine = insert_routine(
+        &db,
+        &CreateRoutineInput {
+            title: "스트레칭".into(),
+            freq: RoutineFreq::Daily,
+            weekdays: vec![],
+            anchor_date: None,
+            start_date: None,
+            end_date: None,
+            time_of_day: None,
+            reminder_offset_min: None,
+            area: None,
+            kind: None,
+            monthly_pattern: None,
+            monthly_nth_week: None,
+            duration_min: None,
+        },
+    )
+    .await
+    .expect("routine");
+
+    // 링크는 사람의 결정이다 — MCP가 아니라 여기서(앱 경로 대리) 건다.
+    sqlx::query("UPDATE key_results SET routine_id = ?2 WHERE id = ?1")
+        .bind(&kr.id)
+        .bind(&routine.id)
+        .execute(&db)
+        .await
+        .expect("link kr to routine");
+
+    let server = WrServer { db: db.clone() };
+    let progress_now = || async {
+        server
+            .okr_list_objectives_inner(OkrQuarterParams {
+                quarter: PAST_QUARTER.into(),
+            })
+            .await
+            .expect("list")
+            .0
+            .objectives[0]
+            .key_results[0]
+            .current_value
+    };
+
+    assert_eq!(progress_now().await, Some(0.0), "완료 0건 → 파생값 0");
+
+    server
+        .toggle_routine_check_for_date(ToggleRoutineCheckParams {
+            routine_id: routine.id.clone(),
+            date: DAY_IN_QUARTER.into(),
+            done: true,
+        })
+        .await
+        .expect("MCP toggle");
+
+    assert_eq!(
+        progress_now().await,
+        Some(1.0),
+        "MCP가 기록한 사실이 KR 파생값을 움직인다 — 의도된 결합"
+    );
+
+    // 가역: 사실을 취소하면 파생값도 되돌아온다(파괴적 write 아님).
+    server
+        .toggle_routine_check_for_date(ToggleRoutineCheckParams {
+            routine_id: routine.id,
+            date: DAY_IN_QUARTER.into(),
+            done: false,
+        })
+        .await
+        .expect("MCP untoggle");
+    assert_eq!(progress_now().await, Some(0.0), "가역");
+}

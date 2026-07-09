@@ -63,10 +63,20 @@ INVARIANT #1은 "매트릭스 분류·승격을 자동 확정 못 한다. 카드
 | `set_key_result_routine`                                                         | KR↔루틴 자동집계 배선 = 구조 결정             |
 | `set_signal_status`, `snooze_signal`, `delete_signal`                            | 상태 확정 = 사람 결정                         |
 
-`update_key_result`가 특히 미묘하다: `current_value`는 겉보기에 "관측 수치"지만 KR progress를
-직접 구동하고 그 progress가 보드 OKR 배지로 승격되므로 결정 레일 안쪽이다. 반면 check-in
-confidence는 어떤 파생 값도 구동하지 않는 순수 로그다. **이 둘을 가르는 기준은 "사람이 보는
-판단 산출물에 자동으로 흘러드는가"이며, 흘러들면 차단한다.**
+**가르는 기준: 에이전트는 _사실_ 을 기록할 수 있고, _파생된 판단값을 직접 설정_ 할 수는 없다.**
+
+"판단 산출물로 흘러드는가"는 기준으로 쓰기에 너무 거칠다 — 그 기준이라면 `wr_toggle_routine_check`도
+막아야 한다. 루틴에 연결된 KR은 progress를 `routine_checks`에서 **쿼리타임 파생**하기 때문이다
+(`commands/okr.rs` `attach_routine_progress`). 즉 MCP로 루틴을 완료 처리하면 OKR 진행률 배지가
+실제로 움직인다(테스트로 확인: `surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`).
+
+그럼에도 그건 위반이 아니다. 에이전트가 준 것은 "했다"는 **사실**이고, 그 사실이 progress로
+흘러드는 규칙(어떤 루틴이 어떤 KR을 먹이는지)은 **사람이 건 링크**다 — `set_key_result_routine`은
+MCP 표면에 없다. 규칙은 사람이 정했고 에이전트는 입력만 준다. 가역이고 감사 가능하다.
+
+반면 `update_key_result`의 `current_value`는 그 파생을 **우회해 결과값을 직접 덮어쓴다** —
+사실 없이 결론만 놓는 것이므로 차단한다. check-in `confidence`는 어떤 파생값도 구동하지 않는
+순수 주간 로그다.
 
 ## 4. Caller 정책 — `require_hermes` 폐지 (변경)
 

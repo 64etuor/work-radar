@@ -64,9 +64,17 @@ Work Radar가 Hermes 세션에 주입하는 env지만, 다른 호스트가 자�
 `set_signal_status` · `snooze_signal` · `delete_signal` · objective/key-result CRUD ·
 `update_key_result` · `set_key_result_routine`.
 
-가르는 기준: **사람이 보는 판단 산출물로 자동으로 흘러드는가.** KR `current_value`는 progress를
-구동하고 progress는 보드 OKR 배지로 승격되므로 차단한다. check-in `confidence`는 어떤 파생
-값도 구동하지 않는 순수 주간 로그이며 `(kr, week_start)` upsert라 멱등·가역이므로 허용한다.
+가르는 기준: **에이전트는 _사실_ 을 기록할 수 있고, _파생된 판단값을 직접 설정_ 할 수는 없다.**
+
+"판단 산출물로 흘러드는가"는 기준으로 쓰기에 너무 거칠다. 루틴에 연결된 KR은 progress를
+`routine_checks`에서 쿼리타임 파생하므로, `wr_toggle_routine_check`는 실제로 OKR 진행률 배지를
+움직인다(`surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`이 이를 고정한다).
+그래도 위반이 아니다 — 에이전트가 준 건 "했다"는 사실이고, 그 사실을 progress로 바꾸는 규칙
+(어떤 루틴이 어떤 KR을 먹이는지)은 **사람이 건 링크**다. `set_key_result_routine`은 MCP 표면에 없다.
+
+반면 `update_key_result`의 `current_value`는 그 파생을 **우회해 결과값을 직접 덮어쓴다** — 사실
+없이 결론만 놓는 것이라 차단한다. check-in `confidence`는 어떤 파생값도 구동하지 않는 순수 주간
+로그이며 `(kr, week_start)` upsert라 멱등·가역이므로 허용한다.
 
 이 denylist는 문서 규칙이 아니라 **라우터에 해당 이름이 없음을 단언하는 테스트**로 강제한다.
 

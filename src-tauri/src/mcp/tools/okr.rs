@@ -1,9 +1,17 @@
 //! Mission / OKR 툴 — read 3개 + 관측 기록 write 1개.
 //!
 //! **왜 check-in만 write인가.** `upsert_check_in_inner`는 KR의 현재 `progress`를 `value_snapshot`에
-//! 스냅샷하고 주간 confidence + 노트를 남길 뿐, 진행률을 *설정하지* 않는다. 진행률은
-//! `current_value`(또는 연결된 루틴의 완료)에서 파생된다. 반면 `update_key_result`는
-//! `current_value`를 바꿔 progress → 보드 OKR 배지로 흘러들므로 결정 레일이다.
+//! 스냅샷하고 주간 confidence + 노트를 남길 뿐, 진행률을 *설정하지* 않는다.
+//!
+//! 규칙은 "에이전트는 사실을 기록하고, 파생된 판단값을 직접 설정하지 못한다"이다.
+//! `update_key_result`는 `current_value`를 직접 덮어써 파생을 우회하므로 결정 레일이다 —
+//! 사실 없이 결론만 놓는다.
+//!
+//! 주의: **루틴에 연결된 KR의 progress는 `routine_checks`에서 쿼리타임 파생된다**
+//! (`commands/okr.rs` `attach_routine_progress`). 즉 `wr_toggle_routine_check`는 이 배지를
+//! 간접적으로 움직인다. 그건 위반이 아니다 — 사실→progress 규칙을 정한 링크
+//! (`set_key_result_routine`)는 사람만 걸 수 있고 MCP 표면에 없다. 결합 자체는
+//! `surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`이 고정한다.
 //!
 //! 따라서 objective/key-result CRUD와 `set_key_result_routine`은 표면에 **없다**
 //! (`surface_tests::decision_rail_writes_never_reach_the_mcp_surface`가 이름으로 강제).
@@ -390,11 +398,24 @@ mod tests {
         assert!(empty.objectives.is_empty());
     }
 
+    /// `clean_quarter`는 바이트 인덱싱을 한다. 잘못된 분기는 거부돼야 하고, **비-ASCII 입력에서
+    /// 패닉하면 안 된다**(`q[..4]`가 char 경계를 가를 수 있다). 짧은-회로 순서 덕에 안전하지만
+    /// 미묘하므로 회귀로 고정한다 — "ab가de"는 정확히 7바이트다.
     #[tokio::test]
     async fn quarter_param_is_validated_not_silently_empty() {
         let db = fresh_db().await;
         let server = WrServer { db };
-        for bad in ["2026-Q5", "2026Q3", "26-Q3", "2026-q3", "", "  "] {
+        for bad in [
+            "2026-Q5",
+            "2026Q3",
+            "26-Q3",
+            "2026-q3",
+            "",
+            "  ",
+            "ab가de",
+            "가나다라-Q1",
+            "2026-Q0",
+        ] {
             let res = server
                 .okr_list_objectives_inner(OkrQuarterParams {
                     quarter: bad.into(),
