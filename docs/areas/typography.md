@@ -35,7 +35,20 @@ leading/font-weight/tracking/font-family 충돌 그룹으로 인식하므로, `c
   typo role이 아니라 **Button size variant**로 정규화하는 게 옳다(별도 follow-up). 그때까지 arbitrary 유지.
 - **뱃지/pill/코드**(`KindBadge`의 `text-[10px] leading-none`, `<code>`, mono 비-role): `leading-none`이
   의도적이거나 매칭 role 없음.
-- **role 없는 1회성 크기**(`44px`/`22px`/`9px`, `13px+font-medium` 라벨 등): 표에 역할이 없으면 arbitrary 유지.
+- **role 없는 1회성 크기**(`44px`/`22px`/`9px` 등): 표에 역할이 없으면 arbitrary 유지.
+  (2026-07-09: `13px+font-medium` 라벨은 반복 role로 판명 → `typo-label-md` 신설·스윕 완료.
+  새 role은 **소비처가 여럿이고 cascade 충돌이 없을 때만** 만든다.)
+
+## 새 role 추가 절차
+
+`@utility typo-x`를 `src/styles/typography.css`에만 추가하고 **`src/lib/tw.ts`의 `TYPO_SUFFIXES`를
+잊으면 실패가 조용하다** — `cn()`이 그 role을 충돌 그룹으로 못 알아봐 병합하지 않고, 함께 온
+빌트인(`text-sm` 등)이 cascade로 이긴다. 컴파일된 CSS를 보기 전엔 안 보인다.
+`src/lib/tw.test.ts`의 패리티 테스트가 두 목록의 일치를 강제한다.
+
+순서: `typography.css`(레시피) → `tw.ts`(`TYPO_SUFFIXES`) → `DESIGN.md` §App Surface Type(역할 표)
+→ 스윕 → `pnpm check:design-tokens --update-baseline`(baseline은 단조 감소만 — 늘면 잘못한 것).
+토큰은 값이 같으면 재사용한다(`typo-label-md`/`typo-body-strong`는 `--text-body-md`를 공유).
 
 ## 강제 (design quality gate)
 

@@ -25,7 +25,7 @@ export function NewsMarqueeSpeedField({
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-start justify-between gap-3">
-        <div className="text-foreground text-[13px] font-medium">마퀴 속도</div>
+        <div className="text-foreground typo-label-md">마퀴 속도</div>
         <div className="text-muted-foreground typo-caption-sm max-w-[28rem] text-right">
           뉴스가 흘러가는 체감 속도입니다. 기본은 보통.
         </div>

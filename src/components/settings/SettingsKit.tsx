@@ -21,7 +21,7 @@ export function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-foreground text-[13px] font-medium">
+      <label htmlFor={htmlFor} className="text-foreground typo-label-md">
         {label}
       </label>
       {children}
@@ -76,7 +76,8 @@ export function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
           className={cn(
             "h-full rounded-md px-3.5 font-medium transition-colors",
-            size === "md" ? "text-[13px]" : "text-xs",
+            // md는 typo-label-md(13/500)가 base의 font-medium까지 흡수한다(cn 병합).
+            size === "md" ? "typo-label-md" : "text-xs",
             value === o.value
               ? "bg-card text-foreground shadow-[var(--wr-shadow-hairline)]"
               : "text-muted-foreground hover:text-foreground",

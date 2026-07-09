@@ -8,11 +8,13 @@ import { extendTailwindMerge } from "tailwind-merge";
  * Result: `cn("text-base …", "typo-title-md")` → typo-title-md wins (built-ins
  * stripped), independent of compiled-cascade order. See docs/areas/typography.md.
  */
-const TYPO_SUFFIXES = [
+/** typography.css의 `@utility typo-*` 롤 목록과 정확히 일치해야 한다(tw.test.ts가 강제). */
+export const TYPO_SUFFIXES = [
   "title-md",
   "title-sm",
   "body-md",
   "body-strong",
+  "label-md",
   "label-sm",
   "caption-sm",
   "mono-label",

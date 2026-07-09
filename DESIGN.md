@@ -163,6 +163,7 @@ The dense desktop shell runs **tighter and heavier** than the marketing scale ab
 | `typo-title-sm`     |  15 |    600 |  1.3 |  -0.01em | Secondary titles.                                                                     |
 | `typo-body-md`      |  13 |    400 |  1.4 |        0 | Default dense body.                                                                   |
 | `typo-body-strong`  |  13 |    600 |  1.4 |        0 | Emphasized body / inline headers.                                                     |
+| `typo-label-md`     |  13 |    500 |  1.4 |        0 | Settings/form field labels, segmented control (md). Size = `var(--text-body-md)`.     |
 | `typo-label-sm`     |  12 |    500 |  1.4 |        0 | Form labels, compact UI.                                                              |
 | `typo-caption-sm`   |  11 |    400 |  1.4 |        0 | Metadata, captions.                                                                   |
 | `typo-mono-label`   |  11 |    600 |  1.4 |   0.12em | Uppercase mono section markers (`font-mono`). Size = `var(--text-caption-sm)` = 11px. |

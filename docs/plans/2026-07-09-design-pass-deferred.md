@@ -53,26 +53,42 @@
 - `TodayHeader.tsx:96`의 `h-[26px]` pill은 형제 아이콘 버튼(`size-[26px]`)과 행 높이 결속 —
   바꾸려면 행 전체(아이콘 3개 포함)를 h-8로 함께 올려야 한다. 단독 변환 금지. (무접촉)
 
-## 3. worktree `.wt-empty` 패밀리 (12+ 사이트, 이번 패스 의도적 스킵)
+## 3. worktree `.wt-empty` 패밀리 — ✅ DONE (2026-07-09)
 
-`.wt-empty`가 `.wt-err`와 규칙 공유 + 상당수가 실제로는 _loading_("diff 로드 중…")이거나
-프롬프트("파일을 선택하면…")라 EmptyState 일괄 치환이 부적절했다.
+실제 사이트는 **11곳**. 3분류 결과:
 
-- 먼저 사이트를 3분류: 진짜 empty → `<EmptyState>`; loading → 스켈레톤/`<Spinner>`(JobList 선례);
-  프롬프트(안내) → 유지 또는 EmptyState(문구 그대로).
-- `.wt-empty-action`의 좌측 정렬(align-items: flex-start)은 의도 — 그 사이트는 className으로 보존.
+| 분류          | 개수 | 처리                                                                         |
+| ------------- | ---: | ---------------------------------------------------------------------------- |
+| loading       |    4 | `.wt-loading`(신설, `.jobs-loading` 선례 = flex+중앙) + `<Spinner />`        |
+| 진짜 empty    |    4 | `<EmptyState className="wt-empty">` (geometry만 클래스, 타이포는 프리미티브) |
+| 안내 프롬프트 |    2 | 유지 — "비어 있음"이 아니라 행동 요구(주석으로 명시)                         |
+| empty + 액션  |    1 | 유지 — 아래 사유                                                             |
+
+- loading 4곳 중 3곳은 이미 `<Spinner/>`를 `.wt-empty`에 담고 있어 클래스가 의미를 배신했다.
+  나머지 1곳(`WorktreeDiffPanel` "diff 로드 중…")은 같은 파일 형제(:230)와 불일치 → Spinner로 통일.
+- **`WorktreeReviewPanel`의 `LensEmptyState`는 EmptyState로 옮기지 않았다.** 메시지 + 액션 버튼
+  구조인데 `EmptyState`는 `title`/`children`만 받아, 버튼을 `children`에 넣으면
+  `typo-body-md text-muted-foreground` 래퍼에 갇히고 `.wt-empty-action`의 `gap: 10px` 컬럼
+  레이아웃이 깨진다. 프리미티브가 액션 슬롯을 갖게 되면 그때 이관.
 - `WorktreeEmptyState.tsx`(별도 컴포넌트)는 무접촉.
+- **시각 변화 있음**(진짜 empty 4곳: 좌측→중앙 정렬, line-height normal→1.4). 라이브 확인 필요.
 
-## 4. 잔여 R3 baseline 37건 — 새 typo 롤 없이는 해소 불가
+## 4. `typo-label-md` 신설 + ① 스윕 — ✅ DONE (2026-07-09, baseline 37 → 34)
 
-남은 대부분이 세 부류(이번 스윕의 weight-보존 규칙이 걸러낸 것):
-① 13px/500 (`SettingsKit` Field 라벨, `Segmented`, News 설정 등) ② mono 소문자(uppercase 강제라
-`typo-mono-*` 부적용: `ui/command` kbd, AgentsPane 등) ③ `leading-none` 동반(CommandPalette 배지 등).
+`typo-label-md`(13/500/1.4/0) 신설. **새 토큰 0개** — `typo-body-strong`가 이미
+`--text-body-md`를 600 weight로 재사용하는 선례를 따라 같은 토큰에 500만 얹었다.
 
-- 진행하려면: `typo-label-md`(13px/500/1.4) 신설 — `tokens.css`(--text 재사용) + `typography.css`
-  - `tw.ts` TYPO_SUFFIXES + DESIGN.md §App Surface Type 표 + `docs/areas/typography.md`. 이후 ①만 스윕.
-- ②③은 롤을 만들지 말 것(소문자 mono·leading-none은 컴포넌트 사정) — baseline에 남기는 게 맞다.
-- 스윕 후 `pnpm check:design-tokens --update-baseline`으로 감소 확인(늘면 잘못한 것).
+- 스윕한 ① 그룹은 **5곳/3파일**: `SettingsKit`(Field 라벨 + Segmented md), `NewsMarqueeSpeedField`,
+  `NewsSourceSettings` ×2. baseline 3건 제거(삭제만 — 단조 감소).
+- **드리프트 가드 신설**: `tw.ts`의 `TYPO_SUFFIXES`와 `typography.css`의 `@utility typo-*` 목록
+  패리티를 `tw.test.ts`가 강제한다. 없으면 새 role 추가 시 `tw.ts`를 잊어도 조용히 실패한다
+  (`cn()`이 병합 못 해 빌트인이 cascade로 이김). 변이 테스트로 non-vacuous 확인.
+- **남긴 부류(롤 만들지 말 것)**: mono 소문자(`ui/command` kbd, `SkillRootsSettings`, `RepoRow`),
+  `font-semibold`(ErrorBoundary=600), 컨트롤 프리미티브의 arbitrary 텍스트 크기
+  (`SprintTimer`/`SettingsView`/`CalendarDrawer`의 Button — typo role이 아니라 **Button size
+  variant**로 정규화하는 게 옳다, `typography.md` 참조).
+- 남은 baseline 34건은 위 부류 + `leading-none` 동반 사이트들. 여기서 더 줄이려면 Button size
+  variant 트랙이 필요하다.
 
 ## 5. 뷰 전환 크로스페이드 재도입 (기각됨 — 조건부로만)
 

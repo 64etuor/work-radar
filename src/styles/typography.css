@@ -33,6 +33,15 @@
   letter-spacing: var(--tracking-body-md);
 }
 
+/* label-md = body-md 크기/행간/자간에 500 weight (typo-body-strong가 600으로 하는 것과 같은 재사용).
+ * 별도 --text-label-md 를 만들지 않는다 — 값이 body-md와 동일해 드리프트 위험만 늘어난다. */
+@utility typo-label-md {
+  font-size: var(--text-body-md);
+  line-height: var(--leading-body-md);
+  font-weight: 500;
+  letter-spacing: var(--tracking-body-md);
+}
+
 @utility typo-label-sm {
   font-size: var(--text-label-sm);
   line-height: var(--leading-label-sm);

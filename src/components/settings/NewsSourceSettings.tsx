@@ -93,7 +93,7 @@ export function NewsSourceSettings({ onToast }: { onToast: (msg: string) => void
                 <button
                   type="button"
                   onClick={() => toggleCollapsed(cat)}
-                  className="text-foreground flex items-center gap-2 text-[13px] font-medium"
+                  className="text-foreground typo-label-md flex items-center gap-2"
                 >
                   {isCollapsed ? (
                     <ChevronRight className="size-4" />
@@ -283,7 +283,7 @@ function OptionRow({
       className={`border-border/70 bg-muted/15 flex min-h-14 items-center justify-between gap-3 rounded-xl border px-3 py-2.5 ${className ?? ""}`}
     >
       <div className="min-w-0">
-        <div className="text-foreground text-[13px] font-medium">{label}</div>
+        <div className="text-foreground typo-label-md">{label}</div>
         {hint && (
           <div className="text-muted-foreground typo-caption-sm mt-0.5 truncate">{hint}</div>
         )}
