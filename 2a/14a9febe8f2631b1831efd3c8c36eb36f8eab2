@@ -1,0 +1,33 @@
+src/components/hermes/HermesPanel.tsx
+  s_14a22fa7abadd8::t_eb9d7dc15c5c17 150
+  s_14a22fa7abadd8::t_dfbf73dc8e61d3 132-136
+  s_14a22fa7abadd8::t_559a3a473f05d7 4,8,10,18-19
+  s_14a22fa7abadd8::t_244875faff2436 161-164
+  s_14a22fa7abadd8::t_126f5f820e692a 20
+src/styles/motion.css
+  s_14a22fa7abadd8::t_ff31de7a63bdf7 147-149,154
+src/lib/overlayExit.test.ts
+  s_14a22fa7abadd8::t_8e96347a654173 36-46
+  s_14a22fa7abadd8::t_f2a219d2ae6cef 99
+  s_14a22fa7abadd8::t_f1a572e483c2af 79-81
+  s_14a22fa7abadd8::t_7551ad5dc30f96 100,103-121
+  s_14a22fa7abadd8::t_bf97d107b212a1 124
+  s_14a22fa7abadd8::t_fb588c8414108e 122-123
+  s_14a22fa7abadd8::t_755c4c0205b2a5 101-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "2a14a9febe8f2631b1831efd3c8c36eb36f8eab2",
+  "prompts": {},
+  "sessions": {
+    "s_14a22fa7abadd8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "d00a882f-1f42-4f05-a5bf-f866a27af786",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
