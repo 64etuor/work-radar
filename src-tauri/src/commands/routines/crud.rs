@@ -440,6 +440,16 @@ pub async fn toggle_routine_check(
     date: String,
     done: bool,
 ) -> Result<(), AppError> {
+    toggle_routine_check_inner(db.inner(), &routine_id, &date, done).await
+}
+
+/// `toggle_routine_check`의 코어(State 없이 호출 가능 — MCP `wr_toggle_routine_check`가 공유).
+pub(crate) async fn toggle_routine_check_inner(
+    db: &Db,
+    routine_id: &str,
+    date: &str,
+    done: bool,
+) -> Result<(), AppError> {
     if done {
         // 완료 = completed_at 마커 세팅. 행이 이미 있으면(캘린더 배치/시각 override 목적)
         // 그 행에 completed_at만 얹어 링크/override를 보존한다.
@@ -448,22 +458,17 @@ pub async fn toggle_routine_check(
              VALUES (lower(hex(randomblob(16))), ?1, ?2, datetime('now')) \
              ON CONFLICT(routine_id, date) DO UPDATE SET completed_at = datetime('now')",
         )
-        .bind(&routine_id)
-        .bind(&date)
-        .execute(db.inner())
+        .bind(routine_id)
+        .bind(date)
+        .execute(db)
         .await
         .map_err(AppError::from)?;
 
         // 완료된 루틴은 오늘 알림을 발사하지 않는다 — 미발사 행을 fired로 마킹(skip).
-        let source_id = reminder_source_id(&routine_id, &date);
-        notification_store::mark_fired_by_source(
-            db.inner(),
-            "routine",
-            &source_id,
-            &utc_now_string(),
-        )
-        .await
-        .map_err(AppError::from)?;
+        let source_id = reminder_source_id(routine_id, date);
+        notification_store::mark_fired_by_source(db, "routine", &source_id, &utc_now_string())
+            .await
+            .map_err(AppError::from)?;
     } else {
         // 완료 해제 = 완료 마커만 지운다. 링크(linked_event_id/calendar_id)나 시각 override가
         // 남아 있으면 행 자체는 보존(체크 해제가 캘린더 배치/이동을 날리지 않게). 아무 상태도
@@ -471,9 +476,9 @@ pub async fn toggle_routine_check(
         sqlx::query(
             "UPDATE routine_checks SET completed_at = NULL WHERE routine_id = ?1 AND date = ?2",
         )
-        .bind(&routine_id)
-        .bind(&date)
-        .execute(db.inner())
+        .bind(routine_id)
+        .bind(date)
+        .execute(db)
         .await
         .map_err(AppError::from)?;
         sqlx::query(
@@ -481,9 +486,9 @@ pub async fn toggle_routine_check(
              AND completed_at IS NULL AND linked_event_id IS NULL \
              AND linked_calendar_id IS NULL AND time_override IS NULL",
         )
-        .bind(&routine_id)
-        .bind(&date)
-        .execute(db.inner())
+        .bind(routine_id)
+        .bind(date)
+        .execute(db)
         .await
         .map_err(AppError::from)?;
     }

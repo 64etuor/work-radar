@@ -10,6 +10,7 @@ pub mod notion;
 pub mod okr;
 pub mod queue;
 pub mod signals;
+pub mod today;
 
 /// 도메인 모듈의 스키마 스냅샷 테스트가 공유하는 헬퍼(§8: 표면 drift = 테스트 실패).
 #[cfg(test)]

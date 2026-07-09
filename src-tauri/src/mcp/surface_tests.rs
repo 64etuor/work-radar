@@ -171,6 +171,11 @@ fn registered_tool_set_is_locked() {
         "wr_okr_list_objectives",
         "wr_okr_list_check_ins",
         "wr_okr_upsert_check_in",
+        "wr_today_overview",
+        "wr_list_today_routines",
+        "wr_toggle_routine_check",
+        "wr_list_timeline_notes",
+        "wr_upsert_timeline_note",
         "wr_propose_noop",
         "wr_action_status",
     ]
