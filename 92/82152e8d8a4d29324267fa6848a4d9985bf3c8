@@ -1,0 +1,28 @@
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_65a1a90da09826::t_0897636931466b 18,25-26
+  s_65a1a90da09826::t_984245f6c54083 200-258
+  s_65a1a90da09826::t_a8b8f9a6dea49b 1229-1236,1238-1240,1242,1244-1293,1295-1323,1326-1337
+  s_65a1a90da09826::t_b0523131e02ee4 747,1324-1325
+  s_65a1a90da09826::t_ffde4eef78a737 649-739
+  s_65a1a90da09826::t_900382d623af78 1237,1241,1243
+  s_65a1a90da09826::t_4ff4d88a52f5a1 1294
+  s_65a1a90da09826::t_c06b93efa0d388 27
+src-tauri/src/mcp/surface_tests.rs
+  s_65a1a90da09826::t_3e644a231ae00c 169-170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "9282152e8d8a4d29324267fa6848a4d9985bf3c8",
+  "prompts": {},
+  "sessions": {
+    "s_65a1a90da09826": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b237a6e2-d324-4796-88a8-709788a7861e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
