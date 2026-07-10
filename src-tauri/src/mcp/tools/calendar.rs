@@ -15,7 +15,7 @@ use crate::commands::calendar::fetch_calendar_events_range_inner;
 use crate::external_actions::ExternalAction;
 use crate::mcp::tools::queue::ProposeResult;
 use crate::mcp::write_routing::{HermesMcpExecutor, LiveHermesMcpExecutor};
-use crate::mcp::{mcp_caller_from_env, mcp_tool_error, McpCaller, WrServer};
+use crate::mcp::{mcp_caller_from_env, mcp_tool_error, parse_iso_date, McpCaller, WrServer};
 
 /// 조회 윈도우 상한(일). 무제한 히스토리 덤프를 막는다(§7 최소권한).
 const MAX_WINDOW_DAYS: i64 = 62;
@@ -77,13 +77,8 @@ pub struct CalendarEventListDto {
 /// 윈도우를 파싱·검증한다. 잘못된 날짜가 조용히 빈 목록이 되면 caller는 "일정 없음"으로 오해한다.
 #[allow(clippy::result_large_err)]
 fn clean_window(start: &str, end: &str) -> Result<(String, String), rmcp::ErrorData> {
-    let parse = |raw: &str| {
-        chrono::NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|_| {
-            rmcp::ErrorData::invalid_params(format!("date must be YYYY-MM-DD (got: {raw})"), None)
-        })
-    };
-    let s = parse(start)?;
-    let e = parse(end)?;
+    let s = parse_iso_date(start)?;
+    let e = parse_iso_date(end)?;
     if e < s {
         return Err(rmcp::ErrorData::invalid_params(
             "end_date must not precede start_date",

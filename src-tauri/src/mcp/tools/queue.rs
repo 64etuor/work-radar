@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::projects;
 use crate::error::AppError;
 use crate::external_actions::{store, ExternalAction};
-use crate::mcp::{db_tool_error, project_kind_str, WrServer};
+use crate::mcp::{mcp_tool_error, project_kind_str, WrServer};
 
 /// 승인 대기 액션 1건(메타만). payload/result/토큰은 노출하지 않는다.
 #[derive(Serialize, JsonSchema)]
@@ -90,7 +90,7 @@ impl WrServer {
     pub async fn list_pending_actions(&self) -> Result<Json<PendingList>, rmcp::ErrorData> {
         let (rows, total) = store::list_pending_with_total(&self.db)
             .await
-            .map_err(|e| db_tool_error("wr_list_pending_actions", &e))?;
+            .map_err(|e| mcp_tool_error("wr_list_pending_actions", &e))?;
         let truncated = total as usize > rows.len();
         Ok(Json(PendingList {
             actions: rows
@@ -116,7 +116,7 @@ impl WrServer {
     pub async fn list_projects(&self) -> Result<Json<ProjectList>, rmcp::ErrorData> {
         let rows = projects::fetch_projects(&self.db)
             .await
-            .map_err(|e| db_tool_error("wr_list_projects", &AppError::from(e)))?;
+            .map_err(|e| mcp_tool_error("wr_list_projects", &AppError::from(e)))?;
         Ok(Json(ProjectList {
             projects: rows
                 .into_iter()
@@ -175,7 +175,7 @@ impl WrServer {
     ) -> Result<Json<ActionStatus>, rmcp::ErrorData> {
         let status = store::status(&self.db, &p.action_id)
             .await
-            .map_err(|e| db_tool_error("wr_action_status", &e))?;
+            .map_err(|e| mcp_tool_error("wr_action_status", &e))?;
         Ok(Json(ActionStatus { status }))
     }
 }

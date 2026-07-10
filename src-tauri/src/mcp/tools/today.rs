@@ -24,7 +24,7 @@ use crate::commands::routines::{fetch_today_routines, toggle_routine_check_inner
 use crate::commands::timeline_notes;
 use crate::commands::today::fetch_today_overview;
 use crate::error::AppError;
-use crate::mcp::{db_tool_error, enum_wire_string, mcp_tool_error, truncate_preview, WrServer};
+use crate::mcp::{enum_wire_string, mcp_tool_error, parse_iso_date, truncate_preview, WrServer};
 use crate::models::{RoutineToday, TimelineNote, TimelineNoteTarget, Weekday};
 
 /// 타임라인 메모 본문 입력 상한(§2).
@@ -165,15 +165,6 @@ pub struct ToggleRoutineCheckResult {
     pub done: bool,
 }
 
-/// 'YYYY-MM-DD'를 강제하고 파싱한다. 하위 스토어는 대개 문자열 비교라 잘못된 날짜가 조용히
-/// 빈 결과가 된다 — caller는 그걸 "그날 아무것도 없다"로 오해한다.
-#[allow(clippy::result_large_err)]
-fn clean_date(raw: &str) -> Result<chrono::NaiveDate, rmcp::ErrorData> {
-    chrono::NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|_| {
-        rmcp::ErrorData::invalid_params(format!("date must be YYYY-MM-DD (got: {raw})"), None)
-    })
-}
-
 /// 날짜에서 요일을 **서버가 파생**한다. caller가 보낸 weekday와 date가 어긋날 여지를 없앤다.
 fn weekday_of(date: chrono::NaiveDate) -> Weekday {
     match date.weekday() {
@@ -202,12 +193,15 @@ fn to_routine_dto(r: RoutineToday) -> RoutineTodayDto {
 }
 
 fn to_note_dto(n: TimelineNote) -> TimelineNoteDto {
-    let body_truncated = n.body.chars().count() > NOTE_PREVIEW_CHARS;
+    // `body_truncated`는 `truncate_preview`의 결과에서 파생한다 — 임계값 판단의 소유자를 하나로
+    // 둬서, preview 규칙이 바뀌어도 플래그가 조용히 어긋나지 않게 한다.
+    let body_preview = truncate_preview(&n.body, NOTE_PREVIEW_CHARS);
+    let body_truncated = body_preview != n.body;
     TimelineNoteDto {
         target_kind: enum_wire_string(&n.target_kind),
         target_id: n.target_id,
         date: n.date,
-        body_preview: truncate_preview(&n.body, NOTE_PREVIEW_CHARS),
+        body_preview,
         body_truncated,
         updated_at: n.updated_at,
     }
@@ -231,12 +225,12 @@ impl WrServer {
         &self,
         p: TodayDateParams,
     ) -> Result<Json<TodayOverviewDto>, rmcp::ErrorData> {
-        let date = clean_date(&p.date)?;
+        let date = parse_iso_date(&p.date)?;
         let date = date.format("%Y-%m-%d").to_string();
         // `today_overview` 커맨드가 아니라 순수 read 코어를 부른다(모듈 doc 참조).
         let overview = fetch_today_overview(&self.db, &date)
             .await
-            .map_err(|e| db_tool_error("wr_today_overview", &AppError::from(e)))?;
+            .map_err(|e| mcp_tool_error("wr_today_overview", &AppError::from(e)))?;
         Ok(Json(TodayOverviewDto {
             date,
             work_debt: WorkDebtDto {
@@ -273,11 +267,11 @@ impl WrServer {
         &self,
         p: TodayDateParams,
     ) -> Result<Json<RoutineTodayListDto>, rmcp::ErrorData> {
-        let parsed = clean_date(&p.date)?;
+        let parsed = parse_iso_date(&p.date)?;
         let date = parsed.format("%Y-%m-%d").to_string();
         let rows = fetch_today_routines(&self.db, &date, weekday_of(parsed))
             .await
-            .map_err(|e| db_tool_error("wr_list_today_routines", &AppError::from(e)))?;
+            .map_err(|e| mcp_tool_error("wr_list_today_routines", &AppError::from(e)))?;
         Ok(Json(RoutineTodayListDto {
             routines: rows.into_iter().map(to_routine_dto).collect(),
         }))
@@ -299,7 +293,7 @@ impl WrServer {
         &self,
         p: ToggleRoutineCheckParams,
     ) -> Result<Json<ToggleRoutineCheckResult>, rmcp::ErrorData> {
-        let date = clean_date(&p.date)?.format("%Y-%m-%d").to_string();
+        let date = parse_iso_date(&p.date)?.format("%Y-%m-%d").to_string();
         toggle_routine_check_inner(&self.db, &p.routine_id, &date, p.done)
             .await
             .map_err(|e| mcp_tool_error("wr_toggle_routine_check", &e))?;
@@ -325,10 +319,10 @@ impl WrServer {
         &self,
         p: TodayDateParams,
     ) -> Result<Json<TimelineNoteListDto>, rmcp::ErrorData> {
-        let date = clean_date(&p.date)?.format("%Y-%m-%d").to_string();
+        let date = parse_iso_date(&p.date)?.format("%Y-%m-%d").to_string();
         let rows = timeline_notes::list_for_date_inner(&self.db, &date)
             .await
-            .map_err(|e| db_tool_error("wr_list_timeline_notes", &AppError::from(e)))?;
+            .map_err(|e| mcp_tool_error("wr_list_timeline_notes", &AppError::from(e)))?;
         Ok(Json(TimelineNoteListDto {
             notes: rows.into_iter().map(to_note_dto).collect(),
         }))
@@ -356,7 +350,7 @@ impl WrServer {
                 None,
             ));
         }
-        let date = clean_date(&p.date)?.format("%Y-%m-%d").to_string();
+        let date = parse_iso_date(&p.date)?.format("%Y-%m-%d").to_string();
         let saved = timeline_notes::upsert_inner(
             &self.db,
             p.target_kind.into(),
@@ -365,7 +359,7 @@ impl WrServer {
             &p.body,
         )
         .await
-        .map_err(|e| db_tool_error("wr_upsert_timeline_note", &AppError::from(e)))?;
+        .map_err(|e| mcp_tool_error("wr_upsert_timeline_note", &AppError::from(e)))?;
         Ok(Json(UpsertTimelineNoteResult {
             status: if saved.is_some() { "saved" } else { "cleared" }.to_string(),
         }))

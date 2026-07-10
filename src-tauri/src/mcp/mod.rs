@@ -112,6 +112,15 @@ pub(crate) fn truncate_preview(text: &str, max_chars: usize) -> String {
     text.chars().take(max_chars - 1).collect::<String>() + "…"
 }
 
+/// 'YYYY-MM-DD'를 강제하고 파싱한다(§2 — 자유 문자열을 좁힌다). 하위 스토어는 대개 문자열 비교라
+/// 잘못된 날짜가 조용히 빈 결과가 된다 — caller는 그걸 "그날 아무것도 없다"로 오해한다.
+#[allow(clippy::result_large_err)]
+pub(crate) fn parse_iso_date(raw: &str) -> Result<chrono::NaiveDate, rmcp::ErrorData> {
+    chrono::NaiveDate::parse_from_str(raw.trim(), "%Y-%m-%d").map_err(|_| {
+        rmcp::ErrorData::invalid_params(format!("date must be YYYY-MM-DD (got: {raw})"), None)
+    })
+}
+
 /// ProjectKind → 안정 라벨 문자열(MCP 표면 전용 — serde 태그와 동일 의미).
 pub(crate) fn project_kind_str(kind: ProjectKind) -> &'static str {
     match kind {
@@ -123,10 +132,6 @@ pub(crate) fn project_kind_str(kind: ProjectKind) -> &'static str {
 /// 툴 에러 → rmcp internal-error 매핑. **PII-free**: AppError.code만 노출/기록하고
 /// message/payload 본문은 절대 넣지 않는다. trace_id는 로그 상관용으로 stderr에만.
 /// stderr 기록(stdout 아님 — stdout은 MCP 프로토콜 전용)으로 삼킨 에러가 완전히 안 보이는 일은 없게 한다.
-pub(crate) fn db_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
-    mcp_tool_error(tool, e)
-}
-
 pub(crate) fn mcp_tool_error(tool: &str, e: &crate::error::AppError) -> rmcp::ErrorData {
     eprintln!(
         "[work-radar mcp-stdio] {tool} error: code={} trace_id={}",

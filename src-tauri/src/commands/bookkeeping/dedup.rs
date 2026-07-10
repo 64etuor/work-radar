@@ -151,6 +151,49 @@ pub(crate) async fn find_bookkeeping_duplicate_candidates_inner(
     Ok(candidates)
 }
 
+/// `flag`/`mark` 두 경로가 공유하는 진입 검증: trim + 자기참조 금지.
+// AppError는 큰 Err 변형 — 레포 관용대로 허용.
+#[allow(clippy::result_large_err)]
+fn clean_duplicate_pair(id: &str, target: &str) -> Result<(String, String), AppError> {
+    let id = clean_required(id, "bookkeeping.duplicate.id")?;
+    let target = clean_required(target, "bookkeeping.duplicate.target")?;
+    if id == target {
+        return Err(AppError::validation(
+            "bookkeeping.duplicate.self",
+            "거래를 자기 자신의 중복으로 표시할 수 없습니다",
+        ));
+    }
+    Ok((id, target))
+}
+
+/// 원본(target)이 실재하고 **자기가 다른 거래의 중복이 아님**을 트랜잭션 안에서 확인한다.
+/// 중복 체인 금지 — `duplicate_of_transaction_id`를 한 번 따라가면 항상 원본에 닿아야 한다.
+/// `flag`(제안)와 `mark`(사람 확정)가 같은 계약을 쓴다.
+async fn ensure_canonical_duplicate_target(
+    tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    target: &str,
+) -> Result<(), AppError> {
+    let target_row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT id, duplicate_of_transaction_id FROM bookkeeping_transactions WHERE id = ?1",
+    )
+    .bind(target)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((_, target_duplicate_of)) = target_row else {
+        return Err(AppError::not_found(
+            "bookkeeping.duplicate.target_not_found",
+            "원본 거래를 찾을 수 없습니다",
+        ));
+    };
+    if target_duplicate_of.is_some() {
+        return Err(AppError::validation(
+            "bookkeeping.duplicate.target_is_duplicate",
+            "원본 거래가 이미 다른 거래의 중복으로 표시돼 있습니다",
+        ));
+    }
+    Ok(())
+}
+
 /// **제안형 중복 표시(MCP 전용).** `mark_bookkeeping_duplicate_inner`와 달리 `review_status`를
 /// 건드리지 않는다 — 행은 `needs_review`에 남고, 링크(`duplicate_of_transaction_id`)와 사유
 /// (`possible_duplicate`)만 붙는다. "X는 Y의 중복이다"는 *판단*이고 리뷰 큐에서 치우는 건 사람의
@@ -165,35 +208,10 @@ pub(crate) async fn flag_bookkeeping_duplicate_inner(
     id: &str,
     duplicate_of_transaction_id: &str,
 ) -> Result<BookkeepingTransaction, AppError> {
-    let id = clean_required(id, "bookkeeping.duplicate.id")?;
-    let target = clean_required(duplicate_of_transaction_id, "bookkeeping.duplicate.target")?;
-    if id == target {
-        return Err(AppError::validation(
-            "bookkeeping.duplicate.self",
-            "거래를 자기 자신의 중복으로 표시할 수 없습니다",
-        ));
-    }
+    let (id, target) = clean_duplicate_pair(id, duplicate_of_transaction_id)?;
 
     let mut tx = db.begin().await?;
-    let target_row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT id, duplicate_of_transaction_id FROM bookkeeping_transactions WHERE id = ?1",
-    )
-    .bind(&target)
-    .fetch_optional(&mut *tx)
-    .await?;
-    let Some((_, target_duplicate_of)) = target_row else {
-        return Err(AppError::not_found(
-            "bookkeeping.duplicate.target_not_found",
-            "원본 거래를 찾을 수 없습니다",
-        ));
-    };
-    // 중복 체인 금지 — mark 경로와 동일 계약.
-    if target_duplicate_of.is_some() {
-        return Err(AppError::validation(
-            "bookkeeping.duplicate.target_is_duplicate",
-            "원본 거래가 이미 다른 거래의 중복으로 표시돼 있습니다",
-        ));
-    }
+    ensure_canonical_duplicate_target(&mut tx, &target).await?;
 
     let current: Option<(String,)> = sqlx::query_as(
         "SELECT review_reasons_json FROM bookkeeping_transactions WHERE id = ?1 AND deleted_at IS NULL",
@@ -251,41 +269,17 @@ pub(crate) async fn flag_bookkeeping_duplicate_inner(
     Ok(updated)
 }
 
+/// **사람 확정 경로.** 리뷰 큐에서 치운다(`review_status='ignored'`) — 앱 안 버튼 전용이며
+/// MCP 표면에 없다(에이전트는 `flag_bookkeeping_duplicate_inner`로 제안만).
 pub(crate) async fn mark_bookkeeping_duplicate_inner(
     db: &Db,
     id: &str,
     duplicate_of_transaction_id: &str,
 ) -> Result<BookkeepingTransaction, AppError> {
-    let id = clean_required(id, "bookkeeping.duplicate.id")?;
-    let target = clean_required(duplicate_of_transaction_id, "bookkeeping.duplicate.target")?;
-    if id == target {
-        return Err(AppError::validation(
-            "bookkeeping.duplicate.self",
-            "거래를 자기 자신의 중복으로 표시할 수 없습니다",
-        ));
-    }
+    let (id, target) = clean_duplicate_pair(id, duplicate_of_transaction_id)?;
 
     let mut tx = db.begin().await?;
-    let target_row: Option<(String, Option<String>)> = sqlx::query_as(
-        "SELECT id, duplicate_of_transaction_id FROM bookkeeping_transactions WHERE id = ?1",
-    )
-    .bind(&target)
-    .fetch_optional(&mut *tx)
-    .await?;
-    let Some((_, target_duplicate_of)) = target_row else {
-        return Err(AppError::not_found(
-            "bookkeeping.duplicate.target_not_found",
-            "원본 거래를 찾을 수 없습니다",
-        ));
-    };
-    // No duplicate chains: the target must itself be a canonical row, so following
-    // duplicate_of_transaction_id always reaches the original in one hop.
-    if target_duplicate_of.is_some() {
-        return Err(AppError::validation(
-            "bookkeeping.duplicate.target_is_duplicate",
-            "원본 거래가 이미 다른 거래의 중복으로 표시돼 있습니다",
-        ));
-    }
+    ensure_canonical_duplicate_target(&mut tx, &target).await?;
 
     let updated = sqlx::query_as::<_, BookkeepingTransaction>(&format!(
         "UPDATE bookkeeping_transactions SET \

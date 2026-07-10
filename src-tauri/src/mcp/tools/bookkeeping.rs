@@ -155,9 +155,12 @@ pub struct BookkeepingSaveReceiptParams {
     pub line_items: Option<Vec<BookkeepingLineItemParam>>,
 }
 
+/// 가계부 로컬 write 툴의 공통 반환.
 #[derive(Serialize, JsonSchema)]
-pub struct BookkeepingSaveReceiptResult {
+pub struct BookkeepingWriteResult {
     pub transaction_id: String,
+    /// `save_receipt` → "saved" | "already_exists"(충돌 시 기존 행 무손상).
+    /// `flag_duplicate` → "flagged_duplicate".
     pub status: String,
 }
 
@@ -347,10 +350,13 @@ pub struct BookkeepingFindDuplicateParams {
     pub exclude_transaction_id: Option<String>,
 }
 
+/// `wr_bookkeeping_flag_duplicate` 파라미터. 둘 다 기존 거래 id.
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-pub struct BookkeepingMarkDuplicateParams {
+pub struct BookkeepingFlagDuplicateParams {
+    /// 중복으로 의심되는 거래.
     pub transaction_id: String,
+    /// 원본으로 지목하는 거래. 그 자신이 다른 거래의 중복이면 거부된다(체인 금지).
     pub duplicate_of_transaction_id: String,
 }
 
@@ -410,14 +416,14 @@ impl WrServer {
     pub async fn bookkeeping_save_receipt(
         &self,
         Parameters(p): Parameters<BookkeepingSaveReceiptParams>,
-    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+    ) -> Result<Json<BookkeepingWriteResult>, rmcp::ErrorData> {
         self.bookkeeping_save_receipt_inner(p).await
     }
 
     pub(crate) async fn bookkeeping_save_receipt_inner(
         &self,
         p: BookkeepingSaveReceiptParams,
-    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+    ) -> Result<Json<BookkeepingWriteResult>, rmcp::ErrorData> {
         validate_receipt_bounds(&p)?;
 
         if let Some(project_id) = p.project_id.as_deref() {
@@ -470,16 +476,17 @@ impl WrServer {
                 .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
         }
 
-        let has_source_ref = p
+        // trim 후 빈 문자열은 "없음"과 동치 — 스토어와 같은 정규화를 한 번만 한다.
+        let source_ref: Option<String> = p
             .source_ref
             .as_deref()
             .map(str::trim)
-            .is_some_and(|s| !s.is_empty());
-        let source_ref = p.source_ref.clone();
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         let input = CreateBookkeepingTransactionInput {
             project_id: p.project_id,
             source: BookkeepingSource::Ocr,
-            source_ref: p.source_ref,
+            source_ref: source_ref.clone(),
             merchant: p.merchant,
             description: p.description,
             amount_minor: p.amount_minor,
@@ -509,26 +516,27 @@ impl WrServer {
 
         // source_ref 없으면 dedup 키가 없으니 평범한 insert. 있으면 insert-if-absent —
         // conflict가 기존 행을 **건드리지 않는다**(모듈/핸들러 doc 참조).
-        let row = if has_source_ref {
-            let inserted =
-                bookkeeping_commands::insert_bookkeeping_transaction_from_ingest_if_absent_inner(
-                    &self.db,
-                    input,
-                    "transaction.ocr_ingested",
-                    "OCR 영수증이 리뷰큐에 추가됨",
-                )
+        let row = match source_ref.as_deref() {
+            None => bookkeeping_commands::create_bookkeeping_transaction_inner(&self.db, input)
                 .await
-                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
+                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?,
+            Some(source_ref) => {
+                let inserted =
+                    bookkeeping_commands::insert_bookkeeping_transaction_from_ingest_if_absent_inner(
+                        &self.db,
+                        input,
+                        "transaction.ocr_ingested",
+                        "OCR 영수증이 리뷰큐에 추가됨",
+                    )
+                    .await
+                    .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
 
-            match inserted {
-                Some(row) => row,
-                None => {
+                let Some(row) = inserted else {
                     // 이미 있는 행 — 아무것도 쓰지 않았다. line item도 덮지 않는다.
-                    let source_ref = source_ref.unwrap_or_default();
                     let existing = bookkeeping_commands::find_transaction_id_by_source_ref(
                         &self.db,
                         BookkeepingSource::Ocr,
-                        source_ref.trim(),
+                        source_ref,
                     )
                     .await
                     .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?
@@ -539,16 +547,13 @@ impl WrServer {
                             None,
                         )
                     })?;
-                    return Ok(Json(BookkeepingSaveReceiptResult {
+                    return Ok(Json(BookkeepingWriteResult {
                         transaction_id: existing,
                         status: "already_exists".to_string(),
                     }));
-                }
+                };
+                row
             }
-        } else {
-            bookkeeping_commands::create_bookkeeping_transaction_inner(&self.db, input)
-                .await
-                .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?
         };
 
         if let Some(items) = line_item_inputs {
@@ -563,7 +568,7 @@ impl WrServer {
             .map_err(|e| mcp_tool_error("wr_bookkeeping_save_receipt", &e))?;
         }
 
-        Ok(Json(BookkeepingSaveReceiptResult {
+        Ok(Json(BookkeepingWriteResult {
             transaction_id: row.id,
             status: "saved".to_string(),
         }))
@@ -751,15 +756,15 @@ impl WrServer {
     )]
     pub async fn bookkeeping_flag_duplicate(
         &self,
-        Parameters(p): Parameters<BookkeepingMarkDuplicateParams>,
-    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        Parameters(p): Parameters<BookkeepingFlagDuplicateParams>,
+    ) -> Result<Json<BookkeepingWriteResult>, rmcp::ErrorData> {
         self.bookkeeping_flag_duplicate_inner(p).await
     }
 
     pub(crate) async fn bookkeeping_flag_duplicate_inner(
         &self,
-        p: BookkeepingMarkDuplicateParams,
-    ) -> Result<Json<BookkeepingSaveReceiptResult>, rmcp::ErrorData> {
+        p: BookkeepingFlagDuplicateParams,
+    ) -> Result<Json<BookkeepingWriteResult>, rmcp::ErrorData> {
         let row = bookkeeping_commands::flag_bookkeeping_duplicate_inner(
             &self.db,
             &p.transaction_id,
@@ -767,7 +772,7 @@ impl WrServer {
         )
         .await
         .map_err(|e| mcp_tool_error("wr_bookkeeping_flag_duplicate", &e))?;
-        Ok(Json(BookkeepingSaveReceiptResult {
+        Ok(Json(BookkeepingWriteResult {
             transaction_id: row.id,
             status: "flagged_duplicate".to_string(),
         }))
@@ -868,10 +873,10 @@ impl WrServer {
 #[cfg(test)]
 mod tests {
     use super::{
-        BookkeepingFindDuplicateParams, BookkeepingLineItemParam, BookkeepingListParams,
-        BookkeepingMarkDuplicateParams, BookkeepingMonthlySummaryParams,
-        BookkeepingProjectScopeParams, BookkeepingRecurringExpenseDto,
-        BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams, BookkeepingTransactionDto,
+        BookkeepingFindDuplicateParams, BookkeepingFlagDuplicateParams, BookkeepingLineItemParam,
+        BookkeepingListParams, BookkeepingMonthlySummaryParams, BookkeepingProjectScopeParams,
+        BookkeepingRecurringExpenseDto, BookkeepingReviewReasonParam, BookkeepingSaveReceiptParams,
+        BookkeepingTransactionDto,
     };
     use crate::commands::bookkeeping as bookkeeping_commands;
     use crate::commands::shared::test_support::fresh_db;
@@ -1134,7 +1139,7 @@ mod tests {
         // flag_duplicate(로컬 review-queue write)도 caller 게이트 없이 동작한다. 존재하지 않는 행은
         // 여전히 도메인 에러 — 개방은 "검증 없이 통과"가 아니다.
         let missing_flag = server
-            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
+            .bookkeeping_flag_duplicate_inner(BookkeepingFlagDuplicateParams {
                 transaction_id: "a".into(),
                 duplicate_of_transaction_id: "b".into(),
             })
@@ -1240,6 +1245,123 @@ mod tests {
         assert_eq!(rows, 1, "중복 행도 만들지 않는다(멱등)");
     }
 
+    /// 공유 가드(`clean_duplicate_pair` / `ensure_canonical_duplicate_target`)의 두 계약을 잠근다.
+    /// deslop에서 `flag`/`mark`가 복붙하던 가드를 하나로 합쳤으므로, 그 하나가 실제로 막는지 봐야 한다.
+    /// 특히 **체인 금지**는 그전까지 어느 테스트도 확인하지 않았다(변이 테스트로 non-vacuous 확인).
+    #[tokio::test]
+    async fn flag_duplicate_shared_guards_reject_self_and_chains() {
+        let db = fresh_db().await;
+        let server = WrServer { db };
+        let seed = |source_ref: &str| BookkeepingSaveReceiptParams {
+            project_id: None,
+            source_ref: Some(source_ref.into()),
+            merchant: "쿠팡".into(),
+            amount_minor: 1_000,
+            currency: None,
+            spent_at: "2026-06-12".into(),
+            category: None,
+            description: None,
+            note: None,
+            direction: None,
+            account: None,
+            subcategory: None,
+            category_code: None,
+            subcategory_code: None,
+            raw_category: None,
+            spent_at_time: None,
+            confidence: None,
+            field_confidence: None,
+            review_reasons: None,
+            order_no: None,
+            payment_no: None,
+            line_items: None,
+        };
+        let mut ids = Vec::new();
+        for r in ["a", "b", "c"] {
+            ids.push(
+                server
+                    .bookkeeping_save_receipt_inner(seed(r))
+                    .await
+                    .expect("seed")
+                    .0
+                    .transaction_id,
+            );
+        }
+        let (a, b, c) = (ids[0].clone(), ids[1].clone(), ids[2].clone());
+        let flag = async |dupe: String, target: String| {
+            server
+                .bookkeeping_flag_duplicate_inner(BookkeepingFlagDuplicateParams {
+                    transaction_id: dupe,
+                    duplicate_of_transaction_id: target,
+                })
+                .await
+        };
+
+        assert!(
+            flag(a.clone(), a.clone()).await.is_err(),
+            "자기 자신의 중복으로는 표시할 수 없다"
+        );
+        flag(b.clone(), a).await.expect("b는 a의 중복 후보");
+        assert!(
+            flag(c, b).await.is_err(),
+            "duplicate chain rejected — duplicate_of는 한 홉이어야 한다"
+        );
+    }
+
+    /// `source_ref`가 없으면 dedup 키가 없으니 평범한 insert다(멱등 아님). 공백만 있는 값은
+    /// **없는 것과 동치**로 정규화된다 — deslop에서 bool+clone 조합을 Option 하나로 합치며 생긴 계약.
+    #[tokio::test]
+    async fn save_receipt_without_source_ref_inserts_and_treats_blank_as_absent() {
+        let db = fresh_db().await;
+        let server = WrServer { db: db.clone() };
+        let receipt = |source_ref: Option<&str>| BookkeepingSaveReceiptParams {
+            project_id: None,
+            source_ref: source_ref.map(str::to_string),
+            merchant: "노점".into(),
+            amount_minor: 3_000,
+            currency: None,
+            spent_at: "2026-06-12".into(),
+            category: None,
+            description: None,
+            note: None,
+            direction: None,
+            account: None,
+            subcategory: None,
+            category_code: None,
+            subcategory_code: None,
+            raw_category: None,
+            spent_at_time: None,
+            confidence: None,
+            field_confidence: None,
+            review_reasons: None,
+            order_no: None,
+            payment_no: None,
+            line_items: None,
+        };
+
+        for (params, why) in [
+            (receipt(None), "source_ref 없음"),
+            (receipt(None), "반복 호출도 새 행(dedup 키 없음)"),
+            (receipt(Some("   ")), "공백만 = 없는 것과 동치"),
+        ] {
+            let out = server
+                .bookkeeping_save_receipt_inner(params)
+                .await
+                .unwrap_or_else(|e| panic!("{why}: {e:?}"))
+                .0;
+            assert_eq!(out.status, "saved", "{why}");
+        }
+
+        let (rows, null_refs): (i64, i64) = sqlx::query_as(
+            "SELECT COUNT(*), SUM(source_ref IS NULL) FROM bookkeeping_transactions",
+        )
+        .fetch_one(&db)
+        .await
+        .expect("count");
+        assert_eq!(rows, 3, "dedup 키가 없으면 매 호출이 새 행");
+        assert_eq!(null_refs, 3, "공백 source_ref는 NULL로 정규화된다");
+    }
+
     /// **결정 레일 가드(사용자 결정 2026-07-10).** MCP의 중복 표시는 *제안*이다 — 링크 + 사유만
     /// 붙이고 `review_status`는 건드리지 않는다. 리뷰 큐에서 치우는 건(=`ignored`) 사람의 결정이다.
     /// 앱 내부 `mark_bookkeeping_duplicate`(사람이 누르는 버튼)만 `ignored`로 확정한다.
@@ -1290,7 +1412,7 @@ mod tests {
         assert_ne!(original, dupe, "distinct source_ref → distinct rows");
 
         let flagged = server
-            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
+            .bookkeeping_flag_duplicate_inner(BookkeepingFlagDuplicateParams {
                 transaction_id: dupe.clone(),
                 duplicate_of_transaction_id: original.clone(),
             })
@@ -1323,7 +1445,7 @@ mod tests {
 
         // 멱등: 같은 제안을 반복해도 사유가 중복 append되지 않는다.
         server
-            .bookkeeping_flag_duplicate_inner(BookkeepingMarkDuplicateParams {
+            .bookkeeping_flag_duplicate_inner(BookkeepingFlagDuplicateParams {
                 transaction_id: dupe.clone(),
                 duplicate_of_transaction_id: original,
             })
@@ -1600,7 +1722,7 @@ mod tests {
         );
 
         let mark =
-            serde_json::to_value(schemars::schema_for!(BookkeepingMarkDuplicateParams)).unwrap();
+            serde_json::to_value(schemars::schema_for!(BookkeepingFlagDuplicateParams)).unwrap();
         assert_eq!(mark["additionalProperties"], serde_json::json!(false));
         assert_eq!(
             prop_names(&mark),

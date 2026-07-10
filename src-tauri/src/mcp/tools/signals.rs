@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::commands::signal_store;
 use crate::error::AppError;
-use crate::mcp::{db_tool_error, enum_wire_string, truncate_preview, WrServer};
+use crate::mcp::{enum_wire_string, mcp_tool_error, truncate_preview, WrServer};
 use crate::models::{CreateSignalInput, Kind, Quadrant, WorkSignal};
 
 /// 본문 미리보기 상한(§6 — 장문 echo 금지).
@@ -201,7 +201,7 @@ impl WrServer {
             }
             _ => signal_store::fetch_signals(&self.db).await,
         }
-        .map_err(|e| db_tool_error("wr_list_signals", &AppError::from(e)))?;
+        .map_err(|e| mcp_tool_error("wr_list_signals", &AppError::from(e)))?;
 
         let quadrant = p.quadrant.map(Quadrant::from);
         let kind = p.kind.map(Kind::from);
@@ -254,7 +254,7 @@ impl WrServer {
         };
         let (signal, deduped) = signal_store::insert_signal_reporting_dedup(&self.db, &input)
             .await
-            .map_err(|e| db_tool_error("wr_create_signal", &AppError::from(e)))?;
+            .map_err(|e| mcp_tool_error("wr_create_signal", &AppError::from(e)))?;
         Ok(Json(CreateSignalResult {
             id: signal.id,
             title: signal.title,

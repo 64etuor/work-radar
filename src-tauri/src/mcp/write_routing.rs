@@ -16,7 +16,7 @@ use crate::external_actions::{store, ExecOutcome, ExternalAction};
 use crate::github::{execute_github_action, github_provider_for_cref};
 use crate::gmail::{execute_gmail_action, HttpGmailProvider};
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::{db_tool_error, mcp_tool_error, McpCaller, WrServer};
+use crate::mcp::{mcp_tool_error, McpCaller, WrServer};
 use crate::models::{Project, ProjectKind};
 use crate::notion::{execute_notion_action, notion_token_for_cref, HttpNotionWriter};
 
@@ -134,7 +134,7 @@ impl WrServer {
         // credential_ref를 절대 신뢰하지 않는다(#11 auth-isolation injection을 구성적으로 차단).
         let project = projects::fetch_project(&self.db, project_id)
             .await
-            .map_err(|e| db_tool_error("wr_write_proposal", &AppError::from(e)))?
+            .map_err(|e| mcp_tool_error("wr_write_proposal", &AppError::from(e)))?
             .ok_or_else(|| {
                 rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
             })?;
@@ -147,7 +147,7 @@ impl WrServer {
         let preview = format!("[{kind_label}: {}] {op_summary}", project.name);
         // 멱등 키는 제안 *내용*에서 파생한 안정값이어야 한다(시도별 UUID 금지 — dedup 무력화).
         let key = stable_idem_key(&action, project_id)
-            .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
+            .map_err(|e| mcp_tool_error("wr_write_proposal", &e))?;
         let id = store::enqueue_with_idempotency(
             &self.db,
             &action,
@@ -157,7 +157,7 @@ impl WrServer {
             Some(&key),
         )
         .await
-        .map_err(|e| db_tool_error("wr_write_proposal", &e))?;
+        .map_err(|e| mcp_tool_error("wr_write_proposal", &e))?;
         Ok(Json(ProposeResult {
             action_id: id,
             status: "awaiting_approval".into(),
