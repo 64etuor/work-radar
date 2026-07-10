@@ -1,0 +1,56 @@
+src-tauri/src/commands/bookkeeping/currency.rs
+  s_b622c0eab0169d::t_a11a6111f4567c 54
+  s_b622c0eab0169d::t_5ec536a29a5820 32
+  s_b622c0eab0169d::t_37ec7685b02581 60-62
+src-tauri/src/commands/routines/crud.rs
+  s_b622c0eab0169d::t_0b723572e6ec96 31,225,265,327,741
+  s_b622c0eab0169d::t_968dbcae65b740 14
+  s_b622c0eab0169d::t_0b3819c54a28f1 13
+src-tauri/src/commands/bookkeeping/common.rs
+  s_b622c0eab0169d::t_055375c19e863a 34-35,37-40,42
+  s_b622c0eab0169d::t_a219da73398ddc 217-218,220-221,231-233,238-241
+  s_b622c0eab0169d::t_5be34b8ff2f225 234-237
+  s_b622c0eab0169d::t_7309fcd379cf66 242-243
+src/components/ui/calendar.tsx
+  s_b622c0eab0169d::t_d8db43c837f602 164
+src-tauri/src/governance/ticker_scheduler.rs
+  s_b622c0eab0169d::t_36440fe027a8e4 235-236,238
+docs/plans/2026-07-10-generalization-plan.md
+  s_b622c0eab0169d::t_24af7056096d7e 34-39,43-47,51-56
+src/lib/localeFormat.test.ts
+  s_b622c0eab0169d::t_f088b97335156b 1-41
+src-tauri/src/commands/calendar.rs
+  s_b622c0eab0169d::t_780a6ffe387f18 614,654
+src-tauri/src/calendar/mod.rs
+  s_b622c0eab0169d::t_7ee0ac0c5627fe 14
+  s_b622c0eab0169d::t_9677262e4fcdfc 55
+src-tauri/src/timezone.rs
+  s_b622c0eab0169d::t_88f4b6611b26b9 124-126,128
+  s_b622c0eab0169d::t_3568355f335c25 130-131
+src/components/SprintTimer.tsx
+  s_b622c0eab0169d::t_d68495fe9f2a96 302
+  s_b622c0eab0169d::t_bd6ea0f08ebd2c 9
+src-tauri/src/calendar/windows.rs
+  s_b622c0eab0169d::t_9f7c7295e3e0d0 1-2
+src-tauri/src/moneymanager.rs
+  s_b622c0eab0169d::t_b2dc9258bb5be1 903
+  s_b622c0eab0169d::t_857bf5e4547dbf 198,201,203
+src/components/board/CalendarView.tsx
+  s_b622c0eab0169d::t_ecd6bbaee29c06 93,98,122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f1a614ab32d9cd48790b79db91a291e7df6d6ad0",
+  "prompts": {},
+  "sessions": {
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
