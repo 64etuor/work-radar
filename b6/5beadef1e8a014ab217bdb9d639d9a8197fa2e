@@ -1,0 +1,30 @@
+src-tauri/src/governance/ticker_scheduler.rs
+  s_b622c0eab0169d::t_49269b5976b5d6 152-162
+  s_b622c0eab0169d::t_6b57c92fb6e8e7 419-451
+  s_b622c0eab0169d::t_f0fea8f5b15ca8 224-243
+  s_50b1d15579b6c4::t_d390f7cacf49bd 452
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b65beadef1e8a014ab217bdb9d639d9a8197fa2e",
+  "prompts": {},
+  "sessions": {
+    "s_50b1d15579b6c4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f49e2-a40e-7e62-b2f7-ea9c854a5808",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
