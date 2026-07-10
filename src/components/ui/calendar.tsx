@@ -13,8 +13,9 @@ import {
   startOfWeek,
   toLocalISODate,
 } from "@/lib/calendarRange";
+import { WEEKDAY_SHORT_MON_FIRST } from "@/lib/localeFormat";
 
-const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"] as const;
+const WEEKDAY_LABELS = WEEKDAY_SHORT_MON_FIRST;
 
 /** 로컬 오늘 'YYYY-MM-DD'. */
 function localToday(): string {

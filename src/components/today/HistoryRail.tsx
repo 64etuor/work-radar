@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
+import { WEEKDAY_SHORT_SUN_FIRST } from "@/lib/localeFormat";
 import { defaultProjectCalendarColor, normalizeHexColor } from "@/lib/projectCalendarColor";
 import {
   IpcError,
@@ -277,6 +278,6 @@ function formatDateHeader(date: string, today: string): string {
   if (date === `${yyyy}-${mm}-${dd}`) return "어제";
   const [, pm, pd] = date.split("-").map(Number);
   const dt = new Date(Number(date.slice(0, 4)), pm - 1, pd);
-  const weekday = ["일", "월", "화", "수", "목", "금", "토"][dt.getDay()];
+  const weekday = WEEKDAY_SHORT_SUN_FIRST[dt.getDay()];
   return `${pm}/${pd} (${weekday})`;
 }

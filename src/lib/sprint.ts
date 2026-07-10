@@ -6,6 +6,8 @@
  * (1s tick은 표시 갱신일 뿐 — drift는 경계가 절대시각이 아니라 Rust가 매번 anchor+interval로 계산해 없음).
  */
 
+import { WEEKDAY_SHORT_BY_CODE } from "./localeFormat";
+
 /** 카운트다운 표시 상태. overdue면 색(Coral)+라벨 병기(DESIGN: 색만으로 의미 금지). */
 export type CountdownDisplay = {
   /** 'D일 HH:MM' (overdue면 절댓값). */
@@ -67,13 +69,6 @@ export function formatSprintGoal(goal: string | null | undefined): string | null
   return normalized.length > 0 ? normalized : null;
 }
 
-/** 요일 코드 → 한국어 라벨(에디터 표시). bindings의 Weekday(snake_case)와 동일 키. */
-export const WEEKDAY_LABELS: Record<string, string> = {
-  mon: "월",
-  tue: "화",
-  wed: "수",
-  thu: "목",
-  fri: "금",
-  sat: "토",
-  sun: "일",
-};
+/** 요일 코드 → 짧은 라벨(에디터 표시). bindings의 Weekday(snake_case)와 동일 키 —
+ *  라벨 자체는 로케일 단일 노브(localeFormat)에서 파생된다. */
+export const WEEKDAY_LABELS: Record<string, string> = WEEKDAY_SHORT_BY_CODE;

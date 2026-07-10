@@ -1,5 +1,7 @@
 // Control Room 헤더 — 에이전트 사용량 게이지 표시 헬퍼 (순수 함수, 테스트 대상).
 
+import { APP_LOCALE } from "./localeFormat";
+
 export type UsageTone = "ok" | "warn" | "crit";
 
 /** 사용률 → 게이지 톤. 70% 미만 평시, 70–90 경고, 90 이상 위험. */
@@ -55,7 +57,7 @@ export function formatResetAt(resetsAt: string | null): string | null {
   if (!resetsAt) return null;
   const t = Date.parse(resetsAt);
   if (Number.isNaN(t)) return null;
-  return new Date(t).toLocaleString("ko-KR", {
+  return new Date(t).toLocaleString(APP_LOCALE, {
     month: "numeric",
     day: "numeric",
     hour: "2-digit",

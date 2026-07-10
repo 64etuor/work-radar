@@ -9,6 +9,7 @@ import {
   toLocalISODate,
   weekDays,
 } from "@/lib/calendarRange";
+import { WEEKDAY_SHORT_MON_FIRST } from "@/lib/localeFormat";
 import { calendarColorStyle } from "@/lib/projectCalendarColor";
 
 /** 한 이벤트가 속한 로컬 날짜(YYYY-MM-DD). timed=RFC3339 시작, all-day=date. */
@@ -40,7 +41,7 @@ function bucketByDate(events: CalendarEvent[]): Map<string, CalendarEvent[]> {
   return map;
 }
 
-const WEEKDAY_LABELS = ["월", "화", "수", "목", "금", "토", "일"];
+const WEEKDAY_LABELS = WEEKDAY_SHORT_MON_FIRST;
 
 type Props = {
   /** 표시할 이벤트(시간순 병합된 ambient 사본). */

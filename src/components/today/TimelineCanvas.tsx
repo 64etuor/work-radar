@@ -10,6 +10,7 @@ import {
   renderTimelineBoxesForDrag,
 } from "@/components/today/timelinePreview";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
+import { formatMonthDay, WEEKDAY_SHORT_BY_CODE } from "@/lib/localeFormat";
 import { weekdayForDate } from "@/lib/query";
 import { dayDiff } from "@/lib/timeAxis";
 import { clientToGrid, DAY_PX, HOUR_PX } from "@/lib/timelineAxis";
@@ -53,20 +54,10 @@ function nowOffsetPx(anchorDate: string): number {
   return (dayDiff(date, anchorDate) * 24 + d.getHours() + d.getMinutes() / 60) * HOUR_PX;
 }
 
-const WEEKDAY_KO: Record<string, string> = {
-  sun: "일",
-  mon: "월",
-  tue: "화",
-  wed: "수",
-  thu: "목",
-  fri: "금",
-  sat: "토",
-};
-
 /** 날짜 separator 라벨 — "6월 12일 (금)". */
 function fmtDayLabel(date: string): string {
   const [, m, d] = date.split("-").map(Number);
-  return `${m}월 ${d}일 (${WEEKDAY_KO[weekdayForDate(date)]})`;
+  return `${formatMonthDay(m, d)} (${WEEKDAY_SHORT_BY_CODE[weekdayForDate(date)]})`;
 }
 
 /**

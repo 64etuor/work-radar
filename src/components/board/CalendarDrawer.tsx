@@ -8,6 +8,7 @@ import { PeriodNavigator } from "@/components/PeriodNavigator";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type CalendarViewMode, parseLocalISODate, stepDate, viewRange } from "@/lib/calendarRange";
+import { WEEKDAY_SHORT_SUN_FIRST } from "@/lib/localeFormat";
 import {
   fetchCalendarEventsRange,
   localToday,
@@ -39,7 +40,7 @@ function headerLabel(mode: CalendarViewMode, date: string): string {
     const e = parseLocalISODate(end);
     return `${s.getMonth() + 1}/${s.getDate()} – ${e.getMonth() + 1}/${e.getDate()}`;
   }
-  const dow = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  const dow = WEEKDAY_SHORT_SUN_FIRST[d.getDay()];
   return `${d.getMonth() + 1}/${d.getDate()} (${dow})`;
 }
 
