@@ -1,0 +1,19 @@
+src-tauri/src/keychain.rs
+  s_b622c0eab0169d::t_68a282765d1ca9 11-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e372b939cfb4fb1867b8c5d58bb59c6eccd0fffc",
+  "prompts": {},
+  "sessions": {
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
