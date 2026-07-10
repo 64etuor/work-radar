@@ -1,0 +1,111 @@
+src-tauri/src/commands/bookkeeping/common.rs
+  s_b622c0eab0169d::t_742096adc65fd8 21-41
+  s_b622c0eab0169d::t_e1645dff2c393c 217-218,220,223
+  s_b622c0eab0169d::t_0b6b97c6003ac9 9-10,13-20,42-43
+  s_c19e20ce48c5d1::t_d7a78f552d21e4 44
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_b622c0eab0169d::t_c4ac42a3fe49ca 152
+  s_b622c0eab0169d::t_876d879d898c43 165-166,173
+src/components/bookkeeping/bookkeepingFormat.ts
+  s_b622c0eab0169d::t_3436864b8d0a94 1-6,12-13,21
+src-tauri/src/moneymanager.rs
+  s_b622c0eab0169d::t_e5722c4f92cc2b 741,747,755
+  s_b622c0eab0169d::t_9b19e3c415d600 1215-1222
+  s_b622c0eab0169d::t_24ef20cb7e44df 790,794
+  s_b622c0eab0169d::t_2a9b06e4ef8746 1067,1112,1139,1158
+  s_b622c0eab0169d::t_bcca76b6750ff8 653
+  s_b622c0eab0169d::t_4d0e8c47494dd1 464-468,472,478-480
+  s_b622c0eab0169d::t_923fc4ae57bc0b 672
+  s_b622c0eab0169d::t_09f6c1da879b0a 697
+  s_b622c0eab0169d::t_df2edf467239ff 535,541
+  s_b622c0eab0169d::t_f0f86364d59fd0 583,587,598
+  s_b622c0eab0169d::t_0363959245985e 891,938,958,989,1018
+src-tauri/src/commands/bookkeeping/currency.rs
+  s_b622c0eab0169d::t_f5efd0803150ca 1-59,67-69
+  s_b622c0eab0169d::t_9b19e3c415d600 60-66
+src/components/bookkeeping/cards/DefaultCurrencyCard.tsx
+  s_b622c0eab0169d::t_2c8abe52cacccd 1-65
+src-tauri/src/commands/bookkeeping/transactions.rs
+  s_b622c0eab0169d::t_3042ef2c2a6e6d 135,222,357
+  s_b622c0eab0169d::t_9e1f39fe205d43 666-667
+src/components/bookkeeping/reconciliation.ts
+  s_b622c0eab0169d::t_c7c68a4b2495b2 13
+  s_b622c0eab0169d::t_2c52bb5fe2d7f2 1-2
+src/components/bookkeeping/BookkeepingView.tsx
+  s_b622c0eab0169d::t_9e359a23691091 87
+  s_b622c0eab0169d::t_38dd1013511d20 745
+  s_b622c0eab0169d::t_5465348c1441e5 793-801
+  s_b622c0eab0169d::t_b233c2a8353f17 40
+  s_b622c0eab0169d::t_26eaf2baed8d36 418-420
+  s_b622c0eab0169d::t_c8c2eb6175b7eb 17
+  s_b622c0eab0169d::t_7c06aa0b1ccbb6 225-226
+  s_b622c0eab0169d::t_b578c7515d4cb9 187-190
+  s_b622c0eab0169d::t_7cd49bea31999a 279-280
+  s_50b1d15579b6c4::t_b290064153493e 802
+src-tauri/src/commands/bookkeeping/mmbak_recurring.rs
+  s_b622c0eab0169d::t_f06def104ff715 42,44
+  s_b622c0eab0169d::t_a75b784519aa0e 245-246
+src-tauri/src/commands/bookkeeping/reporting.rs
+  s_b622c0eab0169d::t_9705e809c5b369 291
+src-tauri/src/commands/routines/mod.rs
+  s_b622c0eab0169d::t_7138c32fc0b349 11
+src-tauri/src/mcp/tools/bookkeeping.rs
+  s_b622c0eab0169d::t_8a7f7bb8254ab4 120-121
+  s_b622c0eab0169d::t_420b23606e8924 494-495
+src/components/bookkeeping/cards/ReconciliationCard.tsx
+  s_b622c0eab0169d::t_53422ff918d1be 18,25-26,33
+  s_b622c0eab0169d::t_14585785649b51 121-122
+  s_b622c0eab0169d::t_7182de086e858a 75
+src/lib/query/bookkeeping.ts
+  s_b622c0eab0169d::t_cc175d09a14f8d 206-221
+src/components/bookkeeping/bookkeepingDrafts.ts
+  s_b622c0eab0169d::t_8529d8a381ca75 106-107
+src-tauri/src/lib.rs
+  s_b622c0eab0169d::t_a28e7d2a4cb532 99-101
+  s_b622c0eab0169d::t_8ae1f8f1783ee1 711-713
+src-tauri/src/commands/bookkeeping/budgets.rs
+  s_b622c0eab0169d::t_edff5f0b8e9c0f 241-242
+  s_b622c0eab0169d::t_fbee8d60973e3b 287
+  s_b622c0eab0169d::t_68f5f54fdeafbf 75
+src-tauri/src/commands/bookkeeping/recurring.rs
+  s_b622c0eab0169d::t_4084aa1626f6c4 79
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_b622c0eab0169d::t_46ce4ee5d01311 27
+  s_b622c0eab0169d::t_90f869928af515 9
+src/components/bookkeeping/bookkeepingConstants.ts
+  s_b622c0eab0169d::t_15c807e2dd07e5 60
+src/bindings.ts
+  s_b622c0eab0169d::t_7826076a279eed 53-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ffdc241ef07ed6bddc983d4654a785256b6efac8",
+  "prompts": {},
+  "sessions": {
+    "s_50b1d15579b6c4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f49e2-a40e-7e62-b2f7-ea9c854a5808",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_c19e20ce48c5d1": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f49cd-886a-7182-b3b7-7c044f743782",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
