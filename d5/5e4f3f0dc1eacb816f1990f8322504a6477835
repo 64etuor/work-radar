@@ -1,0 +1,51 @@
+docs/SETUP.md
+  s_b622c0eab0169d::t_8d212eab80b88e 69,74-78
+src-tauri/src/calendar/tests.rs
+  s_b622c0eab0169d::t_4095f8f1edbbc9 268-274
+  s_b622c0eab0169d::t_1e6017f9aab4dc 297-299
+src-tauri/src/calendar/mod.rs
+  s_b622c0eab0169d::t_8172124e706600 228-230,232,236
+src-tauri/src/commands/okr.rs
+  s_b622c0eab0169d::t_b095c23506d61e 276,661,946,1253
+src-tauri/src/calendar/windows.rs
+  s_b622c0eab0169d::t_ac098b905574a0 21,23
+src-tauri/src/lib.rs
+  s_b622c0eab0169d::t_219554c42e4242 52
+src-tauri/src/commands/sprint.rs
+  s_b622c0eab0169d::t_039e3623fadfde 454
+  s_b622c0eab0169d::t_215ff7bf3a2789 464
+  s_b622c0eab0169d::t_92c7c63ae8444a 14
+  s_b622c0eab0169d::t_37c164a0082c3a 447,520
+  s_b622c0eab0169d::t_8089873452d84d 475,481
+src-tauri/src/commands/bookkeeping/mmbak.rs
+  s_b622c0eab0169d::t_a2b662ef609a25 152,173
+src-tauri/src/calendar/sync.rs
+  s_b622c0eab0169d::t_a8fe66e73806ff 777
+src-tauri/src/commands/routines/google_sync.rs
+  s_b622c0eab0169d::t_9d45606db1c6c1 36-39,41
+src-tauri/src/commands/routines/crud.rs
+  s_b622c0eab0169d::t_a5afe73674d9f0 94-95,97
+src-tauri/src/timezone.rs
+  s_b622c0eab0169d::t_672a85b8994bed 1-86,103-133
+  s_b622c0eab0169d::t_8290bb76adc738 87-102
+src-tauri/src/commands/routines/reminders.rs
+  s_b622c0eab0169d::t_36d378fa89dd88 26
+docs/decisions.md
+  s_b622c0eab0169d::t_12da01c7b345bf 657-658
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d55e4f3f0dc1eacb816f1990f8322504a6477835",
+  "prompts": {},
+  "sessions": {
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
