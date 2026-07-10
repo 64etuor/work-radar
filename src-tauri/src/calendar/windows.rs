@@ -18,9 +18,9 @@ pub fn range_window(start_date: &str, end_date: &str, offset: &str) -> (String, 
     )
 }
 
-/// 시스템 로컬 UTC 오프셋 문자열("+09:00" 등). chrono Local (시스템 시계 — 순수 아님).
+/// 시스템 로컬 UTC 오프셋 문자열("+09:00" 등). OS 로컬 SSOT(`crate::timezone`) 위임(순수 아님).
 pub fn local_offset() -> String {
-    chrono::Local::now().offset().to_string()
+    crate::timezone::local_offset_string()
 }
 
 #[cfg(test)]

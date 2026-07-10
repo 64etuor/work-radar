@@ -13,7 +13,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use chrono::TimeZone;
 use sqlx::SqlitePool;
 use tauri::{AppHandle, Emitter};
 use tokio::sync::Notify;
@@ -775,10 +774,7 @@ pub(crate) fn normalize_timed_start(start: &str) -> Result<String, SyncError> {
     }
     let naive = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S")
         .map_err(|e| SyncError::Terminal(format!("start parse: {e}")))?;
-    let local = chrono::Local
-        .from_local_datetime(&naive)
-        .single()
-        .or_else(|| chrono::Local.from_local_datetime(&naive).earliest())
+    let local = crate::timezone::attach_local(&naive)
         .ok_or_else(|| SyncError::Terminal("start local time ambiguous".into()))?;
     Ok(local.to_rfc3339())
 }

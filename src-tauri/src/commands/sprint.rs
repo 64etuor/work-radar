@@ -11,7 +11,7 @@
 
 #![allow(clippy::result_large_err)]
 
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime, TimeZone};
+use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, NaiveTime};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tauri::State;
@@ -444,14 +444,14 @@ pub async fn set_sprint_config(
     set_sprint_config_inner_at(
         db.inner(),
         config,
-        chrono::Local::now().naive_local(),
+        crate::timezone::now_local().naive_local(),
         false,
     )
     .await
 }
 
 /// 헤더 카운트다운용 다음 경계 + 남은 초(SSOT = 직접 구현 `next_boundary`). 미설정/무효 시 None.
-/// 로컬 wall-clock(`Local::now()`)으로 계산하므로 DST 환경에서도 안전(절대 인스턴트 미저장 — drift 없음).
+/// 로컬 wall-clock(`timezone::now_local()`)으로 계산하므로 DST 환경에서도 안전(절대 인스턴트 미저장 — drift 없음).
 #[tauri::command]
 #[specta::specta]
 pub async fn sprint_status(db: State<'_, Db>) -> Result<Option<SprintStatus>, AppError> {
@@ -461,8 +461,7 @@ pub async fn sprint_status(db: State<'_, Db>) -> Result<Option<SprintStatus>, Ap
     let Ok(config) = serde_json::from_str::<SprintConfig>(&raw) else {
         return Ok(None); // 손상 설정 → 미설정처럼.
     };
-    let now_local = chrono::Local::now();
-    let now = now_local.naive_local();
+    let now = crate::timezone::now_local().naive_local();
     let Some(boundary) = next_boundary(&config, now) else {
         return Ok(None);
     };
@@ -473,15 +472,13 @@ pub async fn sprint_status(db: State<'_, Db>) -> Result<Option<SprintStatus>, Ap
     // 경계의 **그 날짜** 로컬 오프셋으로 RFC3339 생성(now 오프셋이 아님 — DST 경계를 가로질러도
     // 1h drift 없음). 프런트가 Date로 파싱해 1s tick 기준점으로 사용. spring-forward로 건너뛴
     // wall-clock(anchor 21:00에선 사실상 없음)만 now 오프셋으로 폴백.
-    let next = chrono::Local
-        .from_local_datetime(&boundary)
-        .earliest()
+    let next = crate::timezone::attach_local(&boundary)
         .map(|dt| dt.to_rfc3339())
         .unwrap_or_else(|| {
             format!(
                 "{}{}",
                 boundary.format("%Y-%m-%dT%H:%M:%S"),
-                now_local.offset()
+                crate::timezone::local_offset_string()
             )
         });
     Ok(Some(SprintStatus {
@@ -520,7 +517,7 @@ pub async fn link_sprint_goal_to_weekly_focus(
     set_sprint_config_inner_at(
         db.inner(),
         config,
-        chrono::Local::now().naive_local(),
+        crate::timezone::now_local().naive_local(),
         input.replace_existing,
     )
     .await

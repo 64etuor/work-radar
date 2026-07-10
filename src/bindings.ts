@@ -324,7 +324,7 @@ export const commands = {
 	clearSprintConfig: () => typedError<null, AppError>(__TAURI_INVOKE("clear_sprint_config")),
 	/**
 	 *  헤더 카운트다운용 다음 경계 + 남은 초(SSOT = 직접 구현 `next_boundary`). 미설정/무효 시 None.
-	 *  로컬 wall-clock(`Local::now()`)으로 계산하므로 DST 환경에서도 안전(절대 인스턴트 미저장 — drift 없음).
+	 *  로컬 wall-clock(`timezone::now_local()`)으로 계산하므로 DST 환경에서도 안전(절대 인스턴트 미저장 — drift 없음).
 	 */
 	sprintStatus: () => typedError<{
 	/**  다음 경계의 로컬 wall-clock RFC3339 문자열(오프셋 포함). 헤더 1s tick의 기준점. */

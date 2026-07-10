@@ -273,7 +273,7 @@ async fn attach_routine_progress(
     let Some((q_start, q_end)) = quarter_window(quarter) else {
         return Ok(());
     };
-    let end = q_end.min(chrono::Local::now().date_naive());
+    let end = q_end.min(crate::timezone::local_today());
     if end < q_start {
         return Ok(());
     }
@@ -658,7 +658,7 @@ fn date_string(date: NaiveDate) -> String {
 
 fn stats_windows(quarter: &str) -> Result<(String, String, String, String), AppError> {
     let (quarter_start, quarter_end) = quarter_bounds(quarter)?;
-    let today = chrono::Local::now().date_naive();
+    let today = crate::timezone::local_today();
     let week_start = today - Duration::days(today.weekday().num_days_from_monday() as i64);
     let quarter_to_date_end = if today > quarter_end {
         quarter_end
@@ -943,7 +943,7 @@ mod tests {
     #[tokio::test]
     async fn routine_linked_kr_derives_progress_from_checks() {
         let db = fresh_db().await;
-        let today = chrono::Local::now().date_naive();
+        let today = crate::timezone::local_today();
         let quarter = format!("{}-Q{}", today.year(), ((today.month() - 1) / 3) + 1);
         let q_start = super::quarter_window(&quarter).unwrap().0;
         let q_start_s = q_start.format("%Y-%m-%d").to_string();
@@ -1250,7 +1250,7 @@ mod tests {
         .await
         .unwrap();
 
-        let today = chrono::Local::now().date_naive();
+        let today = crate::timezone::local_today();
         let quarter = format!("{}-Q{}", today.year(), ((today.month() - 1) / 3) + 1);
         let today_s = today.format("%Y-%m-%d").to_string();
         let objective = super::create_objective_inner(

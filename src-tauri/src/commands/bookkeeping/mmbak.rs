@@ -149,7 +149,7 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         &loaded.categories,
         &loaded.assets,
         &loaded.currencies,
-        crate::commands::routines::timezone::user_timezone(),
+        crate::timezone::user_timezone(),
     )
     .await?;
 
@@ -170,7 +170,7 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         &loaded.assets,
         &loaded.currencies,
         min_utime,
-        crate::commands::routines::timezone::user_timezone(),
+        crate::timezone::user_timezone(),
     );
 
     let mut counts = SyncCounts {

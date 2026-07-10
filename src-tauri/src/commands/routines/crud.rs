@@ -91,9 +91,10 @@ pub async fn insert_routine(
     })
 }
 
-/// 로컬 오늘 날짜(YYYY-MM-DD).
+/// 로컬 오늘 날짜(YYYY-MM-DD). OS 로컬 SSOT(`crate::timezone`) 위임 — due-calc의 "오늘"이
+/// 리마인더/동기화와 같은 zone에서 나온다.
 fn local_today() -> String {
-    chrono::Local::now().format("%Y-%m-%d").to_string()
+    crate::timezone::local_today_string()
 }
 
 /// IPC-boundary 검증 (plan §5 PR 2b-3 진입 조건). DB CHECK은 `monthly_nth_week` **범위**만 본다 —

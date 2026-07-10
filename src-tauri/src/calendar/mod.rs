@@ -225,14 +225,15 @@ pub async fn fetch_events_core<P: CalendarProvider>(
     merge_sort_events(out)
 }
 
-/// 타임드 RFC3339(어떤 오프셋/`Z`든)을 뷰어 로컬 존(`chrono::Local`, per-instant DST 정확)으로
-/// 정규화해 `YYYY-MM-DDTHH:MM:SS±HH:MM`(소수초 없음·`Z` 없음)로 반환한다. 프런트의 고정 위치
-/// 슬라이스(`iso.slice(11,16)`)와 `new Date()`가 동일 wall-clock을 읽도록 만든다(스펙 §3.2).
+/// 타임드 RFC3339(어떤 오프셋/`Z`든)을 뷰어 로컬 존(OS 로컬 SSOT `crate::timezone`, per-instant
+/// DST 정확)으로 정규화해 `YYYY-MM-DDTHH:MM:SS±HH:MM`(소수초 없음·`Z` 없음)로 반환한다. 프런트의
+/// 고정 위치 슬라이스(`iso.slice(11,16)`)와 `new Date()`가 동일 wall-clock을 읽도록 만든다(스펙 §3.2).
 /// 파싱 불가 입력은 그대로 반환(이벤트 유실/패닉 금지). 종일 이벤트는 호출부가 `all_day`로 분기.
+/// (`to_rfc3339_opts`는 내부에서 offset을 `fix()`하므로 Tz 약어("KST")가 새지 않는다.)
 pub(crate) fn normalize_timed_to_local(s: &str) -> String {
     match chrono::DateTime::parse_from_rfc3339(s) {
         Ok(dt) => dt
-            .with_timezone(&chrono::Local)
+            .with_timezone(&crate::timezone::user_timezone())
             .to_rfc3339_opts(chrono::SecondsFormat::Secs, false),
         Err(_) => s.to_string(),
     }

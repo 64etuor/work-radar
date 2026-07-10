@@ -33,12 +33,12 @@ use crate::{
 #[cfg(test)]
 use crate::calendar::CalendarError;
 
-/// 동기화에 쓸 사용자 타임존 tzid(IANA 이름). `user_timezone` SSOT에서 파생한다 — 리마인더
-/// (`reminders::compute_fire_at`)와 같은 zone을 써 같은 루틴의 캘린더 미러와 알림이 일치한다.
-/// `Tz::name()`은 `&'static str`이라 기존 `tzid: &str` 시그니처에 그대로 들어간다(감지 실패 시
-/// `user_timezone`이 Asia/Seoul로 fail-closed = 기존 하드코딩 기본 보존).
+/// 동기화에 쓸 사용자 타임존 tzid(IANA 이름). OS 로컬 SSOT(`crate::timezone`)에서 파생한다 —
+/// 리마인더(`reminders::compute_fire_at`)와 같은 zone을 써 같은 루틴의 캘린더 미러와 알림이
+/// 일치한다. `Tz::name()`은 `&'static str`이라 기존 `tzid: &str` 시그니처에 그대로 들어간다
+/// (감지 실패 시 UTC 폴백 — 중립값, 지역 하드코딩 없음).
 fn default_tzid() -> &'static str {
-    super::timezone::user_timezone().name()
+    crate::timezone::user_timezone().name()
 }
 
 #[derive(sqlx::FromRow, Debug, Clone)]

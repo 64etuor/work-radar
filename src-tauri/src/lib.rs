@@ -49,6 +49,7 @@ mod routines;
 mod scheduler;
 mod shortcut;
 pub mod skills;
+mod timezone; // OS 로컬 타임존/시각 SSOT — 설정 없음, chrono::Local 직접 사용 금지.
 mod tray;
 mod urgency;
 

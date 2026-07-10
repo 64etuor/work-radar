@@ -265,8 +265,13 @@ fn normalize_timed_utc_to_local_preserves_instant_and_uses_local_offset() {
     let got = chrono::DateTime::parse_from_rfc3339(&out).expect("normalized is valid rfc3339");
     let src = chrono::DateTime::parse_from_rfc3339("2026-06-20T05:30:00Z").unwrap();
     assert_eq!(got.timestamp(), src.timestamp(), "instant preserved");
-    // offset equals chrono::Local's offset for that instant
-    let expected_offset = src.with_timezone(&chrono::Local).offset().fix();
+    // offset equals the SSOT zone's offset for that instant (프로덕션과 같은 소스 —
+    // chrono::Local과 비교하면 OS zoneinfo vs chrono-tz 번들 tzdata의 교차 단언이 되어
+    // 특정 존/미래 인스턴트에서 flaky해질 수 있다, critic MINOR-1).
+    let expected_offset = src
+        .with_timezone(&crate::timezone::user_timezone())
+        .offset()
+        .fix();
     assert_eq!(got.offset(), &expected_offset, "rendered in local offset");
     assert!(
         !out.contains('Z') && !out.contains('.'),
@@ -289,7 +294,9 @@ fn normalize_timed_foreign_offset_to_local_preserves_instant() {
     assert_eq!(got.timestamp(), src.timestamp());
     assert_eq!(
         *got.offset(),
-        src.with_timezone(&chrono::Local).offset().fix()
+        src.with_timezone(&crate::timezone::user_timezone())
+            .offset()
+            .fix()
     );
 }
 

@@ -66,11 +66,16 @@ pnpm tauri build   # 배포용 번들
 - 한국 은행/카드 알림 메일 파서는 확장 포인트다 — 매칭 안 되는 메일은 자동으로
   `needs_review` 큐로 들어와 수동 판단으로 처리된다(기능 파손 아님).
 
-## 4. UI 언어/로케일 현황
+## 4. UI 언어/로케일/타임존 현황
 
 - UI 문안은 현재 **한국어 고정**(i18n 미도입 — 알려진 한계, deferred).
 - 날짜·요일·통화 포맷은 `src/lib/localeFormat.ts`의 `APP_LOCALE` 단일 노브로 수렴돼 있다.
   i18n 도입 시 이 노브를 설정값으로 바꾸는 것이 시작점이다.
+- **타임존은 설정이 없다(by design)** — 항상 OS 로컬을 따른다. Rust의 모든 로컬 시간
+  파생(루틴 동기화 tzid·리마인더·mmbak 날짜 버킷·OKR/스프린트/루틴의 "오늘"·캘린더
+  정규화/오프셋)은 `src-tauri/src/timezone.rs` SSOT 하나를 거치고, 감지 실패 시 UTC로
+  폴백한다(지역 하드코딩 없음). OS 타임존을 바꾸면 앱 전체가 일관되게 따라온다.
+  프런트도 JS `Date`/`getTimezoneOffset()`으로 동일하게 머신 파생.
 
 ## 5. 선택 통합이 없을 때의 동작 (fresh-machine 계약)
 
