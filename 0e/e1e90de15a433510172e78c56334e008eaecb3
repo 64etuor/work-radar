@@ -1,0 +1,33 @@
+src-tauri/src/news/hn.rs
+  s_b622c0eab0169d::t_302fee0781696e 46-48
+src-tauri/migrations/0072_news_legacy_default_on.sql
+  s_b622c0eab0169d::t_6a45439355099b 1-14
+src-tauri/src/news/mod.rs
+  s_b622c0eab0169d::t_0fc75e8905c3b5 108-113
+  s_b622c0eab0169d::t_b84109b4e92a9b 268-269
+  s_b622c0eab0169d::t_b2e85bcb3f7624 244-247
+src-tauri/src/news/pref_store.rs
+  s_b622c0eab0169d::t_c8f53dfb3f8666 69-70,73,77-79,90-103,110-119
+  s_b622c0eab0169d::t_bfac5698c11e9c 2
+  s_b622c0eab0169d::t_dc8fd0a907b20e 21-23
+  s_b622c0eab0169d::t_9b19e3c415d600 104-109
+  s_b622c0eab0169d::t_a4a471ae882f88 120-121
+src-tauri/src/news/lobsters.rs
+  s_b622c0eab0169d::t_2a75ef807b4a53 37-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "0ee1e90de15a433510172e78c56334e008eaecb3",
+  "prompts": {},
+  "sessions": {
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
