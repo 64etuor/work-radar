@@ -105,6 +105,12 @@ pub trait NewsSource: Send + Sync {
     fn id(&self) -> &'static str;
     fn label(&self) -> &'static str;
     fn category(&self) -> NewsCategory;
+    /// DB에 pref 행이 없을 때의 기본 on/off (신규 설치 기본값). safe-by-default `false` —
+    /// 새 소스가 seed 마이그레이션 없이 silent default-ON 되는 회귀를 트레이트 차원에서 막는다.
+    /// 기존 설치의 구 기본값(ON) 보존은 0072 마이그레이션(legacy explicit seed)이 담당.
+    fn default_enabled(&self) -> bool {
+        false
+    }
     /// 페치. 실패는 AppError로 — 호출자(fetcher.rs)가 retry 결정.
     /// 네트워크 실패는 transient(retryable)로 마크해 fetcher가 backoff 후 재시도하게 한다.
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError>;
@@ -235,10 +241,10 @@ mod tests {
         // critic blocker: registry에 추가하고 마이그레이션 seed를 빠뜨리면 silent default-ON 회귀.
         //
         // NOTE(v3 minor): 이 등식이 성립하는 이유는 `pref_store::list_available`이 DB에 행이
-        // 없으면 default ON으로 meta를 *합성*하기 때문(`saved.get(...).unwrap_or(true)`).
-        // 향후 누군가 `list_available`을 "seeded rows만 반환"으로 바꾸면 기존 hn/geeknews/
-        // lobsters 3개가 default-ON 동작을 잃으면서 이 테스트도 깨진다 — 그 회귀를 보호하는
-        // 의도된 coupling.
+        // 없으면 소스별 코드 기본값으로 meta를 *합성*하기 때문
+        // (`saved.get(...).unwrap_or(src.default_enabled())`). 향후 누군가 `list_available`을
+        // "seeded rows만 반환"으로 바꾸면 행 없는 소스가 목록에서 사라지면서 이 테스트도
+        // 깨진다 — 그 회귀를 보호하는 의도된 coupling.
         let p = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         sqlx::migrate!("./migrations").run(&p).await.unwrap();
         let avail = crate::news::pref_store::list_available(&p).await.unwrap();
@@ -259,7 +265,8 @@ mod tests {
         let by_id: std::collections::HashMap<String, bool> =
             avail.into_iter().map(|m| (m.id, m.enabled)).collect();
         assert_eq!(by_id.get("hn"), Some(&true));
-        assert_eq!(by_id.get("geeknews"), Some(&true));
+        // 범용화: geeknews는 신규 설치(빈 news_items) 기본 OFF — 기존 설치는 0072 seed가 보존.
+        assert_eq!(by_id.get("geeknews"), Some(&false));
         assert_eq!(by_id.get("lobsters"), Some(&true));
         assert_eq!(by_id.get("reddit_programming"), Some(&false));
         assert_eq!(by_id.get("arxiv_cs_lg"), Some(&false));

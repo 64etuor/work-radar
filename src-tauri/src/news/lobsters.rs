@@ -34,6 +34,9 @@ impl NewsSource for LobstersSource {
     fn category(&self) -> super::NewsCategory {
         super::NewsCategory::EnglishTech
     }
+    fn default_enabled(&self) -> bool {
+        true
+    }
 
     async fn fetch(&self, client: &Client) -> Result<Vec<NewsItem>, AppError> {
         let resp = client.get(URL).send().await?;
