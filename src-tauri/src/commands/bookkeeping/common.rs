@@ -31,15 +31,15 @@ pub(crate) async fn default_currency(db: &Db) -> String {
     }
 }
 
-/// `clean_currency` + 지연 기본값 조회: 값이 비어 있을 때만 설정을 읽는다 —
-/// mmbak 벌크 임포트처럼 통화가 항상 채워져 오는 행당 루프에서 불필요한 SELECT를 없앤다.
+/// 빈 값이면 앱 기본 통화(지연 조회 — mmbak 벌크 임포트처럼 통화가 항상 채워져 오는
+/// 행당 루프에서 불필요한 SELECT를 없앤다), 아니면 정제.
 pub(crate) async fn clean_currency_or_default(db: &Db, value: &str) -> Result<String, AppError> {
-    if value.trim().is_empty() {
-        let default = default_currency(db).await;
-        clean_currency(value, &default)
-    } else {
-        clean_currency(value, DEFAULT_CURRENCY)
+    let raw = value.trim();
+    if raw.is_empty() {
+        // `default_currency()`가 이미 정제·검증된 3자리 코드를 보장한다.
+        return Ok(default_currency(db).await);
     }
+    normalize_currency_code(raw)
 }
 
 pub(crate) const MAX_SYNC_ERROR_LEN: usize = 160;
@@ -214,16 +214,11 @@ pub(crate) async fn ensure_project_exists(
     }
 }
 
-/// 통화 코드 정제. 빈 값은 `default`(호출자가 `default_currency()`로 조회한 앱 기본값)로
-/// 치환한다 — KRW 하드코딩 대신 설정을 따르게 하는 범용화 지점.
+/// 3자리 ISO 4217 코드로 정제(trim + 대문자화 + 검증). 기본값 치환은 호출자 책임 —
+/// 이 함수는 검증만 한다.
 #[allow(clippy::result_large_err)]
-pub(crate) fn clean_currency(value: &str, default: &str) -> Result<String, AppError> {
-    let raw = value.trim();
-    let cleaned = if raw.is_empty() {
-        default.to_string()
-    } else {
-        raw.to_ascii_uppercase()
-    };
+fn normalize_currency_code(value: &str) -> Result<String, AppError> {
+    let cleaned = value.trim().to_ascii_uppercase();
     if cleaned.len() != 3 || !cleaned.bytes().all(|b| b.is_ascii_uppercase()) {
         return Err(AppError::validation(
             "bookkeeping.currency",
@@ -231,6 +226,19 @@ pub(crate) fn clean_currency(value: &str, default: &str) -> Result<String, AppEr
         ));
     }
     Ok(cleaned)
+}
+
+/// 통화 코드 정제. 빈 값은 `default`로 치환한다 — KRW 하드코딩 대신 설정/기존 값을
+/// 따르게 하는 범용화 지점(편집 경로는 해당 거래의 기존 통화를 `default`로 넘긴다).
+/// DB 조회가 필요한 앱 기본값은 [`clean_currency_or_default`]를 쓴다.
+///
+/// 주의: `default`도 `value`와 동일하게 정규화(trim + 대문자)된 뒤 검증된다 —
+/// 이미 canonical한 코드를 넘긴다고 가정하지 않으므로, 비-canonical `default`는
+/// 거부되지 않고 조용히 정규화된다.
+#[allow(clippy::result_large_err)]
+pub(crate) fn clean_currency(value: &str, default: &str) -> Result<String, AppError> {
+    let raw = value.trim();
+    normalize_currency_code(if raw.is_empty() { default } else { raw })
 }
 
 #[allow(clippy::result_large_err)]

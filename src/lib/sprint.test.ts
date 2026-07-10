@@ -5,7 +5,6 @@ import {
   formatCountdownLabel,
   formatSprintGoal,
   remainingSecondsUntil,
-  WEEKDAY_LABELS,
 } from "@/lib/sprint";
 
 describe("sprint — 카운트다운 순수 헬퍼(P11)", () => {
@@ -69,11 +68,6 @@ describe("sprint — 카운트다운 순수 헬퍼(P11)", () => {
 
   it("remainingSecondsUntil: 파싱 불가 → null(empty 처리)", () => {
     expect(remainingSecondsUntil("not-a-date")).toBeNull();
-  });
-
-  it("WEEKDAY_LABELS: bindings Weekday(snake_case) 키와 매칭", () => {
-    expect(WEEKDAY_LABELS.fri).toBe("금");
-    expect(Object.keys(WEEKDAY_LABELS)).toHaveLength(7);
   });
 
   it("formatSprintGoal: 목표 문구는 공백을 정리하고 비어 있으면 null", () => {

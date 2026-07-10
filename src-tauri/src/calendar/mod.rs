@@ -11,7 +11,7 @@
 //!  - `oauth`   PKCE/auth_url/redirect 파싱 · CalendarCreds blob · TokenResponse · connect/refresh_core
 //!  - `loopback` RFC 8252 loopback redirect 수신기 + LOOPBACK_TIMEOUT
 //!  - `parse`   calendarList/events 응답 파싱 + Raw 타입 + CalendarEvent 정렬
-//!  - `windows` 오늘/임의 범위 RFC3339 윈도우 + 로컬 오프셋
+//!  - `windows` 오늘/임의 범위 RFC3339 윈도우(순수 — 오프셋은 주입)
 //!  - `http`    실 HTTP provider(reqwest) + 에러 분류 + path segment percent-encoding
 //!  - `write`   이벤트 생성 입력(CreateEventInput) + 페이로드 빌더 + 응답 파싱
 //!
@@ -52,7 +52,7 @@ pub use oauth::{
 pub use parse::{
     merge_sort_events, parse_calendar_event, parse_calendar_list, RawCalendar, RawEvent,
 };
-pub use windows::{local_offset, range_window, today_window};
+pub use windows::{range_window, today_window};
 #[allow(unused_imports)]
 pub use write::{build_event_payload, parse_created_event, CreateEventInput};
 // External Action Gate(Phase 4) dispatch — commands::external_actions 라우터가 호출.

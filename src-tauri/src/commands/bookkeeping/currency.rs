@@ -29,7 +29,7 @@ pub async fn set_bookkeeping_default_currency(
 
 #[cfg(test)]
 mod tests {
-    use super::super::common::default_currency;
+    use super::super::common::{default_currency, KEY_DEFAULT_CURRENCY};
     use crate::commands::nav::set_config;
     use crate::db::init_db;
 
@@ -51,19 +51,15 @@ mod tests {
         // 미설정 = KRW (기존 동작 보존).
         assert_eq!(default_currency(&db).await, "KRW");
         // 설정 반영.
-        set_config(&db, super::super::common::KEY_DEFAULT_CURRENCY, "usd")
+        set_config(&db, KEY_DEFAULT_CURRENCY, "usd")
             .await
             .expect("set config");
         // 저장값은 그대로여도 조회 시 정규화(대문자) 적용.
         assert_eq!(default_currency(&db).await, "USD");
         // 불량 값은 KRW로 fail-closed.
-        set_config(
-            &db,
-            super::super::common::KEY_DEFAULT_CURRENCY,
-            "not-a-code",
-        )
-        .await
-        .expect("set config");
+        set_config(&db, KEY_DEFAULT_CURRENCY, "not-a-code")
+            .await
+            .expect("set config");
         assert_eq!(default_currency(&db).await, "KRW");
     }
 }

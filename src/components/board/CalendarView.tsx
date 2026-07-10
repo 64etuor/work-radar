@@ -41,8 +41,6 @@ function bucketByDate(events: CalendarEvent[]): Map<string, CalendarEvent[]> {
   return map;
 }
 
-const WEEKDAY_LABELS = WEEKDAY_SHORT_MON_FIRST;
-
 type Props = {
   /** 표시할 이벤트(시간순 병합된 ambient 사본). */
   events: CalendarEvent[];
@@ -92,12 +90,12 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
                   onClick={() => onSelectDate(d)}
                   aria-label={`${d} 선택`}
                 >
-                  <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
+                  <span className="calv-dow">{WEEKDAY_SHORT_MON_FIRST[i]}</span>
                   <span className="calv-dom">{dd.getDate()}</span>
                 </button>
               ) : (
                 <div className="calv-col-head">
-                  <span className="calv-dow">{WEEKDAY_LABELS[i]}</span>
+                  <span className="calv-dow">{WEEKDAY_SHORT_MON_FIRST[i]}</span>
                   <span className="calv-dom">{dd.getDate()}</span>
                 </div>
               )}
@@ -121,7 +119,7 @@ export function CalendarView({ events, mode, date, onSelectDate }: Props) {
   return (
     <div className="calv calv-month">
       <div className="calv-month-dows">
-        {WEEKDAY_LABELS.map((w) => (
+        {WEEKDAY_SHORT_MON_FIRST.map((w) => (
           <span key={w} className="calv-dow">
             {w}
           </span>

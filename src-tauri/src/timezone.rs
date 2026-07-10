@@ -121,13 +121,14 @@ mod tests {
         assert_eq!(attached.naive_local(), naive);
     }
 
-    // 로컬 계열 파생은 전부 같은 zone(user_timezone)에서 나온다 — SSOT 일관성 스모크.
+    // 문자열 "오늘"은 `%Y-%m-%d`로 파싱되어 `local_today()`와 같은 날짜여야 한다 —
+    // 소비처(루틴 due-calc)가 이 형식에 의존한다. (`local_today() == now_local().date_naive()`
+    // 같은 단언은 구현의 재진술이라 절대 실패하지 않는다 — 넣지 않는다.)
     #[test]
-    fn today_and_now_agree() {
-        assert_eq!(local_today(), now_local().date_naive());
+    fn local_today_string_roundtrips_to_local_today() {
         assert_eq!(
-            local_today_string(),
-            local_today().format("%Y-%m-%d").to_string()
+            NaiveDate::parse_from_str(&local_today_string(), "%Y-%m-%d"),
+            Ok(local_today())
         );
     }
 }

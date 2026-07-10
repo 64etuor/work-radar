@@ -232,8 +232,10 @@ where
                 continue;
             }
             Err(e) => {
+                // due-scan 실패(`scan_failed`)와 구분되는 별도 코드 — 로그 트리아지에서
+                // "probe가 죽었다"와 "scan이 죽었다"는 원인이 다르다.
                 tracing::warn!(
-                    code = "ticker_scheduler.scan_failed",
+                    code = "ticker_scheduler.enabled_probe_failed",
                     error = %e,
                     "enabled-row probe failed"
                 );

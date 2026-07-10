@@ -6,6 +6,7 @@ import type { SprintConfig, Weekday } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { Input } from "@/components/ui/input";
+import { WEEKDAY_SHORT_BY_CODE } from "@/lib/localeFormat";
 import {
   useClearSprintConfig,
   useSetSprintConfig,
@@ -18,7 +19,6 @@ import {
   formatCountdownLabel,
   formatSprintGoal,
   remainingSecondsUntil,
-  WEEKDAY_LABELS,
 } from "@/lib/sprint";
 import { useToastStore } from "@/lib/toast";
 
@@ -299,7 +299,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
               onClick={() => setWeekday(wd)}
               aria-pressed={wd === weekday}
             >
-              {WEEKDAY_LABELS[wd]}
+              {WEEKDAY_SHORT_BY_CODE[wd]}
             </Button>
           ))}
         </div>

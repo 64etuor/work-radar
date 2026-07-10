@@ -31,25 +31,29 @@
 
 ### P2 — 신선한 머신 소음 제거
 
-- Boule 티커: due row 존재 확인을 runner resolve **앞으로** 이동 + runner 부재 warn은
-  1회만(이후 debug). 저자 환경(Boule 존재) 동작 불변.
-- 뉴스 소스 기본값: 마이그레이션 0072로 기존 설치에 explicit enabled row를 심어
-  현 동작 보존 → 코드 기본값에서 `geeknews`만 default-OFF (신규 설치에 한함).
+- Boule 티커: runner resolve를 **`tick_enabled` 행 존재 게이트 뒤로** 이동(as-built —
+  계획 초안의 "warn 1회만" 대신 게이트를 택했다: 미사용 머신은 resolve 자체를 안 하므로
+  로그도 `runner_ok=false` 거짓 표시도 사라진다). 저자 환경(Boule 존재) 동작 불변.
+- 뉴스 소스 기본값: `NewsSource::default_enabled()`(trait 기본 false) + 마이그레이션 0072가
+  뉴스가 실제 흘렀던 기존 설치에만 explicit enabled row를 심어 현 동작 보존 → 신규 설치는
+  `hn`/`lobsters`만 ON(`geeknews` 포함 나머지 OFF).
 
 ### P3 — 부기(bookkeeping) 비한국 사용자 정확성
 
-- mmbak TZ: `seoul_local/seoul_month` → `routines/timezone.rs`의 시스템 TZ 감지 SSOT
-  사용 (KST 머신에서는 결과 동일 = 저자 무영향).
-- 기본통화 설정: `app_config` 키 `bookkeeping.default_currency` (기본 "KRW" = 행동 보존)
-  - Rust 3개 진입점 plumb + 설정 UI 필드 + FE 드래프트 기본값.
+- mmbak TZ: `seoul_local/seoul_month` → tz 파라미터 주입, 커맨드 레이어가 시스템 TZ 감지
+  SSOT를 넘긴다 (KST 머신에서는 결과 동일 = 저자 무영향). _후속 트랙에서 이 SSOT는
+  crate 레벨 `src/timezone.rs`로 승격됐다._
+- 기본통화 설정: `app_config` 키 `bookkeeping.default_currency` (미설정 = "KRW" = 행동 보존)
+  — Rust 통화 진입점 전부(생성/ingest/고정비/예산/정산) + MCP + 설정 UI 카드 + FE 드래프트.
 
 ### P4 — FE 로케일 포맷 중앙화 (refactor)
 
-- `src/lib/localeFormat.ts` 신설: 요일 라벨(Intl), 월-일 포맷, 통화 포맷(머신 로케일).
-- 하드코딩 6곳(`ui/calendar.tsx`, `board/CalendarView`, `CalendarDrawer`,
-  `today/HistoryRail`, `today/TimelineCanvas`, `lib/sprint.ts`) + `bookkeepingFormat.ts`
-  - `agentUsage.ts:58` + `reconciliation.ts:11`을 이 모듈로 수렴.
-- ko 시스템 로케일에서는 출력 동일(월/화/… , N월 D일) = 저자 무영향. 향후 i18n의 단일 노브.
+- `src/lib/localeFormat.ts` 신설: `APP_LOCALE`(**ko-KR 고정** — UI 문안이 한국어인 동안
+  머신 로케일을 따르면 혼종 UI가 된다) + Intl 파생 요일 라벨 + 월-일 포맷.
+- 하드코딩 수렴: `ui/calendar.tsx`, `board/CalendarView`, `CalendarDrawer`,
+  `today/HistoryRail`, `today/TimelineCanvas`, `lib/sprint.ts`, `bookkeepingFormat.ts`,
+  `agentUsage.ts`, `reconciliation.ts`.
+- 출력 동일(월/화/… , N월 D일) = 저자 무영향. 향후 i18n의 단일 노브.
 
 ### P5 — 배포 문서/레포 위생
 

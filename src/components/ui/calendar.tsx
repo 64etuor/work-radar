@@ -15,8 +15,6 @@ import {
 } from "@/lib/calendarRange";
 import { WEEKDAY_SHORT_MON_FIRST } from "@/lib/localeFormat";
 
-const WEEKDAY_LABELS = WEEKDAY_SHORT_MON_FIRST;
-
 /** 로컬 오늘 'YYYY-MM-DD'. */
 function localToday(): string {
   return toLocalISODate(new Date());
@@ -163,7 +161,7 @@ export function Calendar({
       </div>
 
       <div className="grid grid-cols-7" role="presentation">
-        {WEEKDAY_LABELS.map((w) => (
+        {WEEKDAY_SHORT_MON_FIRST.map((w) => (
           <div key={w} className="typo-caption-sm text-muted-foreground py-1 text-center">
             {w}
           </div>

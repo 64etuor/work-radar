@@ -195,12 +195,12 @@ pub struct MappedMmRecurring {
     pub currency: String,
     /// 상위 카테고리 NAME(2단계면 parent) — 거래의 `category` 컬럼과 같은 시맨틱스.
     pub category_label: String,
-    /// NEXT_DATE의 Seoul 로컬 day-of-month. `Datelike::day()`라 항상 1..=31 —
+    /// NEXT_DATE의 로컬(주입 tz) day-of-month. `Datelike::day()`라 항상 1..=31 —
     /// 스키마 CHECK(1..=31)를 타입 수준에서 만족한다.
     pub schedule_day: u32,
-    /// USETIME의 Seoul 로컬 'YYYY-MM' — **최초 삽입 시에만** 반영한다.
+    /// USETIME의 로컬(주입 tz) 'YYYY-MM' — **최초 삽입 시에만** 반영한다.
     pub start_month: String,
-    /// END_DATE의 Seoul 로컬 'YYYY-MM'. 종료 없음이면 None.
+    /// END_DATE의 로컬(주입 tz) 'YYYY-MM'. 종료 없음이면 None.
     pub end_month: Option<String>,
     /// ASSETS.NIC_NAME — 최초 삽입 시 결제수단 라벨로만 싣는다(이후 사용자 소유).
     pub account: Option<String>,
@@ -900,7 +900,7 @@ mod tests {
         assert_eq!(expense.amount_minor, 5500);
         assert_eq!(expense.currency, "KRW");
         assert_eq!(expense.spent_at, "2026-06-15");
-        // 실시각 ZDATE → Seoul HH:MM:SS.
+        // 실시각 ZDATE → 주입 tz(Seoul) 로컬 HH:MM:SS.
         assert_eq!(expense.spent_at_time.as_deref(), Some("13:45:30"));
         assert_eq!(expense.category_label, "식비");
         assert_eq!(expense.subcategory_label.as_deref(), Some("카페"));

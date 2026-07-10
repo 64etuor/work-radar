@@ -10,6 +10,8 @@ use crate::models::{
     Weekday,
 };
 use crate::scheduler::utc_now_string;
+// due-calc의 "오늘"은 리마인더/Google 동기화와 같은 OS 로컬 zone에서 나온다.
+use crate::timezone::local_today_string;
 
 use super::reminders::reminder_source_id;
 
@@ -26,7 +28,7 @@ pub async fn insert_routine(
                 .anchor_date
                 .clone()
                 .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(local_today),
+                .unwrap_or_else(local_today_string),
         ),
         RoutineFreq::Daily | RoutineFreq::Weekly => None,
     };
@@ -89,12 +91,6 @@ pub async fn insert_routine(
         google_event_id: None,
         google_calendar_id: None,
     })
-}
-
-/// 로컬 오늘 날짜(YYYY-MM-DD). OS 로컬 SSOT(`crate::timezone`) 위임 — due-calc의 "오늘"이
-/// 리마인더/동기화와 같은 zone에서 나온다.
-fn local_today() -> String {
-    crate::timezone::local_today_string()
 }
 
 /// IPC-boundary 검증 (plan §5 PR 2b-3 진입 조건). DB CHECK은 `monthly_nth_week` **범위**만 본다 —
@@ -226,7 +222,7 @@ pub async fn update_routine(
         notify.inner(),
         &routine_id,
         sync_snapshot,
-        &local_today(),
+        &local_today_string(),
     )
     .await
     .map_err(|e| {
@@ -266,7 +262,7 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
                         .await?;
                 match row {
                     None => return Err(sqlx::Error::RowNotFound),
-                    Some((existing,)) => Some(existing.unwrap_or_else(local_today)),
+                    Some((existing,)) => Some(existing.unwrap_or_else(local_today_string)),
                 }
             }
         }
@@ -328,7 +324,7 @@ pub async fn update_routine_inner(db: &Db, input: UpdateRoutineInput) -> Result<
     // split하므로 앱/Google이 '당일 이후'로 일관된다. 시간 미변경(제목/길이만 편집)이면 건드리지
     // 않아 사용자가 의도한 per-day 조정을 보존한다.
     if prev_time_of_day != time_of_day {
-        let today = local_today();
+        let today = local_today_string();
         sqlx::query(
             "UPDATE routine_checks SET time_override = NULL, linked_event_id = NULL, \
              linked_calendar_id = NULL WHERE routine_id = ?1 AND date >= ?2",
@@ -742,7 +738,7 @@ mod tests {
             .await
             .unwrap()
             .id;
-        let today = local_today();
+        let today = local_today_string();
         let past = "2000-01-01";
         let future = "2999-12-31";
         insert_override(&db, &rid, past, "08:00").await;

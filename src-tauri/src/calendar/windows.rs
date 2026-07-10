@@ -1,4 +1,5 @@
-//! 시간 윈도우 유틸 (오늘/임의 범위 → RFC3339 [start,end] 한 쌍). 순수 + 시스템 로컬 오프셋 조회.
+//! 시간 윈도우 유틸 (오늘/임의 범위 → RFC3339 [start,end] 한 쌍). **순수** — 로컬 오프셋은
+//! 호출자가 `crate::timezone::local_offset_string()`으로 주입한다.
 
 /// 오늘 윈도우 [00:00:00, 23:59:59] (RFC3339, 주어진 로컬 오프셋). 순수.
 pub fn today_window(date: &str, offset: &str) -> (String, String) {
@@ -16,11 +17,6 @@ pub fn range_window(start_date: &str, end_date: &str, offset: &str) -> (String, 
         format!("{start_date}T00:00:00{offset}"),
         format!("{end_date}T23:59:59{offset}"),
     )
-}
-
-/// 시스템 로컬 UTC 오프셋 문자열("+09:00" 등). OS 로컬 SSOT(`crate::timezone`) 위임(순수 아님).
-pub fn local_offset() -> String {
-    crate::timezone::local_offset_string()
 }
 
 #[cfg(test)]

@@ -611,7 +611,7 @@ pub async fn fetch_calendar_events(
     date: String,
     force_refresh: bool,
 ) -> Result<Vec<CalendarEvent>, AppError> {
-    let offset = calendar::local_offset();
+    let offset = crate::timezone::local_offset_string();
     let (time_min, time_max) = calendar::today_window(&date, &offset);
     let project_ids = resolve_project_ids(db.inner(), project_id).await?;
     fetch_events_windowed(db.inner(), project_ids, time_min, time_max, force_refresh).await
@@ -651,7 +651,7 @@ pub(crate) async fn fetch_calendar_events_range_inner(
     end_date: &str,
     force_refresh: bool,
 ) -> Result<Vec<CalendarEvent>, AppError> {
-    let offset = calendar::local_offset();
+    let offset = crate::timezone::local_offset_string();
     let (time_min, time_max) = calendar::range_window(start_date, end_date, &offset);
     let project_ids = resolve_project_ids(db, project_id).await?;
     fetch_events_windowed(db, project_ids, time_min, time_max, force_refresh).await
