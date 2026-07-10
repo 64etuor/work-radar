@@ -1,0 +1,39 @@
+src/components/board/CalendarDrawer.tsx
+  s_b622c0eab0169d::t_bf5bcce0bfacce 43
+  s_b622c0eab0169d::t_1a781c859a36c9 11
+src/components/today/TimelineCanvas.tsx
+  s_b622c0eab0169d::t_674aaa607840d0 13
+  s_b622c0eab0169d::t_ca0c1130ca386b 60
+src/components/today/HistoryRail.tsx
+  s_b622c0eab0169d::t_20214684e3b28a 8
+  s_b622c0eab0169d::t_c67e69c72e1ecc 281
+src/components/board/CalendarView.tsx
+  s_b622c0eab0169d::t_763ba18fe8e46f 12
+  s_b622c0eab0169d::t_a573f54c5aa951 44
+src/lib/localeFormat.ts
+  s_b622c0eab0169d::t_f81d5be150554c 1-44
+src/lib/agentUsage.ts
+  s_b622c0eab0169d::t_e659007a567b17 3-4
+  s_b622c0eab0169d::t_60fd60d337606c 60
+src/components/ui/calendar.tsx
+  s_b622c0eab0169d::t_36fdbbe1eab1b6 16,18
+src/lib/sprint.ts
+  s_b622c0eab0169d::t_ff9dc194b80a03 72-74
+  s_b622c0eab0169d::t_2925d25cbb7ba9 9-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8d45ddf20d05a221b2d586eebce46f94569f619f",
+  "prompts": {},
+  "sessions": {
+    "s_b622c0eab0169d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7150b61e-dd58-475b-b174-04af3da9b0c3",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
