@@ -149,6 +149,17 @@ pub async fn get_ticker_scheduler_status_core(
     .await?)
 }
 
+/// auto-ticking 사용 여부 probe. `tick_enabled` 행이 하나도 없으면 runner resolve 자체를
+/// 건너뛴다 — due 여부와 무관하게 "기능이 켜져 있는가"만 본다(작가 환경 관측성 보존:
+/// 행이 있으면 due가 아니어도 매 wake resolve → runner_ok가 정직하게 유지된다).
+async fn any_enabled_rows(db: &Db) -> Result<bool, sqlx::Error> {
+    sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS(SELECT 1 FROM project_ticker WHERE tick_enabled = 1)",
+    )
+    .fetch_one(db)
+    .await
+}
+
 async fn due_rows(db: &Db, now: &str) -> Result<Vec<DueTickerRow>, sqlx::Error> {
     sqlx::query_as::<_, DueTickerRow>(
         "SELECT project_id, interval_sec \
@@ -210,6 +221,26 @@ where
     loop {
         ticker.tick().await;
         let now = clock.now_string();
+        // Runner resolve는 auto-ticking이 실제로 사용 중일 때만(tick_enabled 행 ≥1).
+        // Boule CLI가 없는 머신(일반 설치)에서 무조건 resolve하면 쓰지도 않는 기능이
+        // 매 wake마다 warn + runner_ok=false(Control Room "scheduler ✕")를 만든다.
+        // 활성 행이 생기는 순간부터는 기존 매-wake resolve 동작 그대로.
+        match any_enabled_rows(&db).await {
+            Ok(true) => {}
+            Ok(false) => {
+                record_heartbeat_best_effort(&db, &now, true, true, None, 0).await;
+                continue;
+            }
+            Err(e) => {
+                tracing::warn!(
+                    code = "ticker_scheduler.scan_failed",
+                    error = %e,
+                    "enabled-row probe failed"
+                );
+                record_heartbeat_best_effort(&db, &now, false, true, None, 0).await;
+                continue;
+            }
+        }
         let active_runner = match &runner {
             Some(cached) => cached.clone(),
             None => match RealTickCommandRunner::resolve().await {
@@ -383,6 +414,40 @@ mod tests {
             .fetch_one(db)
             .await
             .expect("next_due_at")
+    }
+
+    #[tokio::test]
+    async fn any_enabled_rows_false_on_fresh_db_and_disabled_rows() {
+        let db = test_db().await;
+        assert!(
+            !any_enabled_rows(&db).await.expect("probe fresh db"),
+            "빈 DB = auto-ticking 미사용 → runner resolve 스킵 대상"
+        );
+        seed_project(&db, "p-off").await;
+        seed_ticker(&db, "p-off", false, Some(120), None, false, false).await;
+        assert!(
+            !any_enabled_rows(&db).await.expect("probe disabled row"),
+            "tick_enabled=0만 있으면 여전히 미사용"
+        );
+    }
+
+    #[tokio::test]
+    async fn any_enabled_rows_true_even_when_not_due() {
+        let db = test_db().await;
+        seed_project(&db, "p-on").await;
+        // next_due_at이 먼 미래(=due 아님)여도 기능이 켜져 있으면 true —
+        // runner 관측성(runner_ok)은 due 여부와 무관하게 유지되어야 한다.
+        seed_ticker(
+            &db,
+            "p-on",
+            true,
+            Some(120),
+            Some("2999-01-01T00:00:00Z"),
+            false,
+            false,
+        )
+        .await;
+        assert!(any_enabled_rows(&db).await.expect("probe enabled row"));
     }
 
     #[tokio::test]
