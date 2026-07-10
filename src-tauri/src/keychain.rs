@@ -8,7 +8,9 @@ use keyring::Entry;
 
 use crate::models::TokenKind;
 
-const SERVICE: &str = "co.kr.mirrorless.workradar";
+/// keychain service = 번들 ID 단일 정본(`crate::APP_BUNDLE_IDENTIFIER`).
+/// 값이 바뀌면 기존 설치의 저장 토큰이 전부 orphan된다 — 리브랜딩 시 docs/SETUP.md 절차 필수.
+const SERVICE: &str = crate::APP_BUNDLE_IDENTIFIER;
 
 /// keychain account = `{credential_ref}:{kind}`.
 /// credential_ref는 project별 분리 키(개인 GitHub ≠ 업무 org, Notion 워크스페이스 별개),
