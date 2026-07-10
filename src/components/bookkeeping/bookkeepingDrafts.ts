@@ -103,7 +103,8 @@ export function emptyReconciliationDraft(): ReconciliationDraft {
     account: "",
     statementDate: localToday(),
     statementBalance: "",
-    currency: "KRW",
+    // 빈 값 = 앱 기본 통화(bookkeeping.default_currency, 백엔드가 채움) — KRW 하드코딩 제거.
+    currency: "",
     note: "",
   };
 }

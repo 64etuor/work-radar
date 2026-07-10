@@ -39,8 +39,9 @@ pub(crate) async fn sync_mm_recurring(
     categories: &HashMap<String, MmCategory>,
     assets: &HashMap<String, MmAsset>,
     currencies: &HashMap<String, MmCurrency>,
+    tz: chrono_tz::Tz,
 ) -> Result<MmRecurringSyncCounts, AppError> {
-    let mapped = map_repeats(rows, categories, assets, currencies);
+    let mapped = map_repeats(rows, categories, assets, currencies, tz);
     let mut counts = MmRecurringSyncCounts {
         skipped: mapped.skipped.len() as u32,
         ..MmRecurringSyncCounts::default()
@@ -241,6 +242,8 @@ mod tests {
             &loaded.categories,
             &loaded.assets,
             &loaded.currencies,
+            // 테스트 결정론: 픽스처가 kst_millis로 만들어지므로 tz도 Seoul 고정 주입.
+            chrono_tz::Asia::Seoul,
         )
         .await
         .expect("sync")

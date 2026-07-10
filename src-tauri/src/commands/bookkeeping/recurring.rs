@@ -76,7 +76,7 @@ pub(crate) async fn create_bookkeeping_recurring_expense_inner(
     let name = clean_required(&input.name, "bookkeeping.recurring.name")?;
     let merchant = clean_optional(input.merchant.as_deref());
     let category = clean_required(&input.category, "bookkeeping.category")?;
-    let currency = clean_currency(&input.currency)?;
+    let currency = clean_currency_or_default(db, &input.currency).await?;
     validate_month(&input.start_month)?;
     if let Some(end_month) = input.end_month.as_deref() {
         validate_month(end_month)?;

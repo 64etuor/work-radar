@@ -72,7 +72,7 @@ pub(crate) async fn set_bookkeeping_budget_inner(
         ensure_project_exists(db, project_id, "bookkeeping.budget.project_not_found").await?;
     }
     let category_code = clean_required(&input.category_code, "bookkeeping.budget.category")?;
-    let currency = clean_currency(input.currency.as_deref().unwrap_or(DEFAULT_CURRENCY))?;
+    let currency = clean_currency_or_default(db, input.currency.as_deref().unwrap_or("")).await?;
     let note = clean_optional(input.note.as_deref());
 
     let existing: Option<(String,)> = sqlx::query_as(
@@ -238,6 +238,8 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
         .map(|b| (b.category_code.as_str(), b))
         .collect();
 
+    // 예산 미설정 행의 표시 통화 — 설정된 앱 기본 통화(루프 밖에서 1회 조회).
+    let fallback_currency = default_currency(db).await;
     let mut rows = Vec::with_capacity(codes.len());
     for code in codes {
         let budget = budget_map.get(code.as_str()).copied();
@@ -282,7 +284,7 @@ pub(crate) async fn bookkeeping_budget_planner_inner(
                     0,
                     0,
                     0.0,
-                    DEFAULT_CURRENCY.to_string(),
+                    fallback_currency.clone(),
                 )
             };
 

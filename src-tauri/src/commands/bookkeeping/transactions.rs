@@ -132,7 +132,7 @@ pub(crate) async fn create_bookkeeping_transaction_inner(
 ) -> Result<BookkeepingTransaction, AppError> {
     let merchant = clean_required(&input.merchant, "bookkeeping.merchant")?;
     let category = clean_required(&input.category, "bookkeeping.category")?;
-    let currency = clean_currency(&input.currency)?;
+    let currency = clean_currency_or_default(db, &input.currency).await?;
     validate_date(&input.spent_at)?;
     if input.amount_minor <= 0 {
         return Err(AppError::validation(
@@ -219,7 +219,7 @@ pub(crate) async fn upsert_bookkeeping_transaction_from_ingest_inner(
 
     let merchant = clean_required(&input.merchant, "bookkeeping.merchant")?;
     let category = clean_required(&input.category, "bookkeeping.category")?;
-    let currency = clean_currency(&input.currency)?;
+    let currency = clean_currency_or_default(db, &input.currency).await?;
     validate_date(&input.spent_at)?;
     if input.amount_minor <= 0 {
         return Err(AppError::validation(
@@ -354,7 +354,7 @@ pub(crate) async fn insert_bookkeeping_transaction_from_ingest_if_absent_inner(
     };
     let merchant = clean_required(&input.merchant, "bookkeeping.merchant")?;
     let category = clean_required(&input.category, "bookkeeping.category")?;
-    let currency = clean_currency(&input.currency)?;
+    let currency = clean_currency_or_default(db, &input.currency).await?;
     validate_date(&input.spent_at)?;
     if input.amount_minor <= 0 {
         return Err(AppError::validation(
@@ -663,7 +663,8 @@ pub(crate) async fn update_bookkeeping_transaction_inner(
         None => current.amount_minor,
     };
     let currency = match input.currency.as_deref() {
-        Some(value) => clean_currency(value)?,
+        // 편집 경로의 빈 값은 앱 기본이 아니라 해당 거래의 기존 통화 유지가 자연스럽다.
+        Some(value) => clean_currency(value, &current.currency)?,
         None => current.currency.clone(),
     };
     let spent_at = match input.spent_at.as_deref() {

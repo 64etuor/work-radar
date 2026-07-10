@@ -14,6 +14,7 @@ import {
   useBookkeepingAudit,
   useBookkeepingCashflow,
   useBookkeepingCategoryTrend,
+  useBookkeepingDefaultCurrency,
   useBookkeepingGmailLabels,
   useBookkeepingMmbakOptions,
   useBookkeepingMonthlySummary,
@@ -36,6 +37,7 @@ import {
   usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
+  useSetBookkeepingDefaultCurrency,
   useSetBookkeepingMmbakOptions,
   useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
@@ -82,6 +84,7 @@ import { BookkeepingScopeControls } from "./cards/BookkeepingScopeControls";
 import { BudgetPlannerPanel } from "./cards/BudgetPlannerPanel";
 import { CategorySummaryCard } from "./cards/CategorySummaryCard";
 import { CurrencySummaryRows } from "./cards/CurrencySummaryRows";
+import { DefaultCurrencyCard } from "./cards/DefaultCurrencyCard";
 import { GmailSyncCard } from "./cards/GmailSyncCard";
 import { ManualEntryCard } from "./cards/ManualEntryCard";
 import { MoneyManagerImportCard } from "./cards/MoneyManagerImportCard";
@@ -181,6 +184,10 @@ export function BookkeepingView() {
   const bulkCategory = useBulkSetBookkeepingCategory();
   const bulkDelete = useBulkDeleteBookkeepingTransactions();
   const reconcileAccount = useBookkeepingReconcileAccount();
+  const defaultCurrencyQuery = useBookkeepingDefaultCurrency();
+  const setDefaultCurrency = useSetBookkeepingDefaultCurrency();
+  // 로딩 중 폴백 = 서버 미설정 기본값과 동일(KRW) — 표시용에만 쓰이고 저장 경로엔 미사용.
+  const defaultCurrency = defaultCurrencyQuery.data ?? "KRW";
   const writeExport = useWriteBookkeepingExport();
   const updateTx = useUpdateBookkeepingTransaction();
   const overrideCategory = useOverrideBookkeepingCategory();
@@ -215,7 +222,8 @@ export function BookkeepingView() {
         merchant: manualDraft.merchant,
         description: null,
         amountMinor: Math.round(amount),
-        currency: "KRW",
+        // 빈 값 = 앱 기본 통화(백엔드 clean_currency가 bookkeeping.default_currency로 치환).
+        currency: "",
         spentAt: manualDraft.spentAt,
         category: manualDraft.category,
         note: nullableText(manualDraft.note),
@@ -268,7 +276,8 @@ export function BookkeepingView() {
         name: recurringDraft.name,
         merchant: nullableText(recurringDraft.merchant),
         amountMinor: Math.round(amount),
-        currency: "KRW",
+        // 빈 값 = 앱 기본 통화(백엔드 clean_currency가 bookkeeping.default_currency로 치환).
+        currency: "",
         category: recurringDraft.category,
         paymentMethodKind: recurringDraft.paymentMethodKind,
         paymentMethodLabel: nullableText(recurringDraft.paymentMethodLabel),
@@ -406,7 +415,9 @@ export function BookkeepingView() {
           } else {
             pushError(
               "bookkeeping.reconcile",
-              `차이 ${signedMinorLabel(result.differenceMinor)} ${reconciliationDraft.currency}`,
+              `차이 ${signedMinorLabel(result.differenceMinor)} ${
+                reconciliationDraft.currency || defaultCurrency
+              }`,
             );
           }
         },
@@ -731,6 +742,7 @@ export function BookkeepingView() {
             />
             <ReconciliationCard
               draft={reconciliationDraft}
+              defaultCurrency={defaultCurrency}
               pending={reconcileAccount.isPending}
               result={reconcileAccount.data ?? null}
               onDraftChange={setReconciliationDraft}
@@ -777,6 +789,16 @@ export function BookkeepingView() {
               onSaveWatchDir={() => saveMmbakWatchDir()}
               onToggleAutoImport={toggleMmbakAutoImport}
               onImportNow={runMmbakImport}
+            />
+            <DefaultCurrencyCard
+              current={defaultCurrency}
+              pending={setDefaultCurrency.isPending}
+              onSave={(currency) =>
+                setDefaultCurrency.mutate(currency, {
+                  onSuccess: (saved) => pushSuccess(`기본 통화가 ${saved}로 저장됐습니다`),
+                  onError: (error) => pushMutationError("bookkeeping.default_currency", error),
+                })
+              }
             />
             <OperationsLogCard syncJobs={syncJobs.data ?? []} audit={audit.data ?? []} />
           </div>

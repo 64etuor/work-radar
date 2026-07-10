@@ -6,6 +6,7 @@
 mod audit;
 mod budgets;
 mod common;
+mod currency;
 mod dedup;
 mod export;
 mod gmail;
@@ -23,6 +24,7 @@ mod transactions;
 pub use audit::*;
 pub use budgets::*;
 pub(crate) use common::*;
+pub use currency::*;
 pub use dedup::*;
 pub use export::*;
 pub use gmail::*;

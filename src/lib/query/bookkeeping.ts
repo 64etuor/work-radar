@@ -203,6 +203,22 @@ export function useBookkeepingReconcileAccount() {
   });
 }
 
+/** 앱 기본 통화(app_config `bookkeeping.default_currency`, 미설정=KRW). */
+export function useBookkeepingDefaultCurrency() {
+  return useQuery({
+    queryKey: ["bookkeeping", "defaultCurrency"],
+    queryFn: () => unwrap(commands.bookkeepingDefaultCurrency()),
+  });
+}
+
+export function useSetBookkeepingDefaultCurrency() {
+  const invalidate = useInvalidateBookkeeping();
+  return useMutation({
+    mutationFn: (currency: string) => unwrap(commands.setBookkeepingDefaultCurrency(currency)),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSetBookkeepingBudget() {
   const invalidate = useInvalidateBookkeeping();
   return useMutation({

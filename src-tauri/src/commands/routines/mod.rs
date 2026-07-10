@@ -8,7 +8,7 @@ mod listing;
 mod reminders; // 내부 헬퍼 전용(공개 커맨드 없음) — crud/listing이 `super::reminders::`로 접근.
 mod schedule;
 mod tags;
-mod timezone; // 사용자 타임존 SSOT — google_sync(tzid)·reminders(발사시각)가 공유.
+pub(crate) mod timezone; // 사용자 타임존 SSOT — google_sync(tzid)·reminders(발사시각)·mmbak 임포트가 공유.
 mod tracking;
 
 pub use crud::*;

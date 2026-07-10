@@ -57,6 +57,7 @@ export const FIELD_IDS = {
   reconcileBalance: "bk-reconcile-balance",
   reconcileCurrency: "bk-reconcile-currency",
   reconcileNote: "bk-reconcile-note",
+  defaultCurrency: "bk-default-currency",
   merchant: "bk-manual-merchant",
   amount: "bk-manual-amount",
   spentAt: "bk-manual-spent-at",

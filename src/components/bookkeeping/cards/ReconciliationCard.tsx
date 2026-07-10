@@ -15,18 +15,22 @@ import { reconciliationTone, signedMinorLabel } from "../reconciliation";
 
 export function ReconciliationCard({
   draft,
+  defaultCurrency,
   pending,
   result,
   onDraftChange,
   onSubmit,
 }: {
   draft: ReconciliationDraft;
+  /** 통화 미입력 시 적용되는 앱 기본 통화(표시/포맷 폴백). */
+  defaultCurrency: string;
   pending: boolean;
   result: BookkeepingReconcileAccountResult | null;
   onDraftChange: Dispatch<SetStateAction<ReconciliationDraft>>;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
   const tone = result ? reconciliationTone(result.differenceMinor) : null;
+  const effectiveCurrency = draft.currency || defaultCurrency;
   return (
     <Card className="bk-card">
       <CardHeader className="bk-card-head">
@@ -68,6 +72,7 @@ export function ReconciliationCard({
                 id={FIELD_IDS.reconcileCurrency}
                 value={draft.currency}
                 maxLength={3}
+                placeholder={defaultCurrency}
                 onChange={(event) =>
                   onDraftChange((current) => ({
                     ...current,
@@ -113,8 +118,8 @@ export function ReconciliationCard({
               {result.matched ? "일치" : "불일치"} · {signedMinorLabel(result.differenceMinor)}
             </span>
             <span className="typo-caption-sm">
-              장부 {formatCurrencyMinor(result.computedBalanceMinor, draft.currency)} / 명세서{" "}
-              {formatCurrencyMinor(result.statementBalanceMinor, draft.currency)}
+              장부 {formatCurrencyMinor(result.computedBalanceMinor, effectiveCurrency)} / 명세서{" "}
+              {formatCurrencyMinor(result.statementBalanceMinor, effectiveCurrency)}
             </span>
           </div>
         )}

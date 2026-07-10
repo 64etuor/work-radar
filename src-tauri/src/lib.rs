@@ -96,6 +96,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::bookkeeping_category_trend,
         commands::bookkeeping_cashflow,
         commands::bookkeeping_reconcile_account,
+        // 앱 기본 통화(범용화) — app_config `bookkeeping.default_currency`.
+        commands::bookkeeping_default_currency,
+        commands::set_bookkeeping_default_currency,
         commands::list_bookkeeping_audit,
         commands::record_bookkeeping_sync_failure,
         commands::list_bookkeeping_sync_jobs,
@@ -705,7 +708,9 @@ pub fn run() {
 
 /// Bundle identifier (mirrors `tauri.conf.json` `identifier`). tauri의 `app_data_dir()`는
 /// `dirs::data_dir()/<identifier>`이므로, `--mcp-stdio` 헤드리스 모드가 GUI 부팅 없이 동일
-/// 경로를 재현할 때 이 const를 쓴다(`mcp::run`). conf와 동기화 — 변경 시 둘 다 갱신.
+/// 경로를 재현할 때 이 const를 쓴다(`mcp::run`). `keychain::SERVICE`도 이 값을 참조한다.
+/// conf와 동기화 — 변경 시 둘 다 갱신하고, 기존 설치의 키체인 토큰/앱데이터 경로가
+/// orphan되는 마이그레이션 영향까지 확인(리브랜딩 체크리스트: docs/SETUP.md).
 pub(crate) const APP_BUNDLE_IDENTIFIER: &str = "co.kr.mirrorless.workradar";
 
 /// Resolve the SQLite path. Debug/dev and release/prod intentionally share the same

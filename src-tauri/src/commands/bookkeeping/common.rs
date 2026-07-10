@@ -6,7 +6,41 @@ use crate::models::{
     BookkeepingDirection, BookkeepingTransaction, CreateBookkeepingTransactionInput,
 };
 
+/// 설정이 없거나 불량일 때의 최종 폴백 통화(기존 동작 보존). 런타임 기본은
+/// `default_currency()`(app_config `bookkeeping.default_currency`)가 정본이다.
 pub(crate) const DEFAULT_CURRENCY: &str = "KRW";
+
+/// 앱 기본 통화 app_config 키(범용화 — KRW 하드코딩 제거).
+pub(crate) const KEY_DEFAULT_CURRENCY: &str = "bookkeeping.default_currency";
+
+/// 앱 기본 통화(설정 가능). 미설정/불량 값이면 `DEFAULT_CURRENCY`.
+pub(crate) async fn default_currency(db: &Db) -> String {
+    match crate::commands::nav::get_config(db, KEY_DEFAULT_CURRENCY).await {
+        Ok(Some(saved)) => clean_currency(&saved, DEFAULT_CURRENCY)
+            .unwrap_or_else(|_| DEFAULT_CURRENCY.to_string()),
+        Ok(None) => DEFAULT_CURRENCY.to_string(),
+        Err(e) => {
+            // fail-closed(KRW)가 맞지만 조용히 삼키면 config 읽기 장애를 진단할 수 없다.
+            tracing::debug!(
+                code = "bookkeeping.default_currency.read_failed",
+                error = %e,
+                "app_config read failed; falling back to KRW"
+            );
+            DEFAULT_CURRENCY.to_string()
+        }
+    }
+}
+
+/// `clean_currency` + 지연 기본값 조회: 값이 비어 있을 때만 설정을 읽는다 —
+/// mmbak 벌크 임포트처럼 통화가 항상 채워져 오는 행당 루프에서 불필요한 SELECT를 없앤다.
+pub(crate) async fn clean_currency_or_default(db: &Db, value: &str) -> Result<String, AppError> {
+    if value.trim().is_empty() {
+        let default = default_currency(db).await;
+        clean_currency(value, &default)
+    } else {
+        clean_currency(value, DEFAULT_CURRENCY)
+    }
+}
 
 pub(crate) const MAX_SYNC_ERROR_LEN: usize = 160;
 
@@ -180,11 +214,13 @@ pub(crate) async fn ensure_project_exists(
     }
 }
 
+/// 통화 코드 정제. 빈 값은 `default`(호출자가 `default_currency()`로 조회한 앱 기본값)로
+/// 치환한다 — KRW 하드코딩 대신 설정을 따르게 하는 범용화 지점.
 #[allow(clippy::result_large_err)]
-pub(crate) fn clean_currency(value: &str) -> Result<String, AppError> {
+pub(crate) fn clean_currency(value: &str, default: &str) -> Result<String, AppError> {
     let raw = value.trim();
     let cleaned = if raw.is_empty() {
-        DEFAULT_CURRENCY.to_string()
+        default.to_string()
     } else {
         raw.to_ascii_uppercase()
     };

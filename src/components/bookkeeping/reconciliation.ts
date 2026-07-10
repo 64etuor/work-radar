@@ -1,3 +1,5 @@
+import { APP_LOCALE } from "@/lib/localeFormat";
+
 export type ReconciliationTone = "matched" | "over" | "under";
 
 export function reconciliationTone(differenceMinor: number): ReconciliationTone {
@@ -8,5 +10,5 @@ export function reconciliationTone(differenceMinor: number): ReconciliationTone 
 export function signedMinorLabel(value: number): string {
   if (value === 0) return "0";
   const sign = value > 0 ? "+" : "-";
-  return `${sign}${Math.abs(value).toLocaleString("ko-KR")}`;
+  return `${sign}${Math.abs(value).toLocaleString(APP_LOCALE)}`;
 }

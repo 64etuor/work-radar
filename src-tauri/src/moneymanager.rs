@@ -461,21 +461,23 @@ fn is_valid_date(value: &str) -> bool {
     (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
-/// ZDATE(epoch ms)를 Asia/Seoul 로컬로 변환. MoneyManager 백업의 사용자 타임존은
-/// 한국 사용 전제(KST)이며 chrono-tz가 이미 의존성에 있어 고정 오프셋 대신 IANA zone을 쓴다.
-fn seoul_local(zdate_ms: i64) -> Option<chrono::DateTime<chrono_tz::Tz>> {
+/// ZDATE(epoch ms)를 주입된 타임존의 로컬로 변환. MoneyManager 백업의 wall-clock 의미는
+/// 백업을 만든 기기의 타임존을 따르므로, 커맨드 레이어가 `user_timezone()` SSOT로 tz를
+/// 주입한다(이 모듈은 commands를 import하지 않는 순수 매핑 계층 — 파라미터 주입).
+/// 이전엔 Asia/Seoul 고정이라 비KST 사용자의 날짜/월 버킷이 UTC 오프셋만큼 어긋났다.
+fn local_datetime(zdate_ms: i64, tz: chrono_tz::Tz) -> Option<chrono::DateTime<chrono_tz::Tz>> {
     if zdate_ms <= 0 {
         return None;
     }
-    match chrono_tz::Asia::Seoul.timestamp_millis_opt(zdate_ms) {
+    match tz.timestamp_millis_opt(zdate_ms) {
         chrono::LocalResult::Single(dt) => Some(dt),
         _ => None,
     }
 }
 
-/// ZDATE/USETIME 계열 epoch ms → Seoul 로컬 'YYYY-MM'.
-fn seoul_month(ms: i64) -> Option<String> {
-    seoul_local(ms).map(|dt| dt.format("%Y-%m").to_string())
+/// ZDATE/USETIME 계열 epoch ms → 주입 tz 로컬 'YYYY-MM'.
+fn local_month(ms: i64, tz: chrono_tz::Tz) -> Option<String> {
+    local_datetime(ms, tz).map(|dt| dt.format("%Y-%m").to_string())
 }
 
 /// currencyUid → (3자리 ISO, 최소단위 지수). 원본 통화를 못 찾으면 (KRW, 0).
@@ -530,12 +532,13 @@ fn resolve_category_labels(
     }
 }
 
-/// INOUTCOME 한 행 → 매핑/삭제/스킵. 순수 함수 — DB·시계 접근 없음.
+/// INOUTCOME 한 행 → 매핑/삭제/스킵. 순수 함수 — DB·시계 접근 없음(tz도 파라미터 주입).
 pub fn map_inoutcome_row(
     row: &MmInoutcomeRow,
     categories: &HashMap<String, MmCategory>,
     assets: &HashMap<String, MmAsset>,
     currencies: &HashMap<String, MmCurrency>,
+    tz: chrono_tz::Tz,
 ) -> MmRowOutcome {
     let uid = row.uid.trim().to_string();
     if uid.is_empty() {
@@ -577,11 +580,11 @@ pub fn map_inoutcome_row(
         };
     };
 
-    // 날짜: WDATE 우선, 불량이면 ZDATE의 Seoul 로컬 날짜로 폴백.
+    // 날짜: WDATE 우선, 불량이면 ZDATE의 로컬(주입 tz) 날짜로 폴백.
     let wdate = row.wdate.trim();
     let spent_at = if is_valid_date(wdate) {
         wdate.to_string()
-    } else if let Some(local) = seoul_local(row.zdate_ms) {
+    } else if let Some(local) = local_datetime(row.zdate_ms, tz) {
         local.format("%Y-%m-%d").to_string()
     } else {
         return MmRowOutcome::Skipped {
@@ -592,7 +595,7 @@ pub fn map_inoutcome_row(
 
     // 시간: ZDATE가 실제 시각으로 보일 때만(합성 자정 00:00:00 제외 — 앱이 시간 미입력
     // 거래를 자정으로 저장한다).
-    let spent_at_time = seoul_local(row.zdate_ms)
+    let spent_at_time = local_datetime(row.zdate_ms, tz)
         .map(|local| local.format("%H:%M:%S").to_string())
         .filter(|t| t != "00:00:00");
 
@@ -647,6 +650,7 @@ pub fn map_backup(
     assets: &HashMap<String, MmAsset>,
     currencies: &HashMap<String, MmCurrency>,
     min_utime_exclusive: Option<i64>,
+    tz: chrono_tz::Tz,
 ) -> MmMappedBackup {
     let mut out = MmMappedBackup::default();
     for row in rows {
@@ -665,7 +669,7 @@ pub fn map_backup(
                 continue;
             }
         }
-        match map_inoutcome_row(row, categories, assets, currencies) {
+        match map_inoutcome_row(row, categories, assets, currencies, tz) {
             MmRowOutcome::Mapped(tx) => out.transactions.push(*tx),
             MmRowOutcome::Deleted { uid } => out.deleted_uids.push(uid),
             MmRowOutcome::Skipped { uid, reason } => out.skipped.push((uid, reason)),
@@ -690,6 +694,7 @@ fn map_repeat_row(
     categories: &HashMap<String, MmCategory>,
     assets: &HashMap<String, MmAsset>,
     currencies: &HashMap<String, MmCurrency>,
+    tz: chrono_tz::Tz,
 ) -> MmRepeatOutcome {
     let uid = row.uid.trim().to_string();
     if uid.is_empty() {
@@ -733,13 +738,13 @@ fn map_repeat_row(
     // 규칙이 짧은 달을 다음 예정일로 가리키면 그 달의 말일(28/30)로 읽힌다. 앱 쪽
     // `due_date_for_month`가 매월 말일로 clamp하므로 청구일이 틀어지진 않지만, 저장된
     // schedule_day는 백업을 뜬 시점에 따라 28↔31로 흔들릴 수 있다.
-    let Some(schedule_day) = seoul_local(row.next_date_ms).map(|dt| dt.day()) else {
+    let Some(schedule_day) = local_datetime(row.next_date_ms, tz).map(|dt| dt.day()) else {
         return MmRepeatOutcome::Skipped {
             uid,
             reason: "invalid_next_date",
         };
     };
-    let Some(start_month) = seoul_month(row.usetime_ms) else {
+    let Some(start_month) = local_month(row.usetime_ms, tz) else {
         return MmRepeatOutcome::Skipped {
             uid,
             reason: "invalid_usetime",
@@ -747,7 +752,7 @@ fn map_repeat_row(
     };
     // END_DATE 0/음수 = 종료 없음(무기한).
     let end_month = (row.end_date_ms > 0)
-        .then(|| seoul_month(row.end_date_ms))
+        .then(|| local_month(row.end_date_ms, tz))
         .flatten();
 
     let (category_label, _subcategory, _raw) = resolve_category_labels(&row.ctg_uid, categories);
@@ -782,10 +787,11 @@ pub fn map_repeats(
     categories: &HashMap<String, MmCategory>,
     assets: &HashMap<String, MmAsset>,
     currencies: &HashMap<String, MmCurrency>,
+    tz: chrono_tz::Tz,
 ) -> MmMappedRepeats {
     let mut out = MmMappedRepeats::default();
     for row in rows {
-        match map_repeat_row(row, categories, assets, currencies) {
+        match map_repeat_row(row, categories, assets, currencies, tz) {
             MmRepeatOutcome::Mapped(rule) => out.recurring.push(*rule),
             MmRepeatOutcome::Deleted { uid } => out.deleted_uids.push(uid),
             MmRepeatOutcome::Skipped { uid, reason } => out.skipped.push((uid, reason)),
@@ -882,7 +888,7 @@ mod tests {
         )).await;
 
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, None);
+        let mapped = map_backup(&rows, &cats, &assets, &curs, None, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.transactions.len(), 2);
         assert!(mapped.deleted_uids.is_empty());
         assert!(mapped.skipped.is_empty());
@@ -929,7 +935,7 @@ mod tests {
             insert_row(&path, sql).await;
         }
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, None);
+        let mapped = map_backup(&rows, &cats, &assets, &curs, None, chrono_tz::Asia::Seoul);
         assert!(mapped.transactions.is_empty());
         assert_eq!(mapped.deleted_uids, vec!["del-1".to_string()]);
         let reasons: Vec<&str> = mapped.skipped.iter().map(|(_, r)| *r).collect();
@@ -949,7 +955,7 @@ mod tests {
             insert_row(&path, sql).await;
         }
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, None);
+        let mapped = map_backup(&rows, &cats, &assets, &curs, None, chrono_tz::Asia::Seoul);
         assert!(mapped.transactions.is_empty());
         let reasons: Vec<&str> = mapped.skipped.iter().map(|(_, r)| *r).collect();
         assert_eq!(
@@ -980,7 +986,7 @@ mod tests {
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, None);
+        let mapped = map_backup(&rows, &cats, &assets, &curs, None, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.transactions.len(), 2);
         let m1 = &mapped.transactions[0];
         assert_eq!(m1.category_label, "미분류");
@@ -1009,7 +1015,7 @@ mod tests {
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, None);
+        let mapped = map_backup(&rows, &cats, &assets, &curs, None, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.transactions.len(), 2);
         assert_eq!(mapped.transactions[0].source_ref, "12345");
         assert_eq!(mapped.transactions[0].amount_minor, 170764);
@@ -1058,7 +1064,7 @@ mod tests {
         )).await;
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;
-        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        let mapped = map_repeats(&rows, &cats, &assets, &curs, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.recurring.len(), 2);
         assert!(mapped.deleted_uids.is_empty());
         assert!(mapped.skipped.is_empty());
@@ -1103,7 +1109,7 @@ mod tests {
         }
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;
-        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        let mapped = map_repeats(&rows, &cats, &assets, &curs, chrono_tz::Asia::Seoul);
         assert!(mapped.recurring.is_empty());
         assert_eq!(mapped.deleted_uids, vec!["del-1".to_string()]);
         let reasons: Vec<&str> = mapped.skipped.iter().map(|(_, r)| *r).collect();
@@ -1130,7 +1136,7 @@ mod tests {
         )).await;
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;
-        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        let mapped = map_repeats(&rows, &cats, &assets, &curs, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.recurring.len(), 1);
         assert_eq!(mapped.recurring[0].amount_minor, 1234);
         assert_eq!(mapped.recurring[0].currency, "USD");
@@ -1149,7 +1155,7 @@ mod tests {
         )).await;
 
         let (rows, cats, assets, curs) = load_repeats(&path).await;
-        let mapped = map_repeats(&rows, &cats, &assets, &curs);
+        let mapped = map_repeats(&rows, &cats, &assets, &curs, chrono_tz::Asia::Seoul);
         assert_eq!(mapped.recurring.len(), 1);
         let rule = &mapped.recurring[0];
         assert_eq!(rule.name, "미분류");
@@ -1206,7 +1212,14 @@ mod tests {
         )
         .await;
         let (rows, cats, assets, curs) = load_all(&path).await;
-        let mapped = map_backup(&rows, &cats, &assets, &curs, Some(100));
+        let mapped = map_backup(
+            &rows,
+            &cats,
+            &assets,
+            &curs,
+            Some(100),
+            chrono_tz::Asia::Seoul,
+        );
         assert_eq!(mapped.transactions.len(), 1);
         assert_eq!(mapped.transactions[0].source_ref, "inst-1");
         assert_eq!(mapped.transactions[0].spent_at, "2027-01-15");

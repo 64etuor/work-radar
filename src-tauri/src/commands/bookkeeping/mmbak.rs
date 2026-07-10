@@ -149,6 +149,7 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
         &loaded.categories,
         &loaded.assets,
         &loaded.currencies,
+        crate::commands::routines::timezone::user_timezone(),
     )
     .await?;
 
@@ -161,12 +162,15 @@ async fn import_bookkeeping_mmbak_with_probe_cap(
     let cursor_before = cursor.map(|c| c.cursor_value);
     let min_utime = cursor_before.as_deref().and_then(|v| v.parse::<i64>().ok());
 
+    // tz는 user_timezone SSOT 주입 — 백업 wall-clock을 이 기기의 사용자 타임존으로 해석
+    // (구 Asia/Seoul 고정은 비KST 사용자의 날짜 버킷을 어긋나게 했다).
     let mapped = map_backup(
         &loaded.rows,
         &loaded.categories,
         &loaded.assets,
         &loaded.currencies,
         min_utime,
+        crate::commands::routines::timezone::user_timezone(),
     );
 
     let mut counts = SyncCounts {

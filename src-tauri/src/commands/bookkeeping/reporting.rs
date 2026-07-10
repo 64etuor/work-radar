@@ -288,7 +288,7 @@ pub(crate) async fn bookkeeping_reconcile_account_inner(
     }
     let account = clean_required(&input.account, "bookkeeping.reconcile.account")?;
     validate_date(&input.statement_date)?;
-    let currency = clean_currency(input.currency.as_deref().unwrap_or(DEFAULT_CURRENCY))?;
+    let currency = clean_currency_or_default(db, input.currency.as_deref().unwrap_or("")).await?;
     let note = clean_optional(input.note.as_deref());
 
     let (income, expense): (i64, i64) = sqlx::query_as(

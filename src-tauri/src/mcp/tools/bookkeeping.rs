@@ -117,7 +117,8 @@ pub struct BookkeepingSaveReceiptParams {
     pub merchant: String,
     /// Minor-unit amount (always positive; sign is carried by `direction`). For KRW this is won.
     pub amount_minor: i32,
-    /// ISO 4217 currency. Defaults to KRW.
+    /// ISO 4217 currency. Empty/omitted → the app's configured default currency
+    /// (`bookkeeping.default_currency`, KRW when unset).
     pub currency: Option<String>,
     /// Purchase date in YYYY-MM-DD.
     pub spent_at: String,
@@ -490,7 +491,8 @@ impl WrServer {
             merchant: p.merchant,
             description: p.description,
             amount_minor: p.amount_minor,
-            currency: p.currency.unwrap_or_else(|| "KRW".to_string()),
+            // 빈 값은 스토어의 clean_currency가 설정된 앱 기본 통화로 치환한다(KRW 하드코딩 제거).
+            currency: p.currency.unwrap_or_default(),
             spent_at: p.spent_at,
             category: p.category.unwrap_or_else(|| "uncategorized".to_string()),
             note: p.note,
