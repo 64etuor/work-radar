@@ -1,4 +1,10 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   type AcceptLifeOsRecommendationInput,
@@ -70,11 +76,14 @@ export function useDeleteMissionHorizon() {
   });
 }
 
+// 분기/주 전환 시 직전 데이터 유지(placeholderData) — 빈 상태 플리커 방지.
+// 단, recommendations는 제안 큐라 제외(직전 주 제안이 현재 주로 보이면 안 됨).
 export function useObjectiveHorizonLinks(quarter: string) {
   return useQuery({
     queryKey: lifeOsKeys.objectiveHorizonLinks(quarter),
     queryFn: () => unwrap(commands.listObjectiveHorizonLinks(quarter)),
     enabled: quarter.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -107,6 +116,7 @@ export function useSelectedWeeklyFocus(weekStart: string) {
     queryKey: lifeOsKeys.weeklyFocus(weekStart),
     queryFn: () => unwrap(commands.selectedWeeklyFocus(weekStart)),
     enabled: weekStart.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -115,6 +125,7 @@ export function useLifeOsReview(weekStart: string, quarter: string) {
     queryKey: lifeOsKeys.review(weekStart, quarter),
     queryFn: () => unwrap(commands.latestLifeOsReview(weekStart, quarter)),
     enabled: weekStart.length > 0 && quarter.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

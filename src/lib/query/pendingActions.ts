@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { commands, type PendingAction } from "@/bindings";
 import { useToastStore } from "@/lib/toast";
 
-import { IpcError, unwrap } from "./client";
+import { pushMutationError, unwrap } from "./client";
 
 /**
  * 승인 대기 외부 액션 큐. 외부 에이전트(MCP/codex/hermes)가 비동기로 enqueue하므로
@@ -31,21 +31,18 @@ export function useApproveExternalAction() {
       }
     },
     // terminal failure 노출(INVARIANT) — 승인 IPC 자체 실패도 삼키지 않는다.
-    onError: (e) =>
-      pushError("external-action", e instanceof IpcError ? e.app : `승인 실패: ${String(e)}`),
+    onError: (e) => pushMutationError("external-action", e, "승인"),
   });
 }
 
 export function useRejectExternalAction() {
   const qc = useQueryClient();
-  const pushError = useToastStore((s) => s.pushError);
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.rejectExternalAction(id)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["pendingActions"] });
     },
     // terminal failure 노출(INVARIANT) — 거절 실패를 삼키지 않는다.
-    onError: (e) =>
-      pushError("external-action", e instanceof IpcError ? e.app : `거절 실패: ${String(e)}`),
+    onError: (e) => pushMutationError("external-action", e, "거절"),
   });
 }

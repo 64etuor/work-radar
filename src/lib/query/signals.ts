@@ -1,4 +1,4 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   commands,
@@ -10,15 +10,13 @@ import {
 } from "@/bindings";
 
 import { unwrap, useInvalidate } from "./client";
-
-/** ["signals"] + ["today"] 쌍 무효화 — useSetSignalStatus/useSetSignalAreaTagKey/useSetSignalKind 공통. */
-function invalidateBoardAndToday(qc: QueryClient, opts?: { withLifeWheelTags?: boolean }) {
-  void qc.invalidateQueries({ queryKey: ["signals"] });
-  void qc.invalidateQueries({ queryKey: ["today"] });
-  if (opts?.withLifeWheelTags) {
-    void qc.invalidateQueries({ queryKey: ["lifeWheelTags"] });
-  }
-}
+import {
+  areaTagPatch,
+  patchSignalInLists,
+  removeSignalFromLists,
+  SIGNAL_LIST_PREFIXES,
+  snapshotQueries,
+} from "./optimistic";
 
 /** 매트릭스 + 미분류 카드 (Today로 승격되지 않은 active 신호). */
 export function useSignals() {
@@ -51,60 +49,101 @@ export function useCreateSignal() {
   });
 }
 
-/** 사분면 분류 (사람 결정 레일 — INVARIANT #1). */
+/** 사분면 분류 (사람 결정 레일 — INVARIANT #1). 드래그 직후 zone 배지가 즉시 갱신되도록
+ *  optimistic — 사람이 내린 결정을 화면에 먼저 반영할 뿐, 결정 주체는 그대로 사람이다. */
 export function useClassifySignal() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, quadrant }: { id: string; quadrant: Quadrant }) =>
       unwrap(commands.classifySignal(id, quadrant)),
-    onSuccess: () => inv.signals(),
+    onMutate: async ({ id, quadrant }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, { quadrant });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.signals(),
   });
 }
 
-/** 완료/보관 등 상태 변경. */
+/** 완료/보관 등 상태 변경 — 카드가 즉시 리스트에서 빠지도록 optimistic 제거.
+ *  completed/archivedSnoozed 편입은 invalidate가 수렴(파생 리스트 손계산 금지). */
 export function useSetSignalStatus() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: SignalStatus }) =>
       unwrap(commands.setSignalStatus(id, status)),
-    onSuccess: (_data, { status }) => {
-      inv.signals();
-      inv.today();
-      if (status === "done") inv.completedHistory();
-      if (status === "archived" || status === "snoozed") inv.archivedSnoozed();
+    onMutate: async ({ id, status }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      if (status === "done" || status === "archived" || status === "snoozed") {
+        removeSignalFromLists(qc, id, [["signals"], ["signalSearch"], ["today"]]);
+      } else {
+        patchSignalInLists(qc, id, { status });
+      }
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: (_data, _err, { status }) => {
+      void inv.boardAndToday();
+      if (status === "done") void inv.completedHistory();
+      if (status === "archived" || status === "snoozed") void inv.archivedSnoozed();
     },
   });
 }
 
-/** 미루기 (snooze). */
+/** 미루기 (snooze) — 카드가 즉시 매트릭스에서 빠지도록 optimistic 제거. */
 export function useSnoozeSignal() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, until }: { id: string; until: string }) =>
       unwrap(commands.snoozeSignal(id, until)),
-    onSuccess: () => {
-      inv.signals();
-      inv.archivedSnoozed();
+    onMutate: async ({ id }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      removeSignalFromLists(qc, id, [["signals"], ["signalSearch"]]);
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => {
+      void inv.signals();
+      void inv.archivedSnoozed();
     },
   });
 }
 
-/** 브레인덤프 카드 제목 인라인 편집 (dedup 키 갱신, Phase 15 #5). */
+/** 브레인덤프 카드 제목 인라인 편집 (dedup 키 갱신, Phase 15 #5) — 커밋 직후 구 제목
+ *  플래시 방지 optimistic. */
 export function useUpdateSignalTitle() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
       unwrap(commands.updateSignalTitle(id, title)),
-    onSuccess: () => inv.signals(),
+    onMutate: async ({ id, title }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, { title });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.signals(),
   });
 }
 
-/** 카드 하드 삭제 (영구 — archive와 구분, Phase 15 #5). */
+/** 카드 하드 삭제 (영구 — archive와 구분, Phase 15 #5) — 즉시 제거 optimistic. */
 export function useDeleteSignal() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (id: string) => unwrap(commands.deleteSignal(id)),
-    onSuccess: () => inv.signals(),
+    onMutate: async (id) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      removeSignalFromLists(qc, id);
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.signals(),
   });
 }
 
@@ -118,29 +157,43 @@ export function useLifeWheelTags() {
 }
 
 export function useSetLifeWheelTags() {
-  const qc = useQueryClient();
+  const inv = useInvalidate();
   return useMutation({
     mutationFn: (tags: LifeWheelTagConfig[]) => unwrap(commands.setLifeWheelTags(tags)),
-    onSuccess: () => invalidateBoardAndToday(qc, { withLifeWheelTags: true }),
+    onSuccess: () => inv.boardAndToday({ withLifeWheelTags: true }),
   });
 }
 
-/** Life Wheel 단일 선택. 커스텀 tag key도 허용한다. */
+/** Life Wheel 단일 선택. 커스텀 tag key도 허용 — 칩 색/라벨 즉시 반영 optimistic. */
 export function useSetSignalAreaTagKey() {
   const qc = useQueryClient();
+  const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, tagKey }: { id: string; tagKey: string | null }) =>
       unwrap(commands.setSignalAreaTagKey(id, tagKey)),
-    onSuccess: () => invalidateBoardAndToday(qc),
+    onMutate: async ({ id, tagKey }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, areaTagPatch(tagKey));
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.boardAndToday(),
   });
 }
 
-/** 개인/업무 kind manual override. */
+/** 개인/업무 kind manual override — 칩 즉시 반영 optimistic. */
 export function useSetSignalKind() {
   const qc = useQueryClient();
+  const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, kind }: { id: string; kind: Kind | null }) =>
       unwrap(commands.setSignalKind(id, kind)),
-    onSuccess: () => invalidateBoardAndToday(qc),
+    onMutate: async ({ id, kind }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, { kind });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.boardAndToday(),
   });
 }

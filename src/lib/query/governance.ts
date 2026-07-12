@@ -1,6 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { commands, type SetBouleConfigInput_Deserialize } from "../../bindings";
+import {
+  commands,
+  type ProjectTickStatus,
+  type SetBouleConfigInput_Deserialize,
+} from "../../bindings";
 import { unwrap } from "./client";
 
 /** LIVE per-project Control Room snapshot, folded from the project's `.boule/workspace`
@@ -16,6 +20,12 @@ export function useProjectControlRoomSnapshot(projectId: string | null) {
 }
 
 const PROJECT_TICKER_LIST_KEY = ["project-ticker-list"] as const;
+
+/** 뮤테이션 결과로 per-project 상세 캐시를 프라임하고 목록을 무효화 — tick 뮤테이션 공통 꼬리. */
+function primeTickStatus(qc: QueryClient, status: ProjectTickStatus): void {
+  qc.setQueryData(["project-tick-status", status.projectId], status);
+  void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
+}
 
 /** Live per-project ticker state from app SQLite, separate from the Control Room snapshot. */
 export function useProjectTickerList() {
@@ -45,10 +55,7 @@ export function useClearTickerAttention() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => unwrap(commands.clearTickerAttention(projectId)),
-    onSuccess: (res) => {
-      qc.setQueryData(["project-tick-status", res.projectId], res);
-      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
-    },
+    onSuccess: (res) => primeTickStatus(qc, res),
   });
 }
 
@@ -67,10 +74,7 @@ export function useSetTickEnabled() {
   return useMutation({
     mutationFn: ({ projectId, enabled }: { projectId: string; enabled: boolean }) =>
       unwrap(commands.setProjectTickEnabled(projectId, enabled)),
-    onSuccess: (res) => {
-      qc.setQueryData(["project-tick-status", res.projectId], res);
-      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
-    },
+    onSuccess: (res) => primeTickStatus(qc, res),
   });
 }
 
@@ -79,10 +83,7 @@ export function useSetTickInterval() {
   return useMutation({
     mutationFn: ({ projectId, intervalSec }: { projectId: string; intervalSec: number | null }) =>
       unwrap(commands.setProjectTickInterval(projectId, intervalSec)),
-    onSuccess: (res) => {
-      qc.setQueryData(["project-tick-status", res.projectId], res);
-      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
-    },
+    onSuccess: (res) => primeTickStatus(qc, res),
   });
 }
 
@@ -91,10 +92,7 @@ export function useSetTickLive() {
   return useMutation({
     mutationFn: ({ projectId, live }: { projectId: string; live: boolean }) =>
       unwrap(commands.setProjectTickLive(projectId, live)),
-    onSuccess: (res) => {
-      qc.setQueryData(["project-tick-status", res.projectId], res);
-      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
-    },
+    onSuccess: (res) => primeTickStatus(qc, res),
   });
 }
 
@@ -102,10 +100,7 @@ export function useTickNow() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => unwrap(commands.tickProjectNow(projectId)),
-    onSuccess: (res) => {
-      qc.setQueryData(["project-tick-status", res.status.projectId], res.status);
-      void qc.invalidateQueries({ queryKey: PROJECT_TICKER_LIST_KEY });
-    },
+    onSuccess: (res) => primeTickStatus(qc, res.status),
   });
 }
 

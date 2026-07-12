@@ -30,6 +30,14 @@ export const PERSIST_ALLOWED_KEY_PREFIXES: readonly string[] = [
   "archivedSnoozed",
   "routines",
   "routine-tracking",
+  // Today 타임라인 표시(배치/누적시간/메모) — 재시작 시 블록·배지·메모 즉시 페인트.
+  "signalPlacements",
+  "signalTimeTotals",
+  "timelineNotesForDate",
+  // Mission/Weekly 표시(사람이 입력한 목표/체크인 + Life Wheel 팔레트 설정).
+  // lifeOs는 제외 — recommendations(제안 큐)가 같은 prefix 아래라 stale 제안 노출 위험.
+  "okr",
+  "lifeWheelTags",
   // 로컬 read-only 표시(워크트리/레포/프로젝트 메타).
   "worktrees",
   "worktreeBranches",

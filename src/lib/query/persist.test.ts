@@ -27,6 +27,21 @@ describe("shouldPersistQuery — disk-persist allowlist (P6, INVARIANT)", () => 
     expect(shouldPersistQuery(mkQuery(["projects"]))).toBe(true);
   });
 
+  it("타임라인/OKR 표시 키는 persist 허용(재시작 즉시 페인트)", () => {
+    expect(shouldPersistQuery(mkQuery(["signalPlacements", "2026-07-06", "2026-07-12"]))).toBe(
+      true,
+    );
+    expect(shouldPersistQuery(mkQuery(["signalTimeTotals"]))).toBe(true);
+    expect(shouldPersistQuery(mkQuery(["timelineNotesForDate", "2026-07-12"]))).toBe(true);
+    expect(shouldPersistQuery(mkQuery(["okr", "objectives", "2026-Q3"]))).toBe(true);
+    expect(shouldPersistQuery(mkQuery(["lifeWheelTags"]))).toBe(true);
+  });
+
+  it("lifeOs는 persist 제외 — recommendations(제안 큐)가 같은 prefix 아래(의도적 배제)", () => {
+    expect(shouldPersistQuery(mkQuery(["lifeOs", "recommendations", "2026-07-06"]))).toBe(false);
+    expect(shouldPersistQuery(mkQuery(["lifeOs", "horizons"]))).toBe(false);
+  });
+
   it("결정 큐(signals=매트릭스)는 persist 제외 — 항상 fresh(INVARIANT #1)", () => {
     expect(shouldPersistQuery(mkQuery(["signals"]))).toBe(false);
   });

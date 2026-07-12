@@ -1,4 +1,10 @@
-import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   commands,
@@ -49,11 +55,13 @@ export function useSetMission() {
   });
 }
 
+// 분기 전환 시 직전 분기 데이터 유지(placeholderData) — "목표 없음" 빈 상태 플리커 방지.
 export function useObjectives(quarter: string) {
   return useQuery({
     queryKey: okrKeys.objectives(quarter),
     queryFn: () => unwrap(commands.listObjectives(quarter)),
     enabled: quarter.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -62,6 +70,7 @@ export function useObjectiveSignalStats(quarter: string) {
     queryKey: okrKeys.signalStats(quarter),
     queryFn: () => unwrap(commands.objectiveSignalStats(quarter)),
     enabled: quarter.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -70,6 +79,7 @@ export function useOkrCheckIns(quarter: string) {
     queryKey: okrKeys.checkIns(quarter),
     queryFn: () => unwrap(commands.listCheckIns(quarter)),
     enabled: quarter.length > 0,
+    placeholderData: keepPreviousData,
   });
 }
 

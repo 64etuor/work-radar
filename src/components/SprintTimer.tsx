@@ -13,7 +13,7 @@ import {
   useSprintConfig,
   useSprintStatus,
 } from "@/lib/query";
-import { IpcError } from "@/lib/query/client";
+import { pushMutationError } from "@/lib/query/client";
 import {
   formatCountdown,
   formatCountdownLabel,
@@ -204,7 +204,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
 
   const setConfig = useSetSprintConfig();
   const clearConfig = useClearSprintConfig();
-  const { pushSuccess, pushError } = useToastStore();
+  const { pushSuccess } = useToastStore();
 
   const [intervalDays, setIntervalDays] = useState(
     config?.intervalDays ?? DEFAULT_CONFIG.intervalDays,
@@ -233,8 +233,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
           onClose();
         },
         // 저장 실패는 조용히 삼키지 않는다 — 토스트로 표면화하고 에디터는 열어 둔다(재시도 가능).
-        onError: (e) =>
-          pushError("sprint", e instanceof IpcError ? e.app : `스프린트 저장 실패: ${String(e)}`),
+        onError: (e) => pushMutationError("sprint", e, "스프린트 저장"),
       },
     );
   };
@@ -246,8 +245,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
         pushSuccess("스프린트 해제됨");
         onClose();
       },
-      onError: (e) =>
-        pushError("sprint", e instanceof IpcError ? e.app : `스프린트 해제 실패: ${String(e)}`),
+      onError: (e) => pushMutationError("sprint", e, "스프린트 해제"),
     });
   };
 

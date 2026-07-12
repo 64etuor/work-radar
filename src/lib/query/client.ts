@@ -62,6 +62,22 @@ export async function unwrap<T>(p: Promise<IpcResult<T>>): Promise<T> {
   return res.data;
 }
 
+/**
+ * 뮤테이션 onError 공용 토스트 (정본 — 콜사이트 ternary 하드롤 금지).
+ * IpcError면 backend AppError 그대로(traceId/kind/action 보존, 재로그 금지), 아니면 메시지
+ * 문자열(프런트-originated — trace id 생성/로그는 pushError가 수행). `fallbackPrefix`는
+ * 비-IPC 에러에만 `"<prefix> 실패: "`를 붙인다(콜사이트 한국어 관례).
+ */
+export function pushMutationError(scope: string, error: unknown, fallbackPrefix?: string): void {
+  const store = useToastStore.getState();
+  if (error instanceof IpcError) {
+    store.pushError(scope, error.app);
+    return;
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  store.pushError(scope, fallbackPrefix ? `${fallbackPrefix} 실패: ${msg}` : msg);
+}
+
 // ── 날짜/요일 헬퍼 (로컬 날짜 기준 — SQLite UTC와 분리, architecture.md) ─────────
 
 /** Date → 로컬 YYYY-MM-DD. */
@@ -130,6 +146,14 @@ export function useInvalidate() {
     today: () => {
       void overview();
       return qc.invalidateQueries({ queryKey: ["today"] });
+    },
+    // 보드+Today 동시 변경(승격/상태/kind/area) 공통 콤보 — overview 중복 발사 없이 한 번에.
+    boardAndToday: (opts?: { withLifeWheelTags?: boolean }) => {
+      void overview();
+      void qc.invalidateQueries({ queryKey: ["signalSearch"] });
+      void qc.invalidateQueries({ queryKey: ["today"] });
+      if (opts?.withLifeWheelTags) void qc.invalidateQueries({ queryKey: ["lifeWheelTags"] });
+      return qc.invalidateQueries({ queryKey: ["signals"] });
     },
     routines: () => {
       void qc.invalidateQueries({ queryKey: ["routine-tracking"] });

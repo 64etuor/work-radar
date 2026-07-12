@@ -22,7 +22,7 @@ import { localDateOf } from "./timeAxis";
 import { SNAP_MIN } from "./timelineAxis";
 import { plusMinutesLocal } from "./timelineCoords";
 import type { TimelineCommit } from "./timelineDragPlan";
-import { removeEventFromBuckets } from "./timelineEventCache";
+import { removeEventFromCache } from "./timelineEventCache";
 
 /** 로컬 ISO('YYYY-MM-DDTHH:MM...')에서 'HH:MM' — routine_checks.time_override 포맷(useTimelineDnd 동치). */
 const hhmmOfIso = (iso: string): string => iso.slice(11, 16);
@@ -84,12 +84,6 @@ export function applyTimelineCommitToCaches(qc: QueryClient, commit: TimelineCom
     });
   };
 
-  /** 미러 이벤트 1건을 로드된 모든 calendarEvents 버킷에서 즉시 제거 — 언스케줄 시 고아 블록 방지. */
-  const removeEventFromCache = (calendarId: string, eventId: string) =>
-    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
-      old ? removeEventFromBuckets(old, calendarId, eventId) : old,
-    );
-
   /** routines 캐시 optimistic 패치 — time_override는 occurrence 날짜의 행이라 그 날짜 버킷만 패치. */
   const patchRoutineCache = (
     occDate: string,
@@ -148,7 +142,7 @@ export function applyTimelineCommitToCaches(qc: QueryClient, commit: TimelineCom
     case "unschedule": {
       const { targetSignalId, fromDate, calendarId, linkedEventId } = commit;
       // signal이 Google 이벤트 미러와 연결된 경우 링크 해제 전에 캐시에서 즉시 제거 — 고아 블록 방지.
-      if (calendarId && linkedEventId) removeEventFromCache(calendarId, linkedEventId);
+      if (calendarId && linkedEventId) removeEventFromCache(qc, calendarId, linkedEventId);
       patchSignalCaches(targetSignalId, { clearLink: true });
       patchPlacementCaches(targetSignalId, { type: "remove", date: fromDate });
       return;

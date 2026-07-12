@@ -57,7 +57,9 @@ export function CommitGraphDrawer({
         </button>
       </header>
 
-      {graph.isFetching ? (
+      {graph.isLoading ? (
+        // isLoading(첫 fetch 진행 중)일 때만 스피너 — 재오픈은 직전 그래프를 즉시 페인트하고
+        // 백그라운드 갱신. isPending은 disabled 쿼리(baseRef 없음)에서도 true라 쓰지 않는다.
         <div className="wt-commit-state">
           <Spinner />
           <span>커밋 그래프 로드 중…</span>

@@ -1,5 +1,5 @@
-import { IpcError } from "@/lib/query";
-import { useToastStore } from "@/lib/toast";
+// pushMutationError는 query 레이어 정본으로 승격 — 기존 콜사이트 import 경로 유지용 재수출.
+export { pushMutationError } from "@/lib/query";
 
 export function splitCsv(value: string) {
   return value.split(",").flatMap((item) => {
@@ -16,15 +16,6 @@ export function appendCsvToken(value: string, token: string) {
 
 export function nullableText(value: string) {
   return value.trim() || null;
-}
-
-export function pushMutationError(scope: string, error: unknown) {
-  const store = useToastStore.getState();
-  if (error instanceof IpcError) {
-    store.pushError(scope, error.app);
-  } else {
-    store.pushError(scope, error instanceof Error ? error.message : String(error));
-  }
 }
 
 export function isEditableTarget(target: EventTarget | null): boolean {

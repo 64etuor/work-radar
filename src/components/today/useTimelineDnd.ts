@@ -39,6 +39,10 @@ import { applyTimelineCommitToCaches } from "@/lib/applyTimelineCommitToCaches";
 import { stage } from "@/lib/calendarSync";
 import { clientToGrid, totalPxForDays } from "@/lib/timelineAxis";
 import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import {
+  invalidateEventCaches as invalidateEventCachesOf,
+  invalidateSignalCaches as invalidateSignalCachesOf,
+} from "@/lib/timelineInvalidate";
 import { type LayoutBox } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 
@@ -334,16 +338,9 @@ export function useTimelineDnd(opts: Opts) {
   // commit-구동 optimistic 캐시 패치(layer-①+②)는 applyTimelineCommitToCaches(SSOT)가 소유한다.
   // 여기엔 reconciler 밖 concern만 남긴다: 롤백 invalidate(catch), unschedule undo의 placement 복원.
 
-  const invalidateSignalCaches = () => {
-    void qc.invalidateQueries({ queryKey: ["signals"] });
-    void qc.invalidateQueries({ queryKey: ["today"] });
-    void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
-    void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
-  };
-
-  const invalidateEventCaches = () => {
-    void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
-  };
+  // 키 목록 정본은 timelineInvalidate — useTimelineScheduleActions와 공유(하드롤 금지).
+  const invalidateSignalCaches = () => invalidateSignalCachesOf(qc);
+  const invalidateEventCaches = () => invalidateEventCachesOf(qc);
 
   const dispatchDragEnd = async (ev: DragEndEvent, activeAtStart?: DragData | null) => {
     const a = resolveDragEndActiveData(

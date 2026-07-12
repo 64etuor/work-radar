@@ -63,7 +63,7 @@ import {
   useUpdateRoutine,
   useUpdateSignalTitle,
 } from "@/lib/query";
-import { IpcError } from "@/lib/query/client";
+import { IpcError, pushMutationError } from "@/lib/query/client";
 import { signalCalendarProjectId } from "@/lib/signalCalendarRouting";
 import { useToastStore } from "@/lib/toast";
 import { usePendingSignalFocus } from "@/lib/usePendingSignalFocus";
@@ -388,8 +388,7 @@ function useCaptureBoardView() {
         onSuccess: () => pushSuccess("루틴 수정"),
         // 동기화 루틴의 Google PATCH 실패(routine.sync.patch_failed)는 "저장됐지만 동기화 실패"
         // 메시지를 그대로 노출. 로컬 변경은 onSettled 무효화로 화면에 반영된다.
-        onError: (e) =>
-          pushError("calendar", e instanceof IpcError ? e.app : `루틴 수정 실패: ${String(e)}`),
+        onError: (e) => pushMutationError("calendar", e, "루틴 수정"),
       },
     );
   };
@@ -399,8 +398,7 @@ function useCaptureBoardView() {
       { routineId, projectId, calendarId },
       {
         onSuccess: () => pushSuccess("Google 캘린더 동기화 켜짐"),
-        onError: (e) =>
-          pushError("calendar", e instanceof IpcError ? e.app : `동기화 실패: ${String(e)}`),
+        onError: (e) => pushMutationError("calendar", e, "동기화"),
       },
     );
   };
@@ -408,8 +406,7 @@ function useCaptureBoardView() {
   const handleDisableRoutineSync = (routineId: string) => {
     disableRoutineSync.mutate(routineId, {
       onSuccess: () => pushSuccess("Google 캘린더 동기화 해제"),
-      onError: (e) =>
-        pushError("calendar", e instanceof IpcError ? e.app : `해제 실패: ${String(e)}`),
+      onError: (e) => pushMutationError("calendar", e, "해제"),
     });
   };
 
@@ -418,8 +415,7 @@ function useCaptureBoardView() {
       { routineId, projectId, calendarId },
       {
         onSuccess: () => pushSuccess("Google 캘린더 이동됨"),
-        onError: (e) =>
-          pushError("calendar", e instanceof IpcError ? e.app : `이동 실패: ${String(e)}`),
+        onError: (e) => pushMutationError("calendar", e, "이동"),
       },
     );
   };
@@ -436,11 +432,7 @@ function useCaptureBoardView() {
           ) {
             deleteRoutineLocalOnly.mutate(id, {
               onSuccess: () => pushSuccess("루틴 삭제 (로컬만)"),
-              onError: (e2) =>
-                pushError(
-                  "calendar",
-                  e2 instanceof IpcError ? e2.app : `루틴 삭제 실패: ${String(e2)}`,
-                ),
+              onError: (e2) => pushMutationError("calendar", e2, "루틴 삭제"),
             });
           }
         } else {

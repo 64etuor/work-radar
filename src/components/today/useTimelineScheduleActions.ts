@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 
-import { type CalendarEvent, commands } from "@/bindings";
+import { commands } from "@/bindings";
 import { stage } from "@/lib/calendarSync";
 import { unwrap } from "@/lib/query/client";
 import { localDateOf } from "@/lib/timeAxis";
-import { removeEventFromBuckets } from "@/lib/timelineEventCache";
+import { removeEventFromCache } from "@/lib/timelineEventCache";
+import { invalidateSignalCaches, invalidateTimelineAll } from "@/lib/timelineInvalidate";
 import type { LayoutBox, TimedBlock } from "@/lib/timelineLayout";
 import { useToastStore } from "@/lib/toast";
 
@@ -13,14 +14,6 @@ export const timelineBlockDate = (block: TimedBlock) => localDateOf(block.startI
 
 export function useTimelineScheduleActions() {
   const qc = useQueryClient();
-
-  /** 미러 이벤트 1건을 로드된 모든 calendarEvents 버킷에서 제거 — 공유 removeEventFromBuckets(단일 정본).
-   *  자정 걸침 이벤트는 인접 날짜 버킷에 중복 존재하므로 prefix 키로 전 버킷을 순회한다. */
-  const removeEventFromCache = (calendarId: string, eventId: string) => {
-    qc.setQueriesData<CalendarEvent[]>({ queryKey: ["calendarEvents"] }, (old) =>
-      old ? removeEventFromBuckets(old, calendarId, eventId) : old,
-    );
-  };
 
   const handleDeleteSchedule = (box: LayoutBox) => {
     const { block } = box;
@@ -35,15 +28,12 @@ export function useTimelineScheduleActions() {
       if (block.kind === "signal") {
         const signalId = block.signalId ?? block.id.replace(/^signal:/, "");
         await stage({ kind: "unschedule", targetSignalId: signalId, fromDate: occDate });
-        if (linkedEventId && calendarId) removeEventFromCache(calendarId, linkedEventId);
-        void qc.invalidateQueries({ queryKey: ["signals"] });
-        void qc.invalidateQueries({ queryKey: ["today"] });
-        void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
-        void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
+        if (linkedEventId && calendarId) removeEventFromCache(qc, calendarId, linkedEventId);
+        invalidateSignalCaches(qc);
       } else if (block.kind === "event") {
         const eventId = block.linkedEventId ?? block.id.replace(/^event:/, "");
         await stage({ kind: "eventUnschedule", eventId, calendarId });
-        removeEventFromCache(calendarId, eventId);
+        removeEventFromCache(qc, calendarId, eventId);
       } else if (block.kind === "routine" && block.routineId) {
         const routineId = block.routineId;
         // "빼기"는 표시된 occurrence의 날짜(occDate = 블록 startISO의 날짜)를 대상으로
@@ -53,7 +43,7 @@ export function useTimelineScheduleActions() {
         // per-instance Google 이벤트가 있으면(드물게 드래그로 배치됐던 경우) 함께 정리.
         if (linkedEventId && calendarId) {
           await stage({ kind: "routineUnschedule", routineId, date: occDate });
-          removeEventFromCache(calendarId, linkedEventId);
+          removeEventFromCache(qc, calendarId, linkedEventId);
           void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
         }
         void qc.invalidateQueries({ queryKey: ["routines"] });
@@ -72,12 +62,7 @@ export function useTimelineScheduleActions() {
       useToastStore.getState().pushSuccess(`일정 삭제됨: ${title}`);
     };
     void run().catch((err) => {
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-      void qc.invalidateQueries({ queryKey: ["routines"] });
-      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
-      void qc.invalidateQueries({ queryKey: ["signalPlacements"] });
-      void qc.invalidateQueries({ queryKey: ["signalTimeTotals"] });
+      invalidateTimelineAll(qc);
       useToastStore.getState().pushError("calendar.delete", err);
     });
   };

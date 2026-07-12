@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   type BookkeepingCashflowInput,
@@ -68,6 +68,8 @@ export function useBookkeepingTransactions(
     queryKey: ["bookkeeping", "transactions", status, projectId, orderBy, fromDate, toDate],
     queryFn: () =>
       unwrap(commands.listBookkeepingTransactions(status, projectId, orderBy, fromDate, toDate)),
+    // 월 이동/필터 전환 시 직전 목록 유지 — 빈 테이블+합계 0 플래시 방지.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -170,6 +172,7 @@ export function useBookkeepingMonthlySummary(month: string, projectId: string | 
   return useQuery({
     queryKey: ["bookkeeping", "summary", month, projectId],
     queryFn: () => unwrap(commands.bookkeepingMonthlySummary(month, projectId)),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -177,6 +180,7 @@ export function useBookkeepingBudgetPlanner(month: string, projectId: string | n
   return useQuery({
     queryKey: ["bookkeeping", "budgetPlanner", month, projectId],
     queryFn: () => unwrap(commands.bookkeepingBudgetPlanner(month, projectId)),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -184,6 +188,7 @@ export function useBookkeepingCashflow(input: BookkeepingCashflowInput) {
   return useQuery({
     queryKey: ["bookkeeping", "cashflow", input],
     queryFn: () => unwrap(commands.bookkeepingCashflow(input)),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -191,6 +196,7 @@ export function useBookkeepingCategoryTrend(input: BookkeepingCategoryTrendInput
   return useQuery({
     queryKey: ["bookkeeping", "categoryTrend", input],
     queryFn: () => unwrap(commands.bookkeepingCategoryTrend(input)),
+    placeholderData: keepPreviousData,
   });
 }
 

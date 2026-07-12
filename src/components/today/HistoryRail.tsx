@@ -8,13 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { WEEKDAY_SHORT_SUN_FIRST } from "@/lib/localeFormat";
 import { defaultProjectCalendarColor, normalizeHexColor } from "@/lib/projectCalendarColor";
 import {
-  IpcError,
+  pushMutationError,
   useCompletedHistory,
   useProjects,
   useTimelineNotesForDate,
   useUpsertTimelineNote,
 } from "@/lib/query";
-import { useToastStore } from "@/lib/toast";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 
 /**
@@ -223,12 +222,8 @@ function HistoryMemoEditor({
     upsert.mutate(
       { targetKind: "signal", targetId: signalId, date, body: next },
       {
-        // client.ts:39 — mutations 글로벌 onError 없음. 침묵 실패 방지.
-        onError: (err) => {
-          useToastStore
-            .getState()
-            .pushError("memo.save", err instanceof IpcError ? err.app : String(err));
-        },
+        // client.ts — mutations 글로벌 onError 없음. 침묵 실패 방지.
+        onError: (err) => pushMutationError("memo.save", err),
       },
     );
   }, 500);

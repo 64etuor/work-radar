@@ -1,4 +1,11 @@
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  type QueryClient,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import {
   commands,
@@ -10,6 +17,14 @@ import {
 } from "@/bindings";
 
 import { unwrap, useInvalidate, weekdayForDate } from "./client";
+import { areaTagPatch, reorderListCache, snapshotQueries } from "./optimistic";
+
+/** ["routines", *] 캐시의 해당 루틴 필드를 즉시 패치 (kind/areaTags 칩 등). */
+function patchRoutineInLists(qc: QueryClient, id: string, patch: Partial<RoutineToday>): void {
+  qc.setQueriesData<RoutineToday[]>({ queryKey: ["routines"] }, (old) =>
+    old?.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+  );
+}
 
 /** 오늘 해당하는 루틴 + 날짜별 완료 상태. */
 export function useTodayRoutines(date: string, weekday: Weekday) {
@@ -38,11 +53,13 @@ export function useTodayRoutinesForDates(dates: string[]) {
   });
 }
 
-/** 루틴 트래킹(이행률/streak/히스토리) — endDate 기준 지난 days일. */
+/** 루틴 트래킹(이행률/streak/히스토리) — endDate 기준 지난 days일.
+ *  기간(7/30/90) 전환 시 이전 데이터를 유지(placeholderData) — 스켈레톤 재등장 방지. */
 export function useRoutineTracking(endDate: string, days: number) {
   return useQuery({
     queryKey: ["routine-tracking", endDate, days],
     queryFn: () => unwrap(commands.routineTracking(endDate, days)),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -88,32 +105,53 @@ export function useDeleteRoutineLocalOnly() {
   });
 }
 
-/** 루틴 재정렬 (드래그, rank 영속). */
+/** 루틴 재정렬 (드래그, rank 영속) — optimistic 재배열(드롭 직후 스냅백 방지). */
 export function useReorderRoutines() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (orderedIds: string[]) => unwrap(commands.reorderRoutines(orderedIds)),
-    onSuccess: () => inv.routines(),
+    onMutate: async (orderedIds) => {
+      const rollback = await snapshotQueries(qc, [["routines"]]);
+      reorderListCache(qc, ["routines"], orderedIds);
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.routines(),
   });
 }
 
-/** 루틴 kind 즉시 갱신 (personal/work 토글, signals 패턴 미러). */
+/** 루틴 kind 즉시 갱신 (personal/work 토글, signals 패턴 미러) — 칩 즉시 반영 optimistic. */
 export function useSetRoutineKind() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, kind }: { id: string; kind: Kind | null }) =>
       unwrap(commands.setRoutineKind(id, kind)),
-    onSuccess: () => inv.routines(),
+    onMutate: async ({ id, kind }) => {
+      const rollback = await snapshotQueries(qc, [["routines"]]);
+      patchRoutineInLists(qc, id, { kind });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.routines(),
   });
 }
 
-/** 루틴 Life Wheel tag key 갱신 (커스텀 키 허용, signals 패턴 미러). */
+/** 루틴 Life Wheel tag key 갱신 (커스텀 키 허용, signals 패턴 미러) — 칩 즉시 반영 optimistic. */
 export function useSetRoutineAreaTagKey() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: ({ id, tagKey }: { id: string; tagKey: string | null }) =>
       unwrap(commands.setRoutineAreaTagKey(id, tagKey)),
-    onSuccess: () => inv.routines(),
+    onMutate: async ({ id, tagKey }) => {
+      const rollback = await snapshotQueries(qc, [["routines"]]);
+      patchRoutineInLists(qc, id, areaTagPatch(tagKey));
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.routines(),
   });
 }
 

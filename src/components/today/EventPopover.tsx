@@ -6,9 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { IpcError, openExternal, useTimelineNote, useUpsertTimelineNote } from "@/lib/query";
+import {
+  openExternal,
+  pushMutationError,
+  useTimelineNote,
+  useUpsertTimelineNote,
+} from "@/lib/query";
 import type { LayoutBox } from "@/lib/timelineLayout";
-import { useToastStore } from "@/lib/toast";
 import { blockNoteTarget } from "@/lib/todayBlocks";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
 import { useUIStore } from "@/store";
@@ -292,10 +296,7 @@ function MemoEditor({
         body: next,
       },
       {
-        onError: (err) =>
-          useToastStore
-            .getState()
-            .pushError("memo.save", err instanceof IpcError ? err.app : String(err)),
+        onError: (err) => pushMutationError("memo.save", err),
       },
     );
   }, 500);

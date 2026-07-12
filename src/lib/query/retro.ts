@@ -1,17 +1,26 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 
 import { commands, type WorkSignal } from "@/bindings";
 
 import { unwrap, useInvalidate } from "./client";
+import { patchSignalInLists, SIGNAL_LIST_PREFIXES, snapshotQueries } from "./optimistic";
 
 /**
  * 회고(retro) 완료 todo 타임라인 (Phase 17). [start,end] 로컬 날짜 inclusive.
  * 전부 로컬 read — today_done_at 범위. 외부 변경 없음(INVARIANT #2).
+ * 주 이동 시 이전 범위 데이터를 유지(placeholderData) — 빈 리스트 플래시 방지.
  */
 export function useCompleted(start: string, end: string) {
   return useQuery({
     queryKey: ["completed", start, end],
     queryFn: () => unwrap(commands.listCompleted(start, end)),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -60,23 +69,37 @@ function useInvalidateRetro() {
   };
 }
 
-/** 고임팩트 ⭐ 태그 토글 (사람 결정 — INVARIANT #1). */
+/** 고임팩트 ⭐ 태그 토글 (사람 결정 — INVARIANT #1) — 연속 태깅이 끊기지 않게 optimistic. */
 export function useSetSignalImpact() {
+  const qc = useQueryClient();
   const inv = useInvalidateRetro();
   return useMutation({
     mutationFn: ({ id, value }: { id: string; value: boolean }) =>
       unwrap(commands.setSignalImpact(id, value)),
-    onSuccess: inv,
+    onMutate: async ({ id, value }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, { impactHigh: value });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: inv,
   });
 }
 
-/** 후회 ⚠️ (하지말걸) 태그 토글 (사람 결정 — INVARIANT #1). */
+/** 후회 ⚠️ (하지말걸) 태그 토글 (사람 결정 — INVARIANT #1) — optimistic. */
 export function useSetSignalRegret() {
+  const qc = useQueryClient();
   const inv = useInvalidateRetro();
   return useMutation({
     mutationFn: ({ id, value }: { id: string; value: boolean }) =>
       unwrap(commands.setSignalRegret(id, value)),
-    onSuccess: inv,
+    onMutate: async ({ id, value }) => {
+      const rollback = await snapshotQueries(qc, SIGNAL_LIST_PREFIXES);
+      patchSignalInLists(qc, id, { regret: value });
+      return { rollback };
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: inv,
   });
 }
 

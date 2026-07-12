@@ -1,4 +1,5 @@
 import {
+  keepPreviousData,
   type QueryClient,
   useMutation,
   useQueries,
@@ -168,6 +169,8 @@ export function useCalendarEventsRange(start: string, end: string, enabled = tru
     enabled,
     staleTime: 60_000,
     retry: 1,
+    // 날짜 이동/일·주·월 전환 시 직전 그리드 유지 — 매 스텝 스켈레톤 재등장 방지.
+    placeholderData: keepPreviousData,
   });
 }
 

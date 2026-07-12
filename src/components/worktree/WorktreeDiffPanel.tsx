@@ -122,7 +122,10 @@ export function WorktreeDiffPanel({
         {!selectedDiff ? (
           // 안내 프롬프트 — "비어 있음"이 아니라 사용자 행동을 요구한다(EmptyState 대상 아님).
           <div className="wt-empty">파일을 선택하면 diff를 봅니다.</div>
-        ) : fileDiff.isFetching ? (
+        ) : fileDiff.isLoading ? (
+          // isLoading(첫 fetch 진행 중)일 때만 스피너 — 재방문/stale refetch는 직전 diff를 그대로
+          // 두고 백그라운드로 갱신한다(전면 blank 방지). isPending은 disabled 쿼리에서도 true라
+          // ref 미선택 엣지에서 스피너가 영구 고정될 수 있어 쓰지 않는다.
           <div className="wt-loading">
             <Spinner />
           </div>
@@ -218,8 +221,8 @@ function WorktreeFilePanel({
       <LocalFileSections
         stagedFiles={stagedFiles.data ?? []}
         unstagedFiles={unstagedFiles.data ?? []}
-        stagedLoading={stagedFiles.isFetching}
-        unstagedLoading={unstagedFiles.isFetching}
+        stagedLoading={stagedFiles.isPending}
+        unstagedLoading={unstagedFiles.isPending}
         stagedError={stagedFiles.error}
         unstagedError={unstagedFiles.error}
         selectedDiff={selectedDiff}
@@ -229,7 +232,7 @@ function WorktreeFilePanel({
   }
   // 안내 프롬프트 — "비어 있음"이 아니라 사용자 행동을 요구한다(EmptyState 대상 아님).
   if (!ready) return <div className="wt-empty">비교할 ref를 선택하세요.</div>;
-  if (diffFiles.isFetching) {
+  if (diffFiles.isPending) {
     return (
       <div className="wt-loading">
         <Spinner />

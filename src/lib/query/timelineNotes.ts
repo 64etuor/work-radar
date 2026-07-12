@@ -6,11 +6,22 @@ import { unwrap } from "./client";
 
 type Key = { targetKind: TimelineNoteTarget; targetId: string; date: string };
 
-/** 단일 메모 조회. backend가 None이면 null 반환. */
+/** 단일 메모 조회. backend가 None이면 null 반환.
+ *  TodayView가 이미 날짜별 벌크(["timelineNotesForDate"])를 로드하므로, 팝오버 첫 오픈은
+ *  그 캐시에서 즉시 시딩(placeholderData) — 비활성 셸 대기 없이 메모가 바로 보인다. */
 export function useTimelineNote(key: Key | null) {
+  const qc = useQueryClient();
   return useQuery<TimelineNote | null>({
     queryKey: ["timelineNote", key],
     enabled: key !== null,
+    placeholderData: () => {
+      if (!key) return undefined;
+      const bulk = qc.getQueryData<TimelineNote[]>(["timelineNotesForDate", key.date]);
+      if (!bulk) return undefined; // 벌크 미로드면 시딩 불가 — 기존 로딩 셸 유지.
+      return (
+        bulk.find((n) => n.targetKind === key.targetKind && n.targetId === key.targetId) ?? null
+      );
+    },
     queryFn: async () => {
       if (!key) return null;
       const res = await unwrap(commands.getTimelineNote(key.targetKind, key.targetId, key.date));
