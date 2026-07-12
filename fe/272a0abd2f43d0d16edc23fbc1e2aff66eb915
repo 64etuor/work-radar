@@ -1,0 +1,35 @@
+docs/decisions.md
+  s_6179c03ca60a82::t_5d6a0234869e24 663-664
+scripts/exec-signed.sh
+  s_6179c03ca60a82::t_fa8f33ec534d1a 1-38
+scripts/dev-codesign-runner.sh
+  s_6179c03ca60a82::t_5a963a46a750bc 12-15
+scripts/exec-signed.test.sh
+  s_6179c03ca60a82::t_def62bcf9cf834 1-136
+scripts/dev-codesign-lib.sh
+  s_6179c03ca60a82::t_efa8f513504ff3 1-102
+package.json
+  s_6179c03ca60a82::t_533ab43a9fbbe4 22
+docs/areas/shell-tooling.md
+  s_6179c03ca60a82::t_c330fee7c9b44f 93-115
+src-tauri/.cargo/config.toml
+  s_6179c03ca60a82::t_d068bc1f03f96b 1-9
+scripts/dev-codesign-dr.test.sh
+  s_6179c03ca60a82::t_00af392403573f 1-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "fe272a0abd2f43d0d16edc23fbc1e2aff66eb915",
+  "prompts": {},
+  "sessions": {
+    "s_6179c03ca60a82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb81cfa6-0680-49ed-9502-bbaaaa8cd10f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
