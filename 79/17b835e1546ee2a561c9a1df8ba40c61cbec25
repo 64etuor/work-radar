@@ -1,0 +1,58 @@
+src/components/today/EventPopover.tsx
+  s_6179c03ca60a82::t_37a0f542b335b3 15
+  s_6179c03ca60a82::t_1175bcb949047f 38,40
+src/lib/timelineDragPlan.ts
+  s_6179c03ca60a82::t_76f9e62de0ff1a 510-512,514-517
+  s_6179c03ca60a82::t_1d1fc77cc9ae16 531-618
+  s_6179c03ca60a82::t_dc8f37a81e39f6 35-38
+src/components/today/timelinePreview.ts
+  s_6179c03ca60a82::t_b3c4cf60897f38 144-153
+  s_6179c03ca60a82::t_5aab75b9d6582a 4-8
+  s_6179c03ca60a82::t_600968f1b0547d 129
+  s_6179c03ca60a82::t_5284229633022e 87
+src/lib/timelineDragPlan.test.ts
+  s_6179c03ca60a82::t_b809bfa16ea9a7 5-9
+  s_6179c03ca60a82::t_9ac182e3dc8d29 734-742,744-808
+  s_e9caa7aae55d7d::t_0968d69f6f9953 743
+src/lib/timelineCoords.ts
+  s_6179c03ca60a82::t_603adaf9307d1a 84-87,108,112,118
+  s_6179c03ca60a82::t_81ce72be76e65a 51-66
+src/components/today/TimelineCanvas.tsx
+  s_6179c03ca60a82::t_2095bcde0db7e5 92-103,105
+  s_6179c03ca60a82::t_412278dfb8d04d 238-240,243,258-264,268-269,271,273-277
+  s_6179c03ca60a82::t_c334ee31d1d182 169-170
+  s_6179c03ca60a82::t_3288d414a46799 2,10,17-19,21
+src/lib/timelineCoords.test.ts
+  s_6179c03ca60a82::t_320b6bd9ee494c 170-219
+src/components/today/TimelineBlock.tsx
+  s_6179c03ca60a82::t_3764322acbfb9b 102-106
+  s_6179c03ca60a82::t_9a303395af5f92 38-39,41
+  s_6179c03ca60a82::t_832d567dd1c2fd 13
+src/components/today/timelinePreview.test.ts
+  s_6179c03ca60a82::t_4451975b49bb73 10
+  s_6179c03ca60a82::t_eff568e03b9eb7 743-756
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "7917b835e1546ee2a561c9a1df8ba40c61cbec25",
+  "prompts": {},
+  "sessions": {
+    "s_6179c03ca60a82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb81cfa6-0680-49ed-9502-bbaaaa8cd10f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_e9caa7aae55d7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f552e-6b0a-7c82-9b40-c32a9df908af",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
