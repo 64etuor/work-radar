@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { isComposingEnter } from "@/lib/ime";
 
 import { Field } from "../../settings/SettingsKit";
 import type { TransactionEditDraft } from "../bookkeepingDrafts";
@@ -21,6 +22,8 @@ import { TableCellInput } from "./TableCellInput";
  * - 변경 없음(trim 비교)은 no-op으로 닫는다.
  * - onCommit은 성공 여부를 돌려준다 — 실패 시 입력을 유지해 draft를 잃지 않는다(토스트는 상위).
  * - Enter 커밋 직후 이어지는 blur의 이중 저장은 committingRef가 막는다.
+ * - 키보드 커밋(Enter/Esc) 후엔 셀 트리거로 포커스 복원 — 연속 키보드 편집이 body로 떨어지지
+ *   않는다. blur 커밋(다른 곳 클릭)은 복원하지 않는다(사용자가 옮긴 포커스를 훔치지 않음).
  */
 export function EditableTextCell({
   value,
@@ -45,10 +48,12 @@ export function EditableTextCell({
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   const committingRef = useRef(false);
+  const restoreFocusRef = useRef(false);
 
-  const commit = async () => {
+  const commit = async (opts?: { restoreFocus?: boolean }) => {
     if (draft == null || committingRef.current) return;
     if (!shouldCommitNoteDraft(value, draft)) {
+      if (opts?.restoreFocus) restoreFocusRef.current = true;
       setDraft(null);
       return;
     }
@@ -56,16 +61,21 @@ export function EditableTextCell({
     const ok = await onCommit(draft).finally(() => {
       committingRef.current = false;
     });
-    if (ok) setDraft(null);
+    if (ok) {
+      if (opts?.restoreFocus) restoreFocusRef.current = true;
+      setDraft(null);
+    }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingEnter(event)) return; // 한글 조합 확정 Enter는 커밋 아님
     if (event.key === "Enter") {
       event.preventDefault();
-      void commit();
+      void commit({ restoreFocus: true });
     } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
+      restoreFocusRef.current = true;
       setDraft(null);
     }
   };
@@ -94,6 +104,13 @@ export function EditableTextCell({
       data-empty={value.trim() ? undefined : "true"}
       disabled={disabled}
       aria-label={ariaLabel}
+      ref={(el) => {
+        // 키보드 커밋/취소로 입력→트리거 스왑된 마운트에서만 포커스 복원.
+        if (el && restoreFocusRef.current) {
+          restoreFocusRef.current = false;
+          el.focus();
+        }
+      }}
       onClick={() => setDraft(value)}
     >
       {display ?? (value.trim() ? value : (placeholder ?? "—"))}

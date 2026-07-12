@@ -20,6 +20,7 @@ import {
   useTriggerCodexJob,
   useTriggerPrSelfcheck,
 } from "@/lib/query";
+import { useScrollRestore } from "@/lib/useScrollRestore";
 import { useUIStore } from "@/store";
 
 const PrBucketDistributionChart = lazy(() =>
@@ -87,6 +88,7 @@ function groupPrRadarItems(items: PrRadarItem[]): Record<ReadinessBucket, PrRada
 export function PrRadarView() {
   const { goTo } = useUIStore();
   const qc = useQueryClient();
+  const scrollRef = useScrollRestore("radar");
   const projects = useProjects();
   const projectList = projects.data ?? [];
   const codex = useCodexStatus();
@@ -167,7 +169,7 @@ export function PrRadarView() {
         </span>
       </header>
 
-      <div className="pr-scroll">
+      <div className="pr-scroll" ref={scrollRef}>
         {noProjects && (
           <EmptyState className="pr-empty">
             프로젝트가 없습니다. 설정에서 GitHub 토큰·레포가 있는 프로젝트를 추가하세요.

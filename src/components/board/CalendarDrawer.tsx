@@ -103,7 +103,8 @@ export function CalendarDrawer({ open, onClose }: Props) {
 
   return (
     // 백드롭 없음(비모달) — 캘린더를 보면서 보드/브레인덤프를 그대로 조작할 수 있다. 닫기=✕/Esc.
-    <aside className="caldrawer" role="dialog" aria-label="캘린더">
+    // 열림 마커(overlay-stack) — CmdKnob 억제 + 전역 Enter 가드가 인지(Esc는 자체 capture 처리).
+    <aside className="caldrawer" role="dialog" aria-label="캘린더" data-wr-overlay-open="">
       <header className="caldrawer-head">
         <span className="caldrawer-mark">CALENDAR</span>
         <ToggleGroup

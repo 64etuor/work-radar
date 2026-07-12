@@ -46,6 +46,8 @@ import {
   useWriteBookkeepingExport,
 } from "@/lib/query";
 import { useToastStore } from "@/lib/toast";
+import { useScrollRestore } from "@/lib/useScrollRestore";
+import { useViewSessionState } from "@/lib/useViewSessionState";
 
 import { SectionLabel } from "../settings/SettingsKit";
 import { Button } from "../ui/button";
@@ -66,6 +68,7 @@ import { nullableText, pushMutationError, splitCsv } from "./bookkeepingFieldUti
 import { monthRange, stepMonthBy } from "./bookkeepingMonth";
 import { BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN } from "./bookkeepingPanels";
 import {
+  type BookkeepingScopeAction,
   bookkeepingScopeReducer,
   initialBookkeepingScope,
   inputPanelsReducer,
@@ -102,11 +105,11 @@ import { reviewOrderToQueryParam, type ReviewQueueOrder } from "./reviewSort";
 import { buildInlineCategoryOverride } from "./rowActivation";
 
 export function BookkeepingView() {
-  const [scope, dispatchScope] = useReducer(
-    bookkeepingScopeReducer,
-    undefined,
-    initialBookkeepingScope,
-  );
+  // 스코프(월/프로젝트)는 세션 상태 — 뷰 전환 리마운트에도 보던 월이 유지된다(재시작 시 이번 달).
+  const [scope, setScope] = useViewSessionState("bookkeeping.scope", initialBookkeepingScope);
+  const dispatchScope = (action: BookkeepingScopeAction) =>
+    setScope((cur) => bookkeepingScopeReducer(cur, action));
+  const scrollRef = useScrollRestore("bookkeeping");
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
   const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
   const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft>(() =>
@@ -624,7 +627,7 @@ export function BookkeepingView() {
   };
 
   return (
-    <main className="bk-view">
+    <main className="bk-view" ref={scrollRef}>
       <div className="bk-shell">
         <header className="bk-page-head" aria-labelledby="bk-title">
           <div className="bk-heading">

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { commands } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { isComposingEnter } from "@/lib/ime";
 
 import { detectSlashToken } from "./detectSlashToken";
 import { HermesSlashMenu } from "./HermesSlashMenu";
@@ -208,6 +209,7 @@ export function HermesChatInput({
             onPaste={onPaste}
             onFocus={onFocusInput}
             onKeyDown={(e) => {
+              if (isComposingEnter(e)) return; // 한글 조합 확정 Enter는 전송/선택 아님
               if (menuOpen) {
                 if (e.key === "ArrowDown") {
                   e.preventDefault();

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { isComposingEnter } from "@/lib/ime";
 
 type Props = {
   /** 수정 대상 루틴(폼 초기값). null=새 루틴 추가 모드. */
@@ -126,6 +127,9 @@ export function RoutineForm({ initial, defaults, isEdit, onSubmit, onCancel }: P
         type="text"
         value={title}
         onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (isComposingEnter(e)) e.preventDefault(); // 조합 확정 Enter의 폼 제출 차단
+        }}
         placeholder="루틴 제목 (예: 아침 운동)"
         autoComplete="off"
         data-cb-routine-title

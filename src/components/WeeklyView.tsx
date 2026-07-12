@@ -33,6 +33,7 @@ import {
   useWeeklyReview,
 } from "@/lib/query";
 import { fmtMinutes } from "@/lib/timeTotals";
+import { useScrollRestore } from "@/lib/useScrollRestore";
 import { useWeekNav } from "@/lib/useWeekNav";
 import { bucketByWeekOffset, monthDay, weekRangeForOffset, WEEKS_WINDOW } from "@/lib/weekRange";
 import { useUIStore } from "@/store";
@@ -40,6 +41,7 @@ import { useUIStore } from "@/store";
 export function WeeklyView() {
   const nav = useWeekNav();
   const goTo = useUIStore((s) => s.goTo);
+  const scrollRef = useScrollRestore("weekly");
 
   // 선택 주 KPI/PR/루틴/부채
   const review = useWeeklyReview(nav.range.end);
@@ -125,7 +127,7 @@ export function WeeklyView() {
         onSelect={nav.goto}
       />
 
-      <div className="wk-scroll">
+      <div className="wk-scroll" ref={scrollRef}>
         {pendingCheckIns > 0 && (
           <button type="button" className="wk-okr-prompt" onClick={() => goTo("mission")}>
             <span className="wk-okr-prompt-main typo-body-strong">

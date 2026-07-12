@@ -7,11 +7,13 @@ import {
   type LifeWheelTagConfig,
   type Quadrant,
   type SignalStatus,
+  type WorkSignal,
 } from "@/bindings";
 
 import { unwrap, useInvalidate } from "./client";
 import {
   areaTagPatch,
+  OPTIMISTIC_SIGNAL_PREFIX,
   patchSignalInLists,
   removeSignalFromLists,
   SIGNAL_LIST_PREFIXES,
@@ -40,12 +42,68 @@ export function useSearchSignals(query: string) {
   });
 }
 
-/** 한 줄 braindump → 미분류 카드 생성 (항상 unclassified, dedup). */
+/** 한 줄 braindump → 미분류 카드 생성 (항상 unclassified, dedup).
+ *  캡처는 앱의 테제 표면이라 optimistic — Enter 즉시 임시 카드가 보드에 붙고, 서버 행 도착 시
+ *  스왑된다. dedup upsert가 기존 행(이미 분류/Today/완료)을 돌려줄 수 있어 무조건 스왑하지 않고
+ *  매트릭스 멤버십 조건(fetch_signals 미러: today 미승격 + active 상태)을 확인한다. */
 export function useCreateSignal() {
+  const qc = useQueryClient();
   const inv = useInvalidate();
   return useMutation({
     mutationFn: (input: CreateSignalInput) => unwrap(commands.createSignal(input)),
-    onSuccess: () => inv.signals(),
+    onMutate: async (input) => {
+      const rollback = await snapshotQueries(qc, [["signals"]]);
+      const tempId = `${OPTIMISTIC_SIGNAL_PREFIX}${crypto.randomUUID()}`;
+      const now = new Date().toISOString();
+      const temp: WorkSignal = {
+        id: tempId,
+        projectId: input.projectId,
+        title: input.title,
+        body: null,
+        source: "braindump",
+        type: "thought",
+        quadrant: "unclassified",
+        suggestedQuadrant: null,
+        kind: input.kind,
+        area: null,
+        areaTags: null,
+        suggestedArea: null,
+        status: "new",
+        snoozeUntil: null,
+        todayForDate: null,
+        todayDoneAt: null,
+        todayRank: null,
+        impactHigh: null,
+        regret: null,
+        scheduledAt: null,
+        scheduledDuration: null,
+        linkedEventId: null,
+        linkedCalendarId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      // 서버 정렬(created_at ASC)과 같은 꼬리 위치에 붙인다 — 실제 행 도착 시 위치가 안 튄다.
+      qc.setQueriesData<WorkSignal[]>({ queryKey: ["signals"] }, (old) =>
+        old ? [...old, temp] : old,
+      );
+      return { rollback, tempId };
+    },
+    onSuccess: (created, _input, ctx) => {
+      if (!ctx) return;
+      qc.setQueriesData<WorkSignal[]>({ queryKey: ["signals"] }, (old) => {
+        if (!old) return old;
+        const without = old.filter((s) => s.id !== ctx.tempId);
+        const active =
+          created.status !== "done" &&
+          created.status !== "archived" &&
+          created.status !== "snoozed";
+        const belongs = created.todayForDate == null && active;
+        if (!belongs || without.some((s) => s.id === created.id)) return without;
+        return [...without, created];
+      });
+    },
+    onError: (_err, _vars, ctx) => ctx?.rollback(),
+    onSettled: () => inv.signals(),
   });
 }
 

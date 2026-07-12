@@ -10,6 +10,7 @@ import {
   useTriggerCodexJob,
   useTriggerEchoJob,
 } from "@/lib/query";
+import { useScrollRestore } from "@/lib/useScrollRestore";
 
 import { CodexStatusBanner } from "./CodexStatusBanner";
 import { JobControls } from "./JobControls";
@@ -31,6 +32,7 @@ export function JobsView() {
 
   const [prompt, setPrompt] = useState("");
   const [openLogIds, setOpenLogIds] = useState<Set<string>>(new Set());
+  const scrollRef = useScrollRestore("jobs");
   const list = runs.data ?? [];
   const openLogIdList: string[] = [];
   for (const run of list) {
@@ -54,7 +56,7 @@ export function JobsView() {
         tracking={list.some((r) => isActiveJobStatus(r.status))}
       />
 
-      <div className="jobs-scroll">
+      <div className="jobs-scroll" ref={scrollRef}>
         <CodexStatusBanner
           ready={codexReady}
           detail={codex.data?.detail}

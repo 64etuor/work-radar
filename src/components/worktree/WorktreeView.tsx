@@ -12,6 +12,7 @@ import {
   useWorktrees,
 } from "@/lib/query";
 import { useStickyToggle } from "@/lib/useStickyToggle";
+import { useViewSessionState } from "@/lib/useViewSessionState";
 import { chooseInitialReviewLens, type ReviewLens } from "@/lib/worktreeReview";
 import { useUIStore } from "@/store";
 
@@ -28,15 +29,26 @@ export function WorktreeView() {
   const projects = useProjects();
   const { goTo } = useUIStore();
   const reviewJob = useTriggerCodexJob();
-  const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  // 리뷰 컨텍스트(프로젝트 필터·선택 worktree·lens·ref 쌍·열린 파일)는 세션 상태 —
+  // 뷰 전환 리마운트에도 유지된다(전환마다 리뷰 자리를 처음부터 다시 잡던 마찰 제거).
+  const [projectFilter, setProjectFilter] = useViewSessionState<string | null>(
+    "wt.projectFilter",
+    null,
+  );
   // 12c: live=true → dirty/ahead/behind + 활성 변경 활동을 bounded 주기로 자동 갱신.
   const worktrees = useWorktrees(null, true);
 
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [lens, setLens] = useState<ReviewLens>("local");
-  const [baseRef, setBaseRef] = useState<string | null>(null);
-  const [headRef, setHeadRef] = useState<string | null>(null);
-  const [selectedDiff, setSelectedDiff] = useState<SelectedDiff | null>(null);
+  const [selectedPath, setSelectedPath] = useViewSessionState<string | null>(
+    "wt.selectedPath",
+    null,
+  );
+  const [lens, setLens] = useViewSessionState<ReviewLens>("wt.lens", "local");
+  const [baseRef, setBaseRef] = useViewSessionState<string | null>("wt.baseRef", null);
+  const [headRef, setHeadRef] = useViewSessionState<string | null>("wt.headRef", null);
+  const [selectedDiff, setSelectedDiff] = useViewSessionState<SelectedDiff | null>(
+    "wt.selectedDiff",
+    null,
+  );
   const [showCleanup, setShowCleanup] = useState(false);
   const [graphOpen, setGraphOpen] = useState(false);
   const closeGraph = () => setGraphOpen(false);

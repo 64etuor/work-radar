@@ -12,6 +12,8 @@ import {
   rectContainsPoint,
 } from "@/components/board/matrixGeometry";
 import { InboxColumn } from "@/components/inbox/InboxColumn";
+import { isComposingEnter } from "@/lib/ime";
+import { isOptimisticSignalId } from "@/lib/query/optimistic";
 
 const zoneOf = (s: WorkSignal): ZoneKey => quadrantToZone(s.quadrant);
 
@@ -242,6 +244,8 @@ function useMatrixCanvasView({
 
   const onCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
     if ((e.target as HTMLElement).closest(".menu-btn")) return;
+    // 낙관 임시 카드(서버 왕복 전)는 드래그/선택 비활성 — 존재하지 않는 id로 분류/메뉴가 나가면 안 됨.
+    if (isOptimisticSignalId(id)) return;
     // 인라인 편집 중인 카드는 드래그 비활성(입력 조작 보호).
     if (id === editingId || (e.target as HTMLElement).closest(".postit-edit")) return;
     const el = e.currentTarget;
@@ -386,7 +390,10 @@ function useMatrixCanvasView({
               else cardRefs.current!.delete(s.id);
             }}
             onPointerDown={(e) => onCardPointerDown(e, s.id)}
-            onMouseDown={() => cbRef.current.onSelect(s.id)}
+            onMouseDown={() => {
+              if (isOptimisticSignalId(s.id)) return; // 서버 왕복 전 임시 카드 — 선택 금지
+              cbRef.current.onSelect(s.id);
+            }}
           >
             <CardTagEditor
               target={s}
@@ -435,6 +442,7 @@ function useMatrixCanvasView({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isOptimisticSignalId(s.id)) return; // 서버 왕복 전 임시 카드
                 onPromoteToday(s.id);
               }}
             >
@@ -446,6 +454,7 @@ function useMatrixCanvasView({
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
+                if (isOptimisticSignalId(s.id)) return; // 서버 왕복 전 임시 카드
                 onOpenMenu(s.id, e.currentTarget);
               }}
             >
@@ -530,6 +539,7 @@ function TitleEditor({
       onPointerDown={(e) => e.stopPropagation()}
       onBlur={() => commit(draft)}
       onKeyDown={(e) => {
+        if (isComposingEnter(e)) return; // 한글 조합 확정 Enter는 커밋 아님
         if (e.key === "Enter" && !e.shiftKey) {
           e.preventDefault();
           commit(draft);

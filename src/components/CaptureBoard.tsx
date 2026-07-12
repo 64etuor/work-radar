@@ -19,6 +19,7 @@ import { type ProjectPickerState } from "@/components/board/ProjectPickerModal";
 import { type RoutineDraft } from "@/components/board/RoutinesPanel";
 import { sortSignalsForBoard } from "@/components/board/signalOrdering";
 import { useBoardKeyboard } from "@/components/board/useBoardKeyboard";
+import { usePendingDeletes } from "@/components/board/usePendingDeletes";
 import { useSignalPop } from "@/components/board/useSignalPop";
 import { currentQuarterKey } from "@/lib/lifeOs";
 import {
@@ -68,6 +69,10 @@ import { signalCalendarProjectId } from "@/lib/signalCalendarRouting";
 import { useToastStore } from "@/lib/toast";
 import { usePendingSignalFocus } from "@/lib/usePendingSignalFocus";
 import { useUIStore } from "@/store";
+
+/** 삭제 커밋 지연 — info 토스트 자동 dismiss(2500ms) + fade-out(TOAST_EXIT_MS≈160ms)보다 뒤.
+ *  fade 중 되돌리기 클릭이 커밋과 경합하지 않도록 여유를 둔다(+ committed 플래그 이중 방어). */
+const DELETE_COMMIT_MS = 2800;
 
 const PROMOTION_TARGET: Record<"backlog" | "agenda", PromotionTarget> = {
   backlog: "notion_backlog",
@@ -126,13 +131,16 @@ function useCaptureBoardView() {
   const deleteSignal = useDeleteSignal();
   const { goTo } = useUIStore();
   const enrichAllAgentRunning = useEnrichAllRunning();
-  const { pushSuccess, pushError } = useToastStore();
+  const { pushSuccess, pushError, pushInfo } = useToastStore();
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
 
-  const signals = signalsQ.data ?? EMPTY_SIGNALS;
+  // 삭제 커밋 대기 중 카드(표시 필터). refetch가 서버 상태를 다시 가져와도 숨김이 유지된다.
+  const { pendingDeleteIds, markPendingDelete, unmarkPendingDelete } = usePendingDeletes();
+
+  const signals = (signalsQ.data ?? EMPTY_SIGNALS).filter((s) => !pendingDeleteIds.has(s.id));
   const [captureOrder, setCaptureOrder] = useState<ReadonlyMap<string, number>>(() => new Map());
   const boardSignals = sortSignalsForBoard(signals, captureOrder);
-  const todayItems = todayQ.data ?? [];
+  const todayItems = (todayQ.data ?? []).filter((s) => !pendingDeleteIds.has(s.id));
   const routines = routinesQ.data ?? [];
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -287,16 +295,32 @@ function useCaptureBoardView() {
         // dedup 키는 백엔드가 새 제목으로 갱신. 저장 정규화는 handleTitleCommit에서.
         setEditingId(signalId);
         break;
-      case "delete":
-        // 하드 삭제(영구 — archive와 구분, Phase 15 #5). 확인 후 삭제.
-        if (window.confirm("이 카드를 영구 삭제합니다(복원 불가). 계속할까요?")) {
+      case "delete": {
+        // 하드 삭제(영구 — archive와 구분, Phase 15 #5). 네이티브 confirm 대신 즉시 숨김 +
+        // "되돌리기" 토스트 — 실제 영구 삭제는 토스트 만료 후 커밋한다. 캐시 조작이 아니라
+        // **표시 필터(pendingDeleteIds)**로 숨긴다: 커밋 전 다른 뮤테이션의 invalidate가 서버
+        // 상태(아직 미삭제)를 다시 그려도 카드가 부활하지 않고, 되돌리기는 필터 해제만이라
+        // 연속 삭제끼리 간섭하지 않는다(critic MAJOR-1). 커밋 전 앱 종료 = 카드 잔존(안전 방향).
+        if (selectedId === signalId) setSelectedId(null);
+        markPendingDelete(signalId);
+        let committed = false;
+        const timer = window.setTimeout(() => {
+          committed = true;
           deleteSignal.mutate(signalId, {
-            onSuccess: () => pushSuccess("삭제됨"),
-            onError: (e) => pushError("signal", `삭제 실패: ${String(e)}`),
+            onError: (e) => pushMutationError("signal", e, "삭제"),
+            // 성공/실패 무관 필터 해제 — 성공이면 refetch로 이미 사라졌고, 실패면 다시 보여야 한다.
+            onSettled: () => unmarkPendingDelete(signalId),
           });
-          if (selectedId === signalId) setSelectedId(null);
-        }
+        }, DELETE_COMMIT_MS);
+        pushInfo("카드 삭제됨", {
+          onUndo: () => {
+            if (committed) return; // 토스트 fade 중 커밋 이후 클릭 — 되돌릴 수 없음(no-op)
+            window.clearTimeout(timer);
+            unmarkPendingDelete(signalId);
+          },
+        });
         break;
+      }
       case "done":
         setStatus.mutate({ id: signalId, status: "done" });
         if (selectedId === signalId) setSelectedId(null);

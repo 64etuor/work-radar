@@ -16,7 +16,7 @@ import {
   type WorkSignal,
 } from "@/bindings";
 
-import { unwrap } from "./client";
+import { pushMutationError, unwrap } from "./client";
 
 function invalidateCalendarSelection(qc: QueryClient, projectId: string) {
   void qc.invalidateQueries({ queryKey: ["googleCalendars", projectId] });
@@ -214,6 +214,8 @@ export function useCreateCalendarEvent() {
       unwrap(commands.createCalendarEvent(projectId, calendarId, event)),
     // 생성 즉시 Today/드로어의 calendarEvents(단일 date + range) 양쪽 갱신.
     onSuccess: () => qc.invalidateQueries({ queryKey: ["calendarEvents"] }),
+    // 외부(Google) write 실패는 모달 인라인 문구에만 묻히지 않게 토스트로도 표면화(terminal failure 노출).
+    onError: (e) => pushMutationError("calendar", e, "일정 등록"),
   });
 }
 

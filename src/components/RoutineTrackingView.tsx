@@ -1,7 +1,6 @@
 import "./RoutineTrackingView.css";
 
 import { Flame, Repeat } from "lucide-react";
-import { useState } from "react";
 
 import type { LifeWheelTagConfig, RoutineFreq, RoutineTrackingItem } from "@/bindings";
 import { KindAreaChips } from "@/components/board/LifeWheelPalette";
@@ -9,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/components/ui/cn";
 import { EmptyState } from "@/components/ui/empty-state";
 import { localToday, useLifeWheelTags, useRoutineTracking } from "@/lib/query";
+import { useScrollRestore } from "@/lib/useScrollRestore";
+import { useViewSessionState } from "@/lib/useViewSessionState";
 import { monthDay } from "@/lib/weekRange";
 
 type Period = 7 | 30 | 90;
@@ -32,7 +33,9 @@ const FREQ_LABEL: Record<RoutineFreq, string> = {
  * 전부 로컬 routine_checks 집계 — 자동화/외부 변경 없음(INVARIANT #1/#7).
  */
 export function RoutineTrackingView() {
-  const [period, setPeriod] = useState<Period>(30);
+  // 뷰 전환 생존(세션) — 기간 선택/스크롤이 매번 초기화되지 않게.
+  const [period, setPeriod] = useViewSessionState<Period>("routinetrack.period", 30);
+  const scrollRef = useScrollRestore("routinetrack");
   const tracking = useRoutineTracking(localToday(), period);
   const lifeWheelTags = useLifeWheelTags();
   const items = tracking.data ?? [];
@@ -43,7 +46,7 @@ export function RoutineTrackingView() {
         <span className="typo-mono-heading">루틴 트래킹</span>
       </header>
 
-      <div className="rt-scroll">
+      <div className="rt-scroll" ref={scrollRef}>
         <div className="rt-periods">
           {PERIODS.map((p) => (
             <Button

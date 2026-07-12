@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { isComposingEnter } from "@/lib/ime";
 import { keyResultProgressRatio, quarterDateRange } from "@/lib/okr";
 import { useDeleteKeyResult, useUpdateKeyResult } from "@/lib/query";
 
@@ -215,6 +216,7 @@ function MilestonePopover({
               value={newMilestone}
               onChange={(event) => setNewMilestone(event.target.value)}
               onKeyDown={(event) => {
+                if (isComposingEnter(event)) return; // 한글 조합 확정 Enter는 추가 아님
                 if (event.key === "Enter") {
                   event.preventDefault();
                   addMilestone();

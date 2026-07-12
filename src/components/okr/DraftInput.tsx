@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { Input } from "@/components/ui/input";
+import { isComposingEnter } from "@/lib/ime";
 
 /**
  * blur/Enter 커밋 인라인 입력 — 포커스 동안만 로컬 draft, 평소엔 서버값 표시.
@@ -31,6 +32,7 @@ export function DraftInput({
         setDraft(null);
       }}
       onKeyDown={(event) => {
+        if (isComposingEnter(event)) return; // 한글 조합 확정 Enter는 커밋 아님
         if (event.key === "Enter") {
           event.preventDefault();
           event.currentTarget.blur();

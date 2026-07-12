@@ -10,6 +10,7 @@ import {
   useProjectTickerList,
   useTickerSchedulerStatus,
 } from "../../lib/query/governance";
+import { useViewSessionState } from "../../lib/useViewSessionState";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { EmptyState } from "../ui/empty-state";
@@ -26,7 +27,11 @@ export default function ControlRoomView() {
   const scheduler = useTickerSchedulerStatus();
   // Which project's governance state to show. The snapshot is per-project (folded LIVE from
   // that repo's .boule/workspace), so the user picks one; default = first available project.
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  // 세션 상태 — 뷰 전환에도 선택 프로젝트 탭 유지.
+  const [selectedProject, setSelectedProject] = useViewSessionState<string | null>(
+    "controlRoom.selectedProject",
+    null,
+  );
   const rows = ticker.data ?? [];
   const activeProjectId = pickActiveProjectId(
     rows.map((r) => r.projectId),

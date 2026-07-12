@@ -113,6 +113,14 @@ export function reorderListCache<T extends { id: string }>(
   });
 }
 
+/** 낙관 생성 임시 행의 id prefix — 서버 왕복 전 카드. 임시 카드엔 분류/메뉴 인터랙션 금지. */
+export const OPTIMISTIC_SIGNAL_PREFIX = "optimistic:";
+
+/** 이 id가 아직 서버에 없는 낙관 임시 카드인지. */
+export function isOptimisticSignalId(id: string): boolean {
+  return id.startsWith(OPTIMISTIC_SIGNAL_PREFIX);
+}
+
 /** Life Wheel 단일 태그 선택의 표시 필드 패치 — 칩은 parseAreaTagKeys(areaTags, area)로 읽는다. */
 export function areaTagPatch(
   tagKey: string | null,

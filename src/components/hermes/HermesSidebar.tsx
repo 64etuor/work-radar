@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { isComposingEnter } from "@/lib/ime";
 
 import { filterByName, messagePreview, relativeTime } from "./sessionList";
 import type { TabId, TabState } from "./useHermesTabs";
@@ -105,6 +106,7 @@ export function HermesSidebar({
                         // 행(role=button)의 keydown 핸들러가 Space/Enter 를 preventDefault 로
                         // 삼키지 않도록 입력 단계에서 전파를 막는다(스페이스 입력 가능).
                         e.stopPropagation();
+                        if (isComposingEnter(e)) return; // 한글 조합 확정 Enter는 커밋 아님
                         if (e.key === "Enter") commitRename(t.id);
                         if (e.key === "Escape") setEditingId(null);
                       }}

@@ -81,8 +81,8 @@ export function GmailSyncCard({
           )}
           <div className="bk-gmail-actions">
             <Button type="submit" disabled={pending || !projectSelected}>
-              <RefreshCw className="size-4" />
-              Gmail 동기화
+              <RefreshCw className={pending ? "size-4 animate-spin" : "size-4"} />
+              {pending ? "동기화 중…" : "Gmail 동기화"}
             </Button>
             <Button
               type="button"

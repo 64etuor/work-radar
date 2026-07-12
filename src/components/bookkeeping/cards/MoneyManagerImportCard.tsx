@@ -105,8 +105,8 @@ export function MoneyManagerImportCard({
               disabled={importPending || !configured}
               onClick={onImportNow}
             >
-              <HardDriveDownload className="size-4" />
-              지금 가져오기
+              <HardDriveDownload className={importPending ? "size-4 animate-pulse" : "size-4"} />
+              {importPending ? "가져오는 중…" : "지금 가져오기"}
             </Button>
           </div>
           {options?.lastAutoImportAt && (

@@ -6,6 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { isComposingEnter } from "@/lib/ime";
 import {
   useCreateObjective,
   useDeleteObjective,
@@ -101,6 +102,7 @@ function ObjectiveDialogBody({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (pending) return; // 빠른 더블-Enter 이중 생성 방지(isPending 리렌더 전 창)
     const cleanTitle = title.trim();
     if (!cleanTitle) return;
     const cleanDescription = description.trim() || null;
@@ -159,7 +161,14 @@ function ObjectiveDialogBody({
       <form className="mission-dialog-form" onSubmit={submit}>
         <label className="mission-field">
           <span className="typo-label-sm">제목</span>
-          <Input value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />
+          <Input
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            onKeyDown={(event) => {
+              if (isComposingEnter(event)) event.preventDefault(); // 조합 확정 Enter의 폼 제출 차단
+            }}
+            autoFocus
+          />
         </label>
         <label className="mission-field">
           <span className="typo-label-sm">설명</span>

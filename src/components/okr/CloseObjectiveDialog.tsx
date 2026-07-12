@@ -4,6 +4,7 @@ import type { Objective } from "@/bindings";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { isComposingEnter } from "@/lib/ime";
 import { useCloseObjective } from "@/lib/query";
 
 export function CloseObjectiveDialog({
@@ -43,6 +44,7 @@ function CloseObjectiveBody({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (closeObjective.isPending) return; // 빠른 더블-Enter 이중 마감 방지
     await closeObjective.mutateAsync({
       id: objective.id,
       reflection: reflection.trim() || null,
@@ -63,6 +65,9 @@ function CloseObjectiveBody({
           <Input
             value={reflection}
             onChange={(event) => setReflection(event.target.value)}
+            onKeyDown={(event) => {
+              if (isComposingEnter(event)) event.preventDefault(); // 조합 확정 Enter의 폼 제출 차단
+            }}
             placeholder="무엇이 다음 분기에 남았나요?"
             autoFocus
           />

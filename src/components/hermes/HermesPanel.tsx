@@ -159,6 +159,8 @@ export function HermesPanel({
     <section
       aria-label="Hermes"
       data-state={presence.state}
+      // 열림 동안 overlay-stack 마커 — CmdKnob 억제 + 전역 Enter(브레인덤프 열기) 가드가 인지.
+      data-wr-overlay-open={presence.state !== "closed" ? "" : undefined}
       // closed 동안 inert: fade-out 하는 fixed z-50 패널이 클릭을 삼키지 않게(click-shield 방지)
       // + 채팅 입력이 포커스를 계속 쥐지 않게. CSS의 pointer-events:none과 이중 방어.
       inert={presence.state === "closed"}

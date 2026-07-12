@@ -40,6 +40,8 @@ import {
   useOkrCheckIns,
   useProjects,
 } from "@/lib/query";
+import { useScrollRestore } from "@/lib/useScrollRestore";
+import { useViewSessionState } from "@/lib/useViewSessionState";
 
 type ObjectiveDialogState = Objective | null | undefined;
 
@@ -53,7 +55,9 @@ type ObjectiveDialogState = Objective | null | undefined;
 type MissionTab = "checkin" | "objectives" | "foundation";
 
 export function MissionView() {
-  const [quarter, setQuarter] = useState(currentQuarterKey());
+  // 뷰 전환 생존(세션) — 보던 분기/스크롤 유지(재시작 시 현재 분기로 리셋).
+  const [quarter, setQuarter] = useViewSessionState("mission.quarter", currentQuarterKey);
+  const scrollRef = useScrollRestore("mission");
   const [tabOverride, setTabOverride] = useState<MissionTab | null>(null);
   const [objectiveDialog, setObjectiveDialog] = useState<ObjectiveDialogState>(undefined);
   const [closingObjective, setClosingObjective] = useState<Objective | null>(null);
@@ -128,7 +132,7 @@ export function MissionView() {
         </div>
       </header>
 
-      <div className="mission-scroll">
+      <div className="mission-scroll" ref={scrollRef}>
         <section className="mission-quarter-row">
           <div className="mission-quarter-select">
             <CalendarDays className="size-4" />
@@ -198,7 +202,7 @@ export function MissionView() {
                 }}
               />
             ))}
-            {objectiveRows.length === 0 && (
+            {!objectives.isLoading && objectiveRows.length === 0 && (
               <div className="mission-empty">
                 <span className="typo-title-sm">아직 Objective가 없습니다.</span>
                 <div className="mission-empty-actions">

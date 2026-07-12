@@ -9,6 +9,7 @@ import { nextBrainDumpKind } from "@/components/board/brainDumpKind";
 import { shouldOpenBrainDumpFromGlobalEnter } from "@/components/board/BrainDumpToggleEvents";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { isComposingEnter } from "@/lib/ime";
 
 type Props = {
   /** kind = 파싱된 마커 우선, 없으면 토글 기본값. */
@@ -99,6 +100,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
   };
 
   const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposingEnter(e)) return; // 한글 조합 확정 Enter는 제출 아님
     if (e.key === "Enter") {
       e.preventDefault();
       submit();

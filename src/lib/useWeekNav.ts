@@ -1,8 +1,7 @@
 // src/lib/useWeekNav.ts
-import { useState } from "react";
-
 import { localToday } from "@/lib/query";
 
+import { useViewSessionState } from "./useViewSessionState";
 import { type WeekRange, weekRangeForOffset, WEEKS_WINDOW } from "./weekRange";
 
 /** offset를 [-(WEEKS_WINDOW-1), 0] 범위로 clamp. 0=이번 주(미래 차단), 음수=과거. */
@@ -26,7 +25,8 @@ export interface WeekNav {
 
 export function useWeekNav(): WeekNav {
   const today = localToday();
-  const [offset, setOffset] = useState(0);
+  // 뷰 전환에도 보던 주가 유지되도록 세션 상태(리마운트 생존, 재시작 시 이번 주로 리셋).
+  const [offset, setOffset] = useViewSessionState("weekly.offset", 0);
   const goto = (o: number) => setOffset(clampOffset(o));
   const prev = () => setOffset((o) => clampOffset(o - 1));
   const next = () => setOffset((o) => clampOffset(o + 1));

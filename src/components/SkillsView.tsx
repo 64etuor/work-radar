@@ -46,7 +46,9 @@ import {
 } from "@/lib/skillEnvNav";
 import { collectTags, matchesTag, UNTAGGED } from "@/lib/skillTags";
 import { usePendingFocus } from "@/lib/usePendingFocus";
+import { useScrollRestore } from "@/lib/useScrollRestore";
 import { useStickyToggle } from "@/lib/useStickyToggle";
+import { useViewSessionState } from "@/lib/useViewSessionState";
 import { useUIStore } from "@/store";
 
 import { EnvNavButton } from "./skills/EnvNavButton";
@@ -88,7 +90,9 @@ function useSkillsView() {
   const workspaces = useSkillWorkspaces();
   const divergences = useSkillDivergences();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // 선택 스킬은 세션 상태 — 뷰 전환에도 보던 스킬 유지(팔레트 진입은 pendingSkillId가 덮어씀).
+  const [selectedId, setSelectedId] = useViewSessionState<string | null>("skills.selectedId", null);
+  const bodyScrollRef = useScrollRestore("skills");
   const [adding, setAdding] = useState(false);
   // URL(GitHub) 설치 패널 열림 — adding과 배타. 외부 상태 불변(파일 복사·감사, #1/#2).
   const [installing, setInstalling] = useState(false);
@@ -98,15 +102,15 @@ function useSkillsView() {
   const [updateOpen, setUpdateOpen] = useState(false);
   // 감사 로그 패널 열림 — 읽기 전용(append-only skill_audit_log 뷰어, 쓰기/잡 비취급, #1/#2).
   const [auditOpen, setAuditOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useViewSessionState("skills.search", "");
   const [listView, setListView] = useStickyToggle("wr:skills:list-view");
   // 도움말 다이얼로그 열림 — 스킬 피처 로컬 상태(전역 store 비대상).
   const [helpOpen, setHelpOpen] = useState(false);
   // 태그 필터(#12): null=전체, UNTAGGED=태그 없음, 그 외=해당 태그. 로컬 표시 상태(외부 불변).
-  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [activeTag, setActiveTag] = useViewSessionState<string | null>("skills.activeTag", null);
 
   // 환경 사이드바: 활성 환경(필터) + 로컬 표시 순서(드래그 재정렬) + 진행 중 드래그 id.
-  const [activeEnvId, setActiveEnvId] = useState<string>("all");
+  const [activeEnvId, setActiveEnvId] = useViewSessionState<string>("skills.activeEnvId", "all");
   const [envOrder, setEnvOrderState] = useState<string[]>(loadEnvOrder);
   const [dragId, setDragId] = useState<string | null>(null);
   const setEnvOrder = (next: string[]) => {
@@ -520,13 +524,13 @@ function useSkillsView() {
           )}
         </nav>
 
-        <div className="skl-body">
+        <div className="skl-body" ref={bodyScrollRef}>
           {skills.isError && (
             <div className="skl-note err">
               레지스트리를 불러오지 못했습니다: {(skills.error as Error).message}
             </div>
           )}
-          {!skills.isError && total === 0 && (
+          {!skills.isError && !skills.isLoading && total === 0 && (
             <EmptyState className="skl-empty">
               {search.trim()
                 ? "검색 결과가 없습니다."
