@@ -19,8 +19,8 @@ use tokio::sync::Notify;
 use tokio::time::{interval, Duration, MissedTickBehavior};
 
 use crate::calendar::pending_store::{
-    delete_write, fetch_due_writes, gc_terminal_writes, is_terminal_attempt, mark_created_event_id,
-    record_failure, record_terminal_failure,
+    delete_write_if_payload_unchanged, fetch_due_writes, gc_terminal_writes, is_terminal_attempt,
+    mark_created_event_id, record_failure, record_terminal_failure,
 };
 use crate::calendar::timing::SYNC_WORKER_TICK_MS;
 use crate::calendar::{
@@ -134,13 +134,28 @@ impl SyncEngine {
             .await
         {
             Ok(()) => {
-                if let Err(e) = delete_write(&self.pool, pending_id).await {
-                    tracing::warn!(
-                        code = "calendar.sync.delete_failed",
-                        pending_id,
-                        error = %e,
-                        "failed to delete completed pending write"
-                    );
+                // 외부 호출이 도는 동안 같은 행이 coalesce(upsert)로 새 payload를 받았을 수 있다 —
+                // 그 행을 무조건 지우면 새 intent가 유실된다(감사 P2). payload가 실행 시점
+                // 스냅샷과 같을 때만 삭제하고, 바뀌었으면 남겨 다음 tick이 flush한다.
+                match delete_write_if_payload_unchanged(&self.pool, pending_id, &w.payload_json)
+                    .await
+                {
+                    Ok(true) => {}
+                    Ok(false) => {
+                        tracing::info!(
+                            code = "calendar.sync.coalesced_kept",
+                            pending_id,
+                            "pending write re-written during flush; kept for next tick"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            code = "calendar.sync.delete_failed",
+                            pending_id,
+                            error = %e,
+                            "failed to delete completed pending write"
+                        );
+                    }
                 }
                 // 외부 write가 반영됐으니 표시 TTL 캐시를 비운다 — 다음 fetch가 PATCH 전
                 // 스냅샷(최대 60s stale)을 돌려줘 optimistic 위치를 되돌리는 것 방지.
@@ -251,6 +266,24 @@ async fn execute_with_access<P: CalendarProvider>(
                 link_back_impl(pool, w, event_id)
                     .await
                     .map_err(|e| SyncError::Terminal(format!("link_back: {e}")))?;
+                // coalesce-during-create 수렴(감사 P2 후속): 외부 create가 도는 동안 이 행이 새
+                // payload(재배치)로 재작성됐다면 mark_created_event_id가 그 행에 event_id를 찍어
+                // 다음 tick이 여기로 들어온다 — link-back만 하고 끝내면 새 시각이 Google에 영영
+                // 반영되지 않는다(옛 시각 잔류). 코얼레스 가능한 kind(signal/routine_check)의
+                // timed payload에 한해 payload로 patch해 수렴시킨다. 정상 재시도(payload 불변)면
+                // 같은 값 재전송 = 멱등 PATCH. all-day/비정형 payload는 기존 link-back-only 유지
+                // (build_patch_body가 date-only start를 거부 — 잘못된 dateTime patch 방지).
+                if matches!(w.target_kind.as_str(), "signal" | "routine_check")
+                    && !create_payload_is_all_day(&w.payload_json)
+                {
+                    if let Ok(body) = build_patch_body(&w.payload_json) {
+                        if body.get("start").is_some() {
+                            provider
+                                .patch_event(access, &w.calendar_id, event_id, &body)
+                                .await?;
+                        }
+                    }
+                }
                 return Ok(());
             }
             // 새 mirror 생성 전, 이 카드/루틴의 기존 링크(옛 mirror)를 읽어둔다 — 생성·링크백 후
@@ -566,26 +599,37 @@ async fn fetch_target_link(
 async fn unlink_impl(pool: &SqlitePool, w: &PendingWrite) -> sqlx::Result<()> {
     match w.target_kind.as_str() {
         "signal" => {
+            // late-flush delete 가드(2026-07-12 감사 P1) — 삭제된 바로 그 event(w.event_id)가 여전히
+            // 미러에 걸려 있을 때만 링크를 clear(routine_master arm과 동일 규칙). 이전의 무조건
+            // UPDATE는 "언스케줄 → 디바운스 창 안에 재배치" 시 늦게 도는 delete 행이 방금 세팅된
+            // 링크·scheduled_at을 지워 카드가 placement/Google 미러와 갈라졌다. scheduled_at/
+            // scheduled_duration은 stage IPC(Unschedule arm)가 이미 낙관적으로 지우므로 워커는
+            // 건드리지 않는다. 정상 unschedule은 stage에서 링크가 이미 NULL → 0행 = 정상.
+            // delete arm은 event_id가 항상 Some; None이면 비교가 거짓이라 0행 = 안전.
             sqlx::query(
                 "UPDATE signals
-                 SET linked_event_id = NULL, linked_calendar_id = NULL,
-                     scheduled_at = NULL, scheduled_duration = NULL
-                 WHERE id = ?1",
+                 SET linked_event_id = NULL, linked_calendar_id = NULL
+                 WHERE id = ?1 AND linked_event_id = ?2",
             )
             .bind(&w.target_id)
+            .bind(w.event_id.as_deref())
             .execute(pool)
             .await?;
         }
         "routine_check" => {
             if let Some((routine_id, date)) = split_routine_key(&w.target_id) {
+                // signal arm과 동일한 late-flush 가드 — 같은 event를 아직 미러 중일 때만
+                // 링크+time_override clear(재배치로 생긴 더 새 링크/시각은 보존).
+                // stage IPC(Unschedule arm)가 이미 낙관 클리어하므로 0행 = 정상.
                 sqlx::query(
                     "UPDATE routine_checks
                      SET linked_event_id = NULL, linked_calendar_id = NULL,
                          time_override = NULL
-                     WHERE routine_id = ?1 AND date = ?2",
+                     WHERE routine_id = ?1 AND date = ?2 AND linked_event_id = ?3",
                 )
                 .bind(routine_id)
                 .bind(date)
+                .bind(w.event_id.as_deref())
                 .execute(pool)
                 .await?;
             }
@@ -621,6 +665,15 @@ fn split_routine_key(key: &str) -> Option<(&str, &str)> {
 }
 
 // ── payload → CreateEventInput / patch body 빌더 ──────────────────────────────
+
+/// create payload의 all_day 플래그(없으면 false). coalesce 수렴 patch 게이트 전용 —
+/// all-day payload를 timed dateTime patch로 보내는 사고 방지(coalesce는 timed payload만 쓴다).
+fn create_payload_is_all_day(payload: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(payload)
+        .ok()
+        .and_then(|v| v.get("all_day").and_then(|x| x.as_bool()))
+        .unwrap_or(false)
+}
 
 /// pending_calendar_writes.payload_json(create)의 최소 형태.
 /// `{"title": String, "start": RFC3339, "duration_min": i32, "all_day"?: bool, "description"?: String}`.
@@ -1110,7 +1163,9 @@ mod tests {
     // emit은 process() 분기에서 별도 호출이고, 큐/DB 상태가 본 통합의 진실원이다.
     use std::sync::Mutex;
 
-    use crate::calendar::pending_store::{delete_write, format_sqlite_datetime, upsert_write};
+    use crate::calendar::pending_store::{
+        delete_write, delete_write_if_payload_unchanged, format_sqlite_datetime, upsert_write,
+    };
     use crate::calendar::{
         CalendarCreds, CalendarError, CalendarProvider, CreateEventInput, RawCalendar, RawEvent,
         TokenResponse,
@@ -1556,6 +1611,287 @@ mod tests {
         .unwrap();
         assert!(evt.is_none());
         assert!(cal.is_none());
+    }
+
+    /// 감사 P1 회귀(2026-07-12): 늦게 flush되는 delete 행(옛 evt_A)이, 디바운스 창 안 재배치로
+    /// 생긴 더 새 링크(evt_B)와 방금 세팅된 scheduled_at을 지우면 안 된다 — unlink는 삭제된
+    /// 바로 그 event를 아직 미러 중일 때만(routine_master A4 가드의 signal 대칭).
+    #[tokio::test]
+    async fn stale_delete_row_preserves_newer_signal_link_and_schedule() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, linked_event_id, linked_calendar_id, \
+                                  scheduled_at, scheduled_duration) \
+             VALUES ('s1','Demo','braindump','thought','evt_B','calA', \
+                     '2026-05-28T14:00:00+09:00',30)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        upsert_write(
+            &pool,
+            "delete",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_A"),
+            r#"{}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+
+        // 외부 delete는 나간다(evt_A) — 하지만 더 새 로컬 미러/스케줄은 무손상.
+        assert_eq!(
+            provider.deleted.lock().unwrap().clone(),
+            vec![("calA".to_string(), "evt_A".to_string())]
+        );
+        let (evt, cal, at, dur): (Option<String>, Option<String>, Option<String>, Option<i64>) =
+            sqlx::query_as(
+                "SELECT linked_event_id, linked_calendar_id, scheduled_at, scheduled_duration \
+                 FROM signals WHERE id = 's1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(evt.as_deref(), Some("evt_B"));
+        assert_eq!(cal.as_deref(), Some("calA"));
+        assert_eq!(at.as_deref(), Some("2026-05-28T14:00:00+09:00"));
+        assert_eq!(dur, Some(30));
+    }
+
+    /// 삭제된 event를 아직 미러 중이면 링크만 clear — scheduled_at/duration은 워커 소유가 아니다
+    /// (stage IPC Unschedule arm이 낙관적으로 지운다; 늦은 워커가 다시 지우는 게 P1의 손상 벡터).
+    #[tokio::test]
+    async fn delete_row_matching_link_clears_link_only() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type, linked_event_id, linked_calendar_id, \
+                                  scheduled_at, scheduled_duration) \
+             VALUES ('s1','Demo','braindump','thought','evt_A','calA', \
+                     '2026-05-28T10:00:00+09:00',60)",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        upsert_write(
+            &pool,
+            "delete",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_A"),
+            r#"{}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+
+        let (evt, cal, at, dur): (Option<String>, Option<String>, Option<String>, Option<i64>) =
+            sqlx::query_as(
+                "SELECT linked_event_id, linked_calendar_id, scheduled_at, scheduled_duration \
+                 FROM signals WHERE id = 's1'",
+            )
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert!(evt.is_none());
+        assert!(cal.is_none());
+        assert_eq!(at.as_deref(), Some("2026-05-28T10:00:00+09:00"));
+        assert_eq!(dur, Some(60));
+    }
+
+    /// routine_check도 signal과 동일 가드 — 더 새 링크/time_override는 stale delete가 못 지운다.
+    #[tokio::test]
+    async fn stale_delete_row_preserves_newer_routine_check_link() {
+        let pool = fresh_pool().await;
+        sqlx::query("INSERT INTO routines (id, title, freq) VALUES ('r1','아침 운동','weekly')")
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO routine_checks (id, routine_id, date, time_override, \
+                                         linked_event_id, linked_calendar_id) \
+             VALUES ('rc1','r1','2026-05-28','09:00','evt_B','calA')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        upsert_write(
+            &pool,
+            "delete",
+            "routine_check",
+            "r1|2026-05-28",
+            "calA",
+            Some("evt_A"),
+            r#"{}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+
+        let (ov, evt): (Option<String>, Option<String>) = sqlx::query_as(
+            "SELECT time_override, linked_event_id FROM routine_checks \
+             WHERE routine_id = 'r1' AND date = '2026-05-28'",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(ov.as_deref(), Some("09:00"));
+        assert_eq!(evt.as_deref(), Some("evt_B"));
+    }
+
+    /// 감사 P2 회귀: 외부 호출이 도는 동안 coalesce(upsert)로 payload가 바뀐 행은
+    /// 성공-삭제에서 보존된다(무조건 삭제 = 새 intent 유실 → Google/로컬 divergence).
+    #[tokio::test]
+    async fn coalesced_row_survives_success_delete() {
+        let pool = fresh_pool().await;
+        let t1 = r#"{"title":"T","start":"2026-05-28T10:00:00+09:00","duration_min":60}"#;
+        let t2 = r#"{"title":"T","start":"2026-05-28T14:00:00+09:00","duration_min":60}"#;
+        let id = upsert_write(&pool, "create", "signal", "s1", "calA", None, t1, 0)
+            .await
+            .unwrap();
+        // 실행-중 coalesce 시뮬레이션: 같은 (target, kind) upsert가 같은 행을 T2로 재작성.
+        let id2 = upsert_write(&pool, "create", "signal", "s1", "calA", None, t2, 0)
+            .await
+            .unwrap();
+        assert_eq!(id, id2);
+
+        // 워커의 실행-시점 스냅샷(t1)으로는 못 지운다 → 행 보존(T2 intent 생존).
+        let deleted = delete_write_if_payload_unchanged(&pool, id, t1)
+            .await
+            .unwrap();
+        assert!(!deleted);
+        let (n, payload): (i64, String) = sqlx::query_as(
+            "SELECT COUNT(*), MAX(payload_json) FROM pending_calendar_writes WHERE id = ?",
+        )
+        .bind(id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(n, 1);
+        assert_eq!(payload, t2);
+
+        // 현재 payload와 일치하면 정상 삭제.
+        let deleted = delete_write_if_payload_unchanged(&pool, id, t2)
+            .await
+            .unwrap();
+        assert!(deleted);
+    }
+
+    /// 감사 P2 수렴: mark_created_event_id가 코얼레스된 행에 event_id를 찍은 뒤의 다음 tick —
+    /// create 행(event_id=Some, payload=새 시각)은 link-back에 더해 그 payload로 patch해
+    /// Google을 수렴시킨다(link-back-only면 재배치가 Google에 영영 미반영 — 감사자 반박 반영).
+    #[tokio::test]
+    async fn marked_coalesced_create_row_patches_to_latest_payload() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        upsert_write(
+            &pool,
+            "create",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_A"),
+            r#"{"title":"Demo","start":"2026-05-28T14:00:00+09:00","duration_min":60}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+
+        // 중복 create 없음 + evt_A가 payload 시각으로 patch됨(시점 동치 비교 — 존 정규화 무관).
+        assert!(provider.created.lock().unwrap().is_empty());
+        let patched = provider.patched.lock().unwrap().clone();
+        assert_eq!(patched.len(), 1);
+        assert_eq!(patched[0].0, "calA");
+        assert_eq!(patched[0].1, "evt_A");
+        let got = chrono::DateTime::parse_from_rfc3339(
+            patched[0].2["start"]["dateTime"].as_str().unwrap(),
+        )
+        .unwrap();
+        let want = chrono::DateTime::parse_from_rfc3339("2026-05-28T14:00:00+09:00").unwrap();
+        assert_eq!(got, want);
+        // 링크백도 유지.
+        let (le,): (Option<String>,) =
+            sqlx::query_as("SELECT linked_event_id FROM signals WHERE id = 's1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_A"));
+    }
+
+    /// all-day create 재시도는 수렴 patch 대상이 아니다 — link-back만(date-only start를
+    /// timed dateTime patch로 보내는 사고 방지 게이트).
+    #[tokio::test]
+    async fn marked_all_day_create_row_links_back_without_patch() {
+        let pool = fresh_pool().await;
+        sqlx::query(
+            "INSERT INTO signals (id, title, source, type) VALUES ('s1','Demo','braindump','thought')",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        upsert_write(
+            &pool,
+            "create",
+            "signal",
+            "s1",
+            "calA",
+            Some("evt_A"),
+            r#"{"title":"Demo","start":"2026-05-28","duration_min":1440,"all_day":true}"#,
+            0,
+        )
+        .await
+        .unwrap();
+        let due = crate::calendar::pending_store::fetch_due_writes(&pool)
+            .await
+            .unwrap();
+        let provider = RecordingProvider::default();
+        execute_with_access(&pool, &provider, "fake_access", &due[0])
+            .await
+            .unwrap();
+
+        assert!(provider.created.lock().unwrap().is_empty());
+        assert!(provider.patched.lock().unwrap().is_empty());
+        let (le,): (Option<String>,) =
+            sqlx::query_as("SELECT linked_event_id FROM signals WHERE id = 's1'")
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(le.as_deref(), Some("evt_A"));
     }
 
     /// routine_master fetch_target_link: 이미 링크된 마스터에 대한 create(재링크)는 옛 링크를 읽어

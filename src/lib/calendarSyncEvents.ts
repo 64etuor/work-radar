@@ -15,6 +15,7 @@ import { useEffect } from "react";
 
 import { commands } from "@/bindings";
 import { IpcError, unwrap } from "@/lib/query/client";
+import { invalidateTimelineAll } from "@/lib/timelineInvalidate";
 import { useToastStore } from "@/lib/toast";
 
 type FailedPayload = {
@@ -56,10 +57,10 @@ export function useCalendarSyncEvents() {
             });
         },
       });
-      // 실패 = optimistic 패치 롤백: SSOT에서 재로드.
-      void qc.invalidateQueries({ queryKey: ["signals"] });
-      void qc.invalidateQueries({ queryKey: ["today"] });
-      void qc.invalidateQueries({ queryKey: ["calendarEvents"] });
+      // 실패 = optimistic 패치 롤백: SSOT에서 재로드. 키 콤보는 timelineInvalidate 정본 —
+      // reconciler(applyTimelineCommitToCaches)가 쓰는 캐시 전부(placements·totals·routines 포함)와
+      // 대칭이어야 실패한 낙관 패치가 남지 않는다(2026-07-12 감사 #5: signalPlacements 누락).
+      invalidateTimelineAll(qc);
       void qc.invalidateQueries({ queryKey: ["pendingWrites"] });
     }).then((u) => {
       if (cancelled) u();

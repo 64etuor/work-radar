@@ -186,6 +186,23 @@ pub async fn delete_write(pool: &SqlitePool, id: i32) -> sqlx::Result<()> {
     Ok(())
 }
 
+/// 성공 flush 후 큐 제거 — 단, 외부 호출이 진행되는 동안 같은 행이 coalesce(upsert ON CONFLICT)로
+/// 새 payload를 받았다면 보존한다(2026-07-12 감사 P2: 무조건 삭제는 그 새 intent를 유실시켜
+/// Google=옛 시각 / 로컬=새 시각으로 갈라졌다). 반환 = 실제로 지웠는지. false면 행이 남아
+/// 다음 tick이 새 intent를 flush한다(create 재실행은 워커 defense-in-depth가 옛 이벤트를 정리).
+pub async fn delete_write_if_payload_unchanged(
+    pool: &SqlitePool,
+    id: i32,
+    payload_json: &str,
+) -> sqlx::Result<bool> {
+    let res = sqlx::query("DELETE FROM pending_calendar_writes WHERE id = ? AND payload_json = ?")
+        .bind(id)
+        .bind(payload_json)
+        .execute(pool)
+        .await?;
+    Ok(res.rows_affected() > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
