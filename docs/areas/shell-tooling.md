@@ -90,6 +90,29 @@ zsh의 `tail`/`head` 일부 invocation이 `read -N`(bash-only)을 요청하는 �
 
 벤더 디렉터리(`.claude`/`.codex`/`.omc`)·`src/bindings.ts`·`src-tauri`는 lint ignore.
 
+## 8. macOS dev 키체인 프롬프트 — 앱 실행은 반드시 서명 경로로
+
+macOS 키체인 ACL은 앱의 **코드서명 신원**(designated requirement)에 묶인다. ad-hoc
+서명(맨 `cargo build` 산출물)은 빌드마다 신원이 바뀌어 "항상 허용"이 무효화되고
+리빌드/재실행마다 암호 프롬프트가 재발한다.
+
+**장치(전부 자동):**
+
+- `pnpm tauri dev` → `scripts/tauri-wrapper.sh`가 실행 직전 codesign 러너를 주입.
+- `src-tauri/.cargo/config.toml`의 cargo runner(`scripts/exec-signed.sh`)가 **wrapper를
+  우회하는 실행**(`cargo run`, IDE 실행, 맨 `tauri dev`)까지 실행 직전 서명. cargo test
+  바이너리는 서명 없이 pass-through(keychain 비의존).
+- 서명 정본 = `scripts/dev-codesign-lib.sh`(고정 identity "Work Radar Dev" + identifier).
+  DR 안정성 회귀 가드 = `pnpm test:codesign`.
+
+**가드:**
+
+- 최초 1회 `pnpm tauri:dev:setup`(전용 keychain + self-signed identity, 멱등).
+- 키체인 다이얼로그에서는 **"항상 허용"**(항목당 1회) — "허용"은 매번 다시 묻는다.
+- 외부에서 바이너리를 직접 exec하는 소비자(예: Hermes의 `work-radar --mcp-stdio`)는
+  `scripts/exec-signed.sh <binary> [args...]`로 감싸야 같은 보장을 받는다.
+- escape hatch: `WORK_RADAR_UNSIGNED_DEV=1`(서명 생략 — 프롬프트 재발 감수).
+
 ## 정본 / 참조
 
 - `docs/reference/commands.md` — 명령 정본

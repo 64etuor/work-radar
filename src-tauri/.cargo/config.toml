@@ -1,0 +1,9 @@
+# macOS dev: cargo가 바이너리를 실행할 때(runner 프로토콜: `<runner> <binary> [args...]`)
+# scripts/exec-signed.sh를 경유한다. 앱 바이너리(work-radar)만 실행 직전 고정 dev identity로
+# 서명 — tauri-wrapper(pnpm tauri dev)를 우회하는 실행 경로(cargo run, IDE 실행, 맨 tauri dev)
+# 에서도 키체인 ACL 신원이 고정되어 리빌드마다 macOS 암호 프롬프트가 재발하지 않는다.
+# cargo test 바이너리 등 비-앱 실행 파일은 서명/키체인 접근 없이 pass-through(exec-signed.test.sh).
+# 상대경로는 config 기준(= src-tauri/) 해석이라 CWD 무관(2026-07-12 실측 검증).
+# escape hatch: WORK_RADAR_UNSIGNED_DEV=1.
+[target.'cfg(target_os = "macos")']
+runner = "../scripts/exec-signed.sh"
