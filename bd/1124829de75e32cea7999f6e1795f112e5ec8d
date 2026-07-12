@@ -1,0 +1,156 @@
+src/components/okr/DraftInput.tsx
+  s_c3922b37792641::t_fa3f53b94b8702 4
+  s_c3922b37792641::t_a0bbd08d4598b9 35
+src/components/MissionView.tsx
+  s_c3922b37792641::t_d13b937ed7f6a9 135
+  s_c3922b37792641::t_9a8575e04a64d7 205
+  s_c3922b37792641::t_55a8958abf0011 58-60
+  s_07896e5841b545::t_1b27325f2e8ef6 43-44
+src/lib/query/inbox.ts
+  s_c3922b37792641::t_0449e21c49165f 1,6,24-49,54-59,62-65,76-90,92-94,96-101
+  s_c3922b37792641::t_27173809d205aa 91,95
+  s_c3922b37792641::t_51e7e8c6db6906 60-61
+src/components/hermes/HermesSidebar.tsx
+  s_c3922b37792641::t_d8419541315451 109
+  s_c3922b37792641::t_b579350bef8a13 6
+src/components/board/usePendingDeletes.ts
+  s_c3922b37792641::t_aa34e0711850c1 1-20
+src/lib/query/calendar.ts
+  s_c3922b37792641::t_265fde1124a58e 19
+  s_c3922b37792641::t_d74e02ce24259c 217-218
+src/components/bookkeeping/cards/GmailSyncCard.tsx
+  s_c3922b37792641::t_0ecd727a11f744 84-85
+src/components/worktree/WorktreeView.tsx
+  s_c3922b37792641::t_85a67a35778b7c 15
+  s_c3922b37792641::t_a01cf78885b8d0 32-37,41-51
+src/lib/useWeekNav.ts
+  s_c3922b37792641::t_1a8b46a7f542da 28-29
+  s_c3922b37792641::t_08841b94c5356b 4
+src/components/okr/KeyResultRow.tsx
+  s_c3922b37792641::t_9f9fec097df6bf 219
+  s_c3922b37792641::t_691db642242dd9 9
+src/lib/query/signals.ts
+  s_c3922b37792641::t_fbfa71135a23b6 10,16
+  s_c3922b37792641::t_fae3f060e1fee3 45-48,50,54-106
+src/lib/useViewSessionState.ts
+  s_c3922b37792641::t_3a422b49951cac 10,22-26
+  s_c3922b37792641::t_3f913bcaca5ff1 1-9,11-21,27-32
+src/components/SkillsView.tsx
+  s_c3922b37792641::t_8e88ad314222f7 49,51
+  s_c3922b37792641::t_13ce04af533c78 93-94
+  s_c3922b37792641::t_68f4196c854265 110,113
+  s_c3922b37792641::t_7c464b1273c4f1 527
+  s_c3922b37792641::t_873841db65263a 95
+  s_c3922b37792641::t_4e222b7e4c3ca2 533
+  s_c3922b37792641::t_53e70da0f407f8 105
+src/components/board/BrainDumpToggle.tsx
+  s_c3922b37792641::t_e5bbd01d3819a2 12
+  s_c3922b37792641::t_0f691fc68b3cd5 103
+src/components/bookkeeping/BookkeepingView.tsx
+  s_c3922b37792641::t_dc8652e27a9797 71
+  s_c3922b37792641::t_a071237d9b34c8 630
+  s_c3922b37792641::t_fb8f13056f74f9 108-112
+  s_c3922b37792641::t_22666331ee1fa6 49-50
+src/components/okr/ObjectiveDialog.tsx
+  s_c3922b37792641::t_32c21820c83074 105
+  s_c3922b37792641::t_4e49cece47638a 9
+  s_c3922b37792641::t_769eb390fa3935 164-171
+src/components/PrRadarView.tsx
+  s_c3922b37792641::t_80e1f44956fde1 91
+  s_c3922b37792641::t_677cf18e69f296 172
+  s_c3922b37792641::t_91c6a074a6b7de 23
+src/lib/query/optimistic.ts
+  s_c3922b37792641::t_e45e28b589e081 116-123
+src/components/bookkeeping/cards/EditableCell.tsx
+  s_c3922b37792641::t_996a67918c9b6a 107-113
+  s_c3922b37792641::t_008ffe1df0a1db 25-26
+  s_c3922b37792641::t_8b141d3c5bb1ce 51,53,56,64-67,71,74,78
+  s_c3922b37792641::t_c0ebce86cfe7d1 8
+src/lib/ime.ts
+  s_c3922b37792641::t_b339d406ff1814 1-13
+src/lib/useScrollRestore.ts
+  s_c3922b37792641::t_fac1a0733e4da1 1-31
+src/components/board/CalendarDrawer.tsx
+  s_c3922b37792641::t_14f89c8113573e 106-107
+src/components/control-room/ControlRoomView.tsx
+  s_c3922b37792641::t_61de2c47790458 30-34
+  s_07896e5841b545::t_c93a195229047d 13
+src/components/okr/CloseObjectiveDialog.tsx
+  s_c3922b37792641::t_cb7da00859199e 68-70
+  s_c3922b37792641::t_c69e12112f1fdb 7
+  s_c3922b37792641::t_3c2a7b13c40f27 47
+src/lib/ime.test.ts
+  s_c3922b37792641::t_fb23a239f76f2d 1-36
+src/lib/useViewSessionState.dom.test.tsx
+  s_c3922b37792641::t_f12a7c4e96bbba 1-9,19-21,24-38,40,44-47,49-50,52,54-55,57-58
+  s_c3922b37792641::t_409f81c627aa1c 10-18,22-23,39,41-43,48,51,53,56
+src/components/RoutineTrackingView.tsx
+  s_c3922b37792641::t_569f3bad0e78bf 11-12
+  s_c3922b37792641::t_f0c26d5da4e9ff 49
+  s_c3922b37792641::t_9b7257b31295e3 36-38
+src/components/board/RoutineForm.tsx
+  s_c3922b37792641::t_05450acb6744d9 14
+  s_c3922b37792641::t_cea58b0787bb86 130-132
+src/components/jobs/JobsView.tsx
+  s_c3922b37792641::t_a4ad15233b45ec 59
+  s_c3922b37792641::t_4bac909224ca85 13
+  s_c3922b37792641::t_faacbd60f25424 35
+src/components/CaptureBoard.tsx
+  s_c3922b37792641::t_6a27256a0e548e 22
+  s_c3922b37792641::t_8285647ea06a74 134
+  s_c3922b37792641::t_c86145fb6af82b 138
+  s_c3922b37792641::t_4874d9b05c2a87 137,139-140,143
+  s_c3922b37792641::t_55d73b1cfcf66f 298,304,323
+  s_c3922b37792641::t_7c41aaf0c5ebcf 299-303,305-308,310-312,314-321
+  s_c3922b37792641::t_e03f65ea7333b9 73-75
+  s_0ef26faa8ce80a::t_3e6d4710c7ffc1 76
+src/components/board/MatrixCanvas.tsx
+  s_c3922b37792641::t_d7ff367069b9cf 247-248
+  s_c3922b37792641::t_961943697ee57c 15-16
+  s_c3922b37792641::t_5fe26d1d6f1c88 393-396
+  s_c3922b37792641::t_edfa4ec28ed442 445,457
+  s_c3922b37792641::t_f363f4a3711ae4 542
+src/components/WeeklyView.tsx
+  s_c3922b37792641::t_6a4f0155f1ea8e 36
+  s_c3922b37792641::t_2c17a58734224a 44
+  s_c3922b37792641::t_e28f49a9b078b4 130
+src/components/bookkeeping/cards/MoneyManagerImportCard.tsx
+  s_c3922b37792641::t_8513cb99911010 108-109
+src/components/hermes/HermesPanel.tsx
+  s_c3922b37792641::t_de550671a41a00 162-163
+src/components/hermes/HermesChatInput.tsx
+  s_c3922b37792641::t_73935833847365 8
+  s_c3922b37792641::t_4812b471fd0f6e 212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "bd1124829de75e32cea7999f6e1795f112e5ec8d",
+  "prompts": {},
+  "sessions": {
+    "s_07896e5841b545": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f53f7-5135-7fe0-ab58-23a85421300f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_0ef26faa8ce80a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0128211d-c900-4699-9325-831658cdb816",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_c3922b37792641": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c4758316-ce1e-4f30-b59f-6d0f4ff3b432",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
