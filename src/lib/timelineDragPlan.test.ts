@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { DragData } from "@/components/today/useTimelineDnd";
 
-import { planTimelineDrag, type TimelineDragInput } from "./timelineDragPlan";
+import {
+  planTimelineDrag,
+  planTimelineDragCached,
+  type TimelineDragInput,
+} from "./timelineDragPlan";
 import { computeLayout, type TimedBlock } from "./timelineLayout";
 
 const ANCHOR = "2026-05-28";
@@ -725,5 +729,80 @@ describe("planTimelineDrag — guide parity", () => {
     const activeDrag: DragData = { from: "tray", signalId: "s1", title: "S1" };
     const result = plan({ boxes: [], activeDrag, drop: { to: "canvas", gridY: 0 } });
     expect(result.guide).toBeNull();
+  });
+});
+
+describe("planTimelineDrag — schedule 스냅 opts(fine-snap + 자석)", () => {
+  const tray: DragData = { from: "tray", signalId: "s1", title: "S1" };
+
+  it("tray 드롭이 snapMin 5(Alt fine-snap)를 존중한다", () => {
+    const result = plan({
+      boxes: [],
+      activeDrag: tray,
+      drop: { to: "canvas", gridY: 547 },
+      snapMin: 5,
+    });
+    expect((result.commit as { at: string }).at).toBe("2026-05-28T09:05:00+09:00");
+  });
+
+  it("tray 드롭이 이웃 블록 엣지에 자석 스냅된다(그리드보다 우선)", () => {
+    // 이웃 10:07–11:07 → 엣지 607/667. 드롭 664px: 그리드 15면 660(11:00)인데 자석(667, 3분 거리) 우선.
+    const boxes = computeLayout(
+      [block("event:cal:e1", "2026-05-28T10:07:00+09:00", "2026-05-28T11:07:00+09:00")],
+      ANCHOR,
+    );
+    const result = plan({ boxes, activeDrag: tray, drop: { to: "canvas", gridY: 664 } });
+    expect((result.commit as { at: string }).at).toBe("2026-05-28T11:07:00+09:00");
+  });
+});
+
+describe("planTimelineDragCached — 스냅 스텝 단위 참조 안정 memo", () => {
+  const boxes = computeLayout(
+    [block("signal:s1", "2026-05-28T09:00:00+09:00", "2026-05-28T10:00:00+09:00")],
+    ANCHOR,
+  );
+  const activeDrag: DragData = {
+    from: "canvas",
+    blockKind: "signal",
+    blockId: "signal:s1",
+    signalId: "s1",
+    title: "S1",
+    startISO: "2026-05-28T09:00:00+09:00",
+    durationMin: 60,
+    calendarId: "cal",
+  };
+  const base: Omit<TimelineDragInput, "delta"> = {
+    anchorDate: ANCHOR,
+    days: 1,
+    boxes,
+    activeDrag,
+    drop: { to: "canvas" },
+    snapMin: 15,
+    release: null,
+  };
+
+  it("같은 스냅 스텝의 raw delta 변화는 같은 plan 객체를 돌려준다(previewBoxes 참조 안정)", () => {
+    const a = planTimelineDragCached({ ...base, delta: { x: 0, y: 32 } }); // 572→570(09:30)
+    const b = planTimelineDragCached({ ...base, delta: { x: 0, y: 34 } }); // 574→570(09:30)
+    expect(b).toBe(a);
+    const c = planTimelineDragCached({ ...base, delta: { x: 0, y: 40 } }); // 580→585(09:45)
+    expect(c).not.toBe(a);
+    expect(c.previewBoxes.find((x) => x.id === "signal:s1")!.block.startISO).toBe(
+      "2026-05-28T09:45:00+09:00",
+    );
+  });
+
+  it("캐시 산출은 원함수와 값 동일(동일 입력 기준 parity)", () => {
+    const input: TimelineDragInput = { ...base, delta: { x: 0, y: 17 } };
+    expect(planTimelineDragCached(input)).toEqual(planTimelineDrag(input));
+  });
+
+  it("boxes/activeDrag/snapMin이 바뀌면 재계산한다", () => {
+    const a = planTimelineDragCached({ ...base, delta: { x: 0, y: 32 } });
+    const fine = planTimelineDragCached({ ...base, snapMin: 5, delta: { x: 0, y: 32 } });
+    expect(fine).not.toBe(a);
+    expect(fine.previewBoxes.find((x) => x.id === "signal:s1")!.block.startISO).toBe(
+      "2026-05-28T09:30:00+09:00", // 572 → 5분 스냅 570 == 09:30 (여긴 우연히 동일값, 객체는 별도)
+    );
   });
 });

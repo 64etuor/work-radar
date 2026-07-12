@@ -202,9 +202,6 @@ export function TodayView() {
   };
   // 활성 picker resolver — unmount 시 promise leak 방지용(아래 cleanup effect에서 resolve(null)).
   const pickerResolverRef = useRef<((v: string | null) => void) | null>(null);
-  // TimelineCanvas 라이브 hover preview용 grid-local 좌표(드래그 중 가이드/프리뷰 렌더).
-  const canvasPointerYRef = useRef<number | null>(null);
-  const canvasPointerXRef = useRef<number | null>(null);
 
   const promptCalendarPicker = (targetId: string, targetKind: "signal" | "routine" = "signal") =>
     new Promise<string | null>((resolve) => {
@@ -371,8 +368,6 @@ export function TodayView() {
                 memoByBlockId={memoByBlockId}
                 onBlockClick={handleBlockClick}
                 onToggleDone={handleBlockToggleDone}
-                pointerYRef={canvasPointerYRef}
-                pointerXRef={canvasPointerXRef}
                 gridElRef={gridElRef}
                 activeDrag={activeDrag}
                 activeDelta={activeDelta}

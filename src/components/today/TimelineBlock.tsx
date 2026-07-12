@@ -10,6 +10,7 @@ import {
 import { dragDataForBox, resizeDataForBox } from "@/components/today/timelineDragData";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
+import { absMin, localDateOf } from "@/lib/timeAxis";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 type Props = {
@@ -34,9 +35,10 @@ function memoSnippet(memo: string): string {
   return (first ?? "").trim();
 }
 
+/** 로컬-오프셋 ISO에서 HH:MM — 문자열 slice(INVARIANT #7: `new Date().getHours()` 재파싱 금지).
+ *  블록 *위치*(absMin)와 같은 소스라 격자선과 라벨이 구조적으로 일치한다. */
 function hhmm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return iso.slice(11, 16);
 }
 
 /**
@@ -97,8 +99,11 @@ export function TimelineBlock({
   const { topPx, heightPx, leftPct, widthPct } = box.visual;
   const hasMemo = Boolean(memo && memo.trim());
   // 실제 endISO−startISO 그대로 — 15분 floor는 dispatcher(useTimelineDnd) 책임.
-  const durationMin = Math.round(
-    (new Date(block.endISO).getTime() - new Date(block.startISO).getTime()) / 60000,
+  // absMin(분 해상도 문자열 연산)로 계산 — 위치/드래그 수학과 동일 축(INVARIANT #7).
+  const durationMin = Math.max(
+    0,
+    absMin(block.endISO, localDateOf(block.startISO)) -
+      absMin(block.startISO, localDateOf(block.startISO)),
   );
   /*
    * 반응형 블록 높이:

@@ -7,6 +7,7 @@ import {
   activeDragLabel,
   activeDragWouldOverlap,
   clientPointToGridGuide,
+  dropPreviewDurationMin,
   renderTimelineBoxesForDrag,
 } from "./timelinePreview";
 import type { DragData } from "./useTimelineDnd";
@@ -737,5 +738,19 @@ describe("clientPointToGridGuide", () => {
     // 40-50=-10 → 0.
     expect(clientPointToGridGuide({ x: 300, y: 40 }, rect, 1440).y).toBe(0);
     expect(clientPointToGridGuide({ x: 300, y: 99999 }, rect, 1440).y).toBe(1440);
+  });
+});
+
+describe("dropPreviewDurationMin — 드롭 프리뷰 길이 == commit 배치 길이", () => {
+  it("routine 드래그는 ROUTINE_SCHEDULE_MIN(30) — 60분 프리뷰가 절반으로 착지하던 회귀 방지", () => {
+    const routine: DragData = { from: "routine", routineId: "r1", title: "R" };
+    expect(dropPreviewDurationMin(routine)).toBe(30);
+  });
+
+  it("tray 드래그는 durationMin ?? DEFAULT_SCHEDULE_MIN(60)", () => {
+    const bare: DragData = { from: "tray", signalId: "s1", title: "S" };
+    const sized: DragData = { from: "tray", signalId: "s1", title: "S", durationMin: 45 };
+    expect(dropPreviewDurationMin(bare)).toBe(60);
+    expect(dropPreviewDurationMin(sized)).toBe(45);
   });
 });

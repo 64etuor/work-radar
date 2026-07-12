@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { TimelineBlock } from "@/components/today/TimelineBlock";
@@ -7,16 +7,18 @@ import {
   activeDragLabel,
   activeDragWouldOverlap,
   type DragDelta,
+  dropPreviewDurationMin,
   renderTimelineBoxesForDrag,
 } from "@/components/today/timelinePreview";
 import type { DragData, DropData } from "@/components/today/useTimelineDnd";
 import { formatMonthDay, WEEKDAY_SHORT_BY_CODE } from "@/lib/localeFormat";
 import { weekdayForDate } from "@/lib/query";
 import { dayDiff } from "@/lib/timeAxis";
-import { clientToGrid, DAY_PX, HOUR_PX } from "@/lib/timelineAxis";
-import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import { DAY_PX, HOUR_PX, LABEL_GUTTER_PX } from "@/lib/timelineAxis";
+import { pixelToAbsMin } from "@/lib/timelineCoords";
+import { planTimelineDragCached } from "@/lib/timelineDragPlan";
 import { synthesizeGuideX } from "@/lib/timelineGuide";
-import type { LayoutBox } from "@/lib/timelineLayout";
+import { type LayoutBox, magnetEdgesFromBoxes } from "@/lib/timelineLayout";
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
@@ -30,12 +32,6 @@ type Props = {
   onBlockClick: (box: LayoutBox, e: ReactMouseEvent<HTMLButtonElement>) => void;
   /** ✓ 체크 토글(signal/routine). 부모(TodayView)가 block.kind 분기로 mutate dispatch. */
   onToggleDone?: (box: LayoutBox, done: boolean) => void;
-  /**
-   * 캔버스 그리드 로컬 좌표(Y)를 기록하는 ref. 부모(TodayView)가 소유하고 useTimelineDnd가
-   * onDragEnd에서 마지막 hover Y를 읽는다. dropData에 mutable 객체를 박는 antipattern을 회피.
-   */
-  pointerYRef?: React.MutableRefObject<number | null>;
-  pointerXRef?: React.MutableRefObject<number | null>;
   /** 그리드 DOM을 부모(TodayView)에 노출 — useTimelineDnd가 onDragEnd에서 fresh rect를 읽는다. */
   gridElRef?: React.MutableRefObject<HTMLDivElement | null>;
   activeDrag?: DragData | null;
@@ -72,8 +68,6 @@ export function TimelineCanvas({
   memoByBlockId,
   onBlockClick,
   onToggleDone,
-  pointerYRef,
-  pointerXRef,
   gridElRef,
   activeDrag,
   activeDelta,
@@ -87,8 +81,6 @@ export function TimelineCanvas({
   // 분 단위 tick — nowPx는 렌더 시 anchorDate에서 파생(앵커 변경 시 effect-내 setState 회피).
   const [, setMinuteTick] = useState(0);
   const nowPx = nowOffsetPx(anchorDate);
-  const [hoverPx, setHoverPx] = useState<number | null>(null);
-  const [hoverX, setHoverX] = useState<number | null>(null);
   const [gridWidth, setGridWidth] = useState<number>(0);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
@@ -97,8 +89,20 @@ export function TimelineCanvas({
     return () => clearInterval(t);
   }, []);
 
+  // gridWidth는 ResizeObserver로 추적 — 이전의 "드래그 중 pointermove마다 rect 재측정+setState"는
+  // 프레임당 리렌더를 1회 더 만들었다(가이드 X 합성에만 쓰이는 값이라 리사이즈 시에만 갱신하면 충분).
+  useEffect(() => {
+    const el = gridRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setGridWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   const showNow = dates.includes(today);
-  const plan = planTimelineDrag({
+  const plan = planTimelineDragCached({
     anchorDate,
     days,
     boxes,
@@ -162,8 +166,8 @@ export function TimelineCanvas({
       : null;
 
   // dropData는 상수 — gridY는 dropData에 박지 않는다(@dnd-kit가 register 시점 스냅샷할
-  // 위험 + mutable ref antipattern). 실제 Y 좌표는 부모 pointerYRef에 기록되어
-  // useTimelineDnd가 onDragEnd에서 읽는다.
+  // 위험 + mutable ref antipattern). 실제 드롭 Y는 useTimelineDnd가 onDragEnd 시점에
+  // raw 포인터(lastPointerRef) × fresh grid rect로 환산한다(resolveCanvasGridY).
   const dropData: DropData = { to: "canvas", gridY: 0 };
   const { setNodeRef, isOver } = useDroppable({ id: "today-canvas", data: dropData });
   const bindGridRef = (el: HTMLDivElement | null) => {
@@ -174,36 +178,11 @@ export function TimelineCanvas({
     setGridWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
   };
 
-  // pointer-tracking: 캔버스 위 pointer Y를 그리드 로컬 좌표로 환산.
-  // - 부모 pointerYRef(ref-only)는 매 move마다 갱신 — onDragEnd에서 읽힘.
-  // - state(setHoverPx)는 가이드 라인 렌더용 — drag 활성(isOver) 시에만 setState해서
-  //   매 pointermove 리렌더로 인한 dnd-kit pointer state 교란/성능 저하 방지.
-  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    const el = gridRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const { x, y } = clientToGrid({ x: e.clientX, y: e.clientY }, rect, totalPx);
-    if (pointerYRef) pointerYRef.current = y;
-    if (pointerXRef) pointerXRef.current = x;
-    if (isOver || activeDrag) {
-      setHoverPx(y);
-      setHoverX(x);
-      if (gridWidth !== rect.width) setGridWidth(rect.width);
-    }
-  }
-
-  function onPointerLeave() {
-    if (hoverPx !== null) setHoverPx(null);
-    if (hoverX !== null) setHoverX(null);
-  }
-
   return (
     <div
       className="today-canvas"
       data-dates={`${dates[0]}..${dates[days - 1]}`}
       data-drop-over={isOver || undefined}
-      onPointerMove={onPointerMove}
-      onPointerLeave={onPointerLeave}
     >
       <div ref={bindGridRef} className="today-canvas-grid" style={{ height: `${totalPx}px` }}>
         {dates.map((date, di) => (
@@ -256,13 +235,12 @@ export function TimelineCanvas({
           (() => {
             // 캔버스 이동/리사이즈는 activeGuide(블록 착지 엣지)가 정본 — 시간 라벨도 착지 시각이라 정확.
             // tray/routine은 activeGuide=null → 라이브 raw 포인터(dragPointerGrid)가 커서를 정확히 따른다
-            // (옛 hoverPx 폴백은 dnd-kit 오버레이 hit-test로 stale했음). 둘 다 없으면 hover로 최종 폴백.
-            const guideY = activeGuide?.y ?? dragPointerGrid?.y ?? hoverPx;
-            const guideX = activeGuide?.x ?? dragPointerGrid?.x ?? hoverX;
+            // (옛 hoverPx 폴백은 dnd-kit 오버레이 hit-test로 stale했음).
+            const guideY = activeGuide?.y ?? dragPointerGrid?.y ?? null;
+            const guideX = activeGuide?.x ?? dragPointerGrid?.x ?? null;
             if (guideY === null || guideX === null) return null;
             // canvas/canvas-resize: active preview 박스의 스냅된 엣지(Alt fine-snap·자석·루틴 클램프
-            // 모두 반영)가 정본 — 드롭 라인·라벨·pill이 렌더된 블록과 정확히 일치한다. tray/routine은
-            // 아직 블록이 없으므로 기존 15-grid 스냅(배치도 15-grid)으로 폴백. 1min=1px(HOUR_PX=60).
+            // 모두 반영)가 정본 — 드롭 라인·라벨·pill이 렌더된 블록과 정확히 일치한다. 1min=1px.
             const activeBox =
               activeDrag.from === "canvas" || activeDrag.from === "canvas-resize"
                 ? previewBoxes.find((b) => b.id === activeDrag.blockId)
@@ -277,18 +255,26 @@ export function TimelineCanvas({
                   ? activeBox.semantic.endAbs
                   : activeBox.semantic.startAbs
                 : null;
-            const lineY = edgeY ?? Math.max(0, Math.min(days * 1440, Math.round(guideY / 15) * 15));
+            // tray/routine 착지선 = commit(pixelToAt)과 동일 스냅 수학(fine-snap + 이웃 엣지 자석 + 클램프).
+            const lineY =
+              edgeY ??
+              pixelToAbsMin(days, guideY, {
+                snapMin: fineSnap ? 5 : 15,
+                magnetEdges: magnetEdgesFromBoxes(boxes, anchorDate, null),
+              });
             const dayMin = lineY % 1440;
             const hh = String(Math.floor(dayMin / 60)).padStart(2, "0");
             const mm = String(dayMin % 60).padStart(2, "0");
-            const previewDuration =
-              activeGuide?.durationMin ??
-              ("durationMin" in activeDrag ? (activeDrag.durationMin ?? 60) : 60);
+            // 프리뷰 박스 길이 = commit이 배치할 길이(tray=durationMin??60, routine=30) — preview==commit.
+            const previewDuration = dropPreviewDurationMin(activeDrag);
             const previewHeight = Math.max(20, previewDuration);
-            const previewWidth = Math.min(260, Math.max(120, guideX - 60));
+            const previewWidth = Math.min(260, Math.max(120, guideX - LABEL_GUTTER_PX));
             const previewLeft = Math.max(
-              60,
-              Math.min(guideX - previewWidth / 2, Math.max(60, gridWidth - previewWidth)),
+              LABEL_GUTTER_PX,
+              Math.min(
+                guideX - previewWidth / 2,
+                Math.max(LABEL_GUTTER_PX, gridWidth - previewWidth),
+              ),
             );
             return (
               <>

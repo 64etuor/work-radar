@@ -167,3 +167,53 @@ describe("shiftIsoByPx / resizeIsoByPx with SnapOpts", () => {
     expect(r.at).toBe(`2026-06-11T09:07:00${off(A)}`);
   });
 });
+
+describe("fine-snap(snapMin 5) — 최소 길이/신규 배치 스냅", () => {
+  const A = "2026-06-11";
+
+  it("resizeIsoByPx bottom: fine-snap이면 최소 길이도 5분(15분 floor 아님)", () => {
+    const r = resizeIsoByPx({
+      anchorDate: A,
+      days: 3,
+      startISO: `2026-06-11T09:00:00${off(A)}`,
+      durationMin: 15,
+      edge: "bottom",
+      deltaPx: -10,
+      snapOpts: { snapMin: 5 },
+    });
+    expect(r.durationMin).toBe(5);
+  });
+
+  it("resizeIsoByPx bottom: 기본 스냅에선 최소 15분 유지(기존 동작)", () => {
+    const r = resizeIsoByPx({
+      anchorDate: A,
+      days: 3,
+      startISO: `2026-06-11T09:00:00${off(A)}`,
+      durationMin: 15,
+      edge: "bottom",
+      deltaPx: -10,
+    });
+    expect(r.durationMin).toBe(15);
+  });
+
+  it("resizeIsoByPx top: fine-snap이면 끝-5분까지 시작을 올릴 수 있다", () => {
+    const r = resizeIsoByPx({
+      anchorDate: A,
+      days: 3,
+      startISO: `2026-06-11T09:00:00${off(A)}`,
+      durationMin: 15,
+      edge: "top",
+      deltaPx: 12,
+      snapOpts: { snapMin: 5 },
+    });
+    expect(r).toEqual({ at: `2026-06-11T09:10:00${off(A)}`, durationMin: 5 });
+  });
+
+  it("pixelToLocalIso: snapMin 5 + 자석 엣지를 반영한다(신규 배치도 캔버스 이동과 동일 스냅)", () => {
+    expect(pixelToLocalIso(A, 3, 547, { snapMin: 5 })).toBe(`2026-06-11T09:05:00${off(A)}`);
+    // 543px — 자석 엣지 540(임계 6분 내)이 그리드(545)보다 우선.
+    expect(pixelToLocalIso(A, 3, 543, { snapMin: 5, magnetEdges: [540] })).toBe(
+      `2026-06-11T09:00:00${off(A)}`,
+    );
+  });
+});

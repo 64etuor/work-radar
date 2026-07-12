@@ -12,6 +12,7 @@ import {
   useTimelineNote,
   useUpsertTimelineNote,
 } from "@/lib/query";
+import { localDateOf } from "@/lib/timeAxis";
 import type { LayoutBox } from "@/lib/timelineLayout";
 import { blockNoteTarget } from "@/lib/todayBlocks";
 import { useDebouncedCallback } from "@/lib/useDebouncedCallback";
@@ -34,15 +35,9 @@ type Props = {
   onToggleDone: (box: LayoutBox, done: boolean) => void;
 };
 
+/** 로컬-오프셋 ISO에서 HH:MM — 문자열 slice(INVARIANT #7, TimelineBlock 라벨과 동일 소스). */
 function hhmm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function localDateOf(iso: string): string {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  return iso.slice(11, 16);
 }
 
 /** 블록 kind → 한글 배지 라벨. */

@@ -48,10 +48,22 @@ function clampAbs(min: number, days: number): number {
   return Math.max(0, Math.min(days * MIN_PER_DAY - SNAP_MIN, min));
 }
 
-/** 그리드 픽셀(절대 Y) → 로컬 ISO. 날짜는 Y에서 유도(자정 넘는 배치 가능). */
-export function pixelToLocalIso(anchorDate: string, days: number, gridY: number): string {
-  const abs = clampAbs(gridSnap((gridY / HOUR_PX) * 60), days);
-  return isoFromAbsMin(anchorDate, abs);
+/**
+ * 그리드 픽셀(절대 Y) → 스냅+클램프된 절대 분. pixelToLocalIso의 수학 절반 —
+ * 드롭 가이드 라인(px==min)이 commit과 동일한 스냅을 쓰도록 분 단위를 노출한다.
+ */
+export function pixelToAbsMin(days: number, gridY: number, opts?: SnapOpts): number {
+  return clampAbs(snapAbsMin((gridY / HOUR_PX) * 60, opts), days);
+}
+
+/** 그리드 픽셀(절대 Y) → 로컬 ISO. 날짜는 Y에서 유도(자정 넘는 배치 가능). opts로 fine-snap/자석. */
+export function pixelToLocalIso(
+  anchorDate: string,
+  days: number,
+  gridY: number,
+  opts?: SnapOpts,
+): string {
+  return isoFromAbsMin(anchorDate, pixelToAbsMin(days, gridY, opts));
 }
 
 /** 기존 ISO + delta px → 새 ISO. 절대 분 기준이라 자정 통과 자동. */
@@ -69,7 +81,10 @@ export function shiftIsoByPx(
   return isoFromAbsMin(anchorDate, abs);
 }
 
-/** 리사이즈: top=시작 이동(끝 고정), bottom=duration 변경. 자정 경계 클램프 없음(로드 범위만). */
+/**
+ * 리사이즈: top=시작 이동(끝 고정), bottom=duration 변경. 자정 경계 클램프 없음(로드 범위만).
+ * 최소 길이 = 스냅 단위(기본 15분, Alt fine-snap이면 5분) — fine-snap에서 5분 블록을 만들 수 있다.
+ */
 export function resizeIsoByPx({
   anchorDate,
   days,
@@ -90,16 +105,17 @@ export function resizeIsoByPx({
   const startAbs = absMin(startISO, anchorDate);
   const endAbs = startAbs + durationMin;
   const deltaMin = (deltaPx / HOUR_PX) * 60;
+  const minDur = snapOpts?.snapMin ?? SNAP_MIN;
   if (edge === "top") {
     const nextStart = Math.max(
       0,
-      Math.min(endAbs - SNAP_MIN, snapAbsMin(startAbs + deltaMin, snapOpts)),
+      Math.min(endAbs - minDur, snapAbsMin(startAbs + deltaMin, snapOpts)),
     );
     return { at: isoFromAbsMin(anchorDate, nextStart), durationMin: endAbs - nextStart };
   }
   const snappedEnd = snapAbsMin(endAbs + deltaMin, snapOpts);
   const durationMinNext = Math.max(
-    SNAP_MIN,
+    minDur,
     Math.min(days * MIN_PER_DAY - startAbs, snappedEnd - startAbs),
   );
   return { at: startISO, durationMin: durationMinNext };

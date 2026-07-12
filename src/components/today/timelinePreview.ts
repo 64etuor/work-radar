@@ -1,7 +1,11 @@
 import type { DragData } from "@/components/today/useTimelineDnd";
 import { absMin } from "@/lib/timeAxis";
 import { clientToGrid } from "@/lib/timelineAxis";
-import { planTimelineDrag } from "@/lib/timelineDragPlan";
+import {
+  DEFAULT_SCHEDULE_MIN,
+  planTimelineDragCached,
+  ROUTINE_SCHEDULE_MIN,
+} from "@/lib/timelineDragPlan";
 import type { LayoutBox } from "@/lib/timelineLayout";
 
 export type DragDelta = { x: number; y: number };
@@ -80,7 +84,7 @@ export function activeDragLabel(args: {
   if (activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize") return null;
   const activeId = activeDrag.blockId;
   if (!activeId) return null;
-  const { previewBoxes } = planTimelineDrag({
+  const { previewBoxes } = planTimelineDragCached({
     anchorDate,
     days,
     boxes,
@@ -122,7 +126,7 @@ export function activeDragWouldOverlap(args: {
   if (activeDrag.from !== "canvas" && activeDrag.from !== "canvas-resize") return false;
   const activeId = activeDrag.blockId;
   if (!activeId) return false;
-  const { previewBoxes } = planTimelineDrag({
+  const { previewBoxes } = planTimelineDragCached({
     anchorDate,
     days,
     boxes,
@@ -136,4 +140,14 @@ export function activeDragWouldOverlap(args: {
   if (!activeBox) return false;
   // n===1 → widthPct===100 (100/1은 IEEE 754에서 정확) → 단독 블록은 false. 멀티컬럼(n≥2)만 <100.
   return activeBox.visual.widthPct < 100;
+}
+
+/**
+ * tray/routine 드래그의 드롭 프리뷰 박스 길이(분) — commit이 쓰는 planner 상수와 같은 소스.
+ * (routine 신규 배치=30분인데 프리뷰만 60분으로 그려 착지 높이가 절반으로 줄어 보이던 버그의 정본 fix.)
+ */
+export function dropPreviewDurationMin(activeDrag: DragData): number {
+  if (activeDrag.from === "routine") return ROUTINE_SCHEDULE_MIN;
+  if (activeDrag.from === "tray") return activeDrag.durationMin ?? DEFAULT_SCHEDULE_MIN;
+  return "durationMin" in activeDrag ? activeDrag.durationMin : DEFAULT_SCHEDULE_MIN;
 }

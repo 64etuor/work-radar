@@ -32,10 +32,10 @@ import {
   type TimedBlock,
 } from "./timelineLayout";
 
-/** signal 신규 배치 기본 길이(분) — useTimelineDnd `DEFAULT_SCHEDULE_MIN`. */
-const DEFAULT_SCHEDULE_MIN = 60;
-/** routine 신규 배치 길이(분) — useTimelineDnd `ROUTINE_SCHEDULE_MIN`. */
-const ROUTINE_SCHEDULE_MIN = 30;
+/** signal 신규 배치 기본 길이(분). 드롭 프리뷰(TimelineCanvas)도 이 값으로 그려 preview==commit. */
+export const DEFAULT_SCHEDULE_MIN = 60;
+/** routine 신규 배치 길이(분). 드롭 프리뷰도 이 값으로 그려 preview==commit. */
+export const ROUTINE_SCHEDULE_MIN = 30;
 
 /** RFC3339-구조 client point/rect 대체 타입(DOM 비의존 — off-grid 분류 입력). */
 export type DOMRectLike = { left: number; right: number; top: number; bottom: number };
@@ -507,10 +507,14 @@ function computeCommit(input: TimelineDragInput): {
   return { commit: null };
 }
 
-/** gridY(px) → 로컬 ISO at. useTimelineDnd schedule/routineSchedule의 pixelToLocalIso와 동일.
- *  와이어링 시 caller가 resolveCanvasGridY로 보정한 gridY를 drop.gridY로 넘긴다(여기선 그대로 사용). */
+/** gridY(px) → 로컬 ISO at (tray/routine 신규 배치). caller가 resolveCanvasGridY로 보정한 gridY를
+ *  drop.gridY로 넘긴다. 스냅은 캔버스 이동과 동일 규칙 — snapMin(Alt fine-snap 5분) + 이웃 블록
+ *  엣지 자석. 드롭 가이드 라인(TimelineCanvas)도 같은 opts의 pixelToAbsMin으로 그려 preview==commit. */
 function pixelToAt(input: TimelineDragInput, gridY: number): string {
-  return pixelToLocalIso(input.anchorDate, input.days, gridY);
+  return pixelToLocalIso(input.anchorDate, input.days, gridY, {
+    snapMin: input.snapMin,
+    magnetEdges: magnetEdgesFromBoxes(input.boxes, input.anchorDate, null),
+  });
 }
 
 /**
@@ -523,4 +527,92 @@ export function planTimelineDrag(input: TimelineDragInput): TimelineDragPlan {
   const guide = computeGuide(input);
   const { commit, routineLengthFixed, routineBoundaryClamped } = computeCommit(input);
   return { previewBoxes, guide, commit, routineLengthFixed, routineBoundaryClamped };
+}
+
+/**
+ * 스냅된 preview 서명 — canvas 이동/리사이즈의 previewBoxes/label/conflict는 raw delta가 아니라
+ * 이 스냅 결과의 함수다(computePreviewBoxes와 동일 프리미티브·동일 opts). 서명이 같으면 plan 산출이
+ * 값-동일하므로 프레임마다 computeLayout을 다시 돌릴 필요가 없다. 비-canvas 드래그는 delta 무관 → null.
+ */
+function canvasSnapSignature(input: TimelineDragInput): string | null {
+  const a = input.activeDrag;
+  if (!a || (a.from !== "canvas" && a.from !== "canvas-resize")) return null;
+  const snapOpts = {
+    snapMin: input.snapMin,
+    magnetEdges: magnetEdgesFromBoxes(input.boxes, input.anchorDate, a.blockId),
+  };
+  if (a.from === "canvas") {
+    return shiftIsoByPx(input.anchorDate, input.days, a.startISO, input.delta.y, snapOpts);
+  }
+  const r = resizeIsoByPx({
+    anchorDate: input.anchorDate,
+    days: input.days,
+    startISO: a.startISO,
+    durationMin: a.durationMin,
+    edge: a.edge,
+    deltaPx: input.delta.y,
+    snapOpts,
+  });
+  return `${r.at}|${r.durationMin}`;
+}
+
+type PlanCacheKey = {
+  anchorDate: string;
+  days: number;
+  boxes: LayoutBox[];
+  activeDrag: DragData | null;
+  snapMin: number;
+  dropTo: string | null;
+  dropGridY: number | null;
+  dropCalendarId: string | null;
+  signature: string | null;
+};
+
+let planCacheKey: PlanCacheKey | null = null;
+let planCacheResult: TimelineDragPlan | null = null;
+
+/**
+ * `planTimelineDrag`의 렌더-경로 memo(단일 슬롯). 포인터 드래그는 매 프레임 delta가 바뀌지만
+ * preview는 스냅 단위로만 변한다 — 스냅 서명이 같으면 이전 plan 객체를 그대로 반환해
+ * previewBoxes 참조가 안정되고(블록 리렌더 스킵) O(n²) computeLayout 재계산을 프레임당 1회 이하로
+ * 줄인다. TimelineCanvas·activeDragLabel·activeDragWouldOverlap이 같은 입력으로 부르므로 세 호출이
+ * 계산 1회를 공유한다.
+ *
+ * 주의: 캐시 히트 시 `guide.y`(raw delta 유래)는 스냅 스텝 사이에서 갱신되지 않는다 — 소비자
+ * (TimelineCanvas)는 previewBoxes의 semantic 엣지를 정본으로 쓰므로 무영향. commit이 필요한
+ * onDragEnd는 release 분류가 있어 이 래퍼가 아니라 원함수를 직접 호출한다(release 입력은 캐시 비대상).
+ */
+export function planTimelineDragCached(input: TimelineDragInput): TimelineDragPlan {
+  if (input.release?.point || input.release?.rect) return planTimelineDrag(input);
+  const key: PlanCacheKey = {
+    anchorDate: input.anchorDate,
+    days: input.days,
+    boxes: input.boxes,
+    activeDrag: input.activeDrag,
+    snapMin: input.snapMin,
+    dropTo: input.drop?.to ?? null,
+    dropGridY: input.drop?.gridY ?? null,
+    dropCalendarId: input.drop?.calendarId ?? null,
+    signature: canvasSnapSignature(input),
+  };
+  const prev = planCacheKey;
+  if (
+    prev &&
+    planCacheResult &&
+    prev.anchorDate === key.anchorDate &&
+    prev.days === key.days &&
+    prev.boxes === key.boxes &&
+    prev.activeDrag === key.activeDrag &&
+    prev.snapMin === key.snapMin &&
+    prev.dropTo === key.dropTo &&
+    prev.dropGridY === key.dropGridY &&
+    prev.dropCalendarId === key.dropCalendarId &&
+    prev.signature === key.signature
+  ) {
+    return planCacheResult;
+  }
+  const result = planTimelineDrag(input);
+  planCacheKey = key;
+  planCacheResult = result;
+  return result;
 }
