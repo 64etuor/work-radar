@@ -1,0 +1,21 @@
+docs/decisions.md
+  s_6179c03ca60a82::t_290b69463d07bf 662
+  s_6179c03ca60a82::t_3858b58a96a818 661
+  s_6179c03ca60a82::t_ebce650ea88a70 659-660
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.12",
+  "base_commit_sha": "e805f77e2cea6af3b5bbe9e2df6c34cd21f38810",
+  "prompts": {},
+  "sessions": {
+    "s_6179c03ca60a82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fb81cfa6-0680-49ed-9502-bbaaaa8cd10f",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
