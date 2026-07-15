@@ -1,0 +1,19 @@
+docs/plans/2026-07-15-worktree-control-room-redesign-design.md
+  s_6f47e89b8b03ef::t_797cb0e80abea4 1-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "8fb15359f93bf8840d3fb06fb343c55bee63ff82",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
