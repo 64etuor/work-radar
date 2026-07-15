@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { Worktree } from "@/bindings";
 import {
   branchChangeSummary,
   chooseInitialReviewLens,
-  controlRoomBrief,
   emptyStateForLens,
   localChangeSummary,
   mergeStateSummary,
@@ -13,33 +11,6 @@ import {
   visualGitGraphRows,
   type WorktreeReviewCounts,
 } from "@/lib/worktreeReview";
-
-function worktree(overrides: Partial<Worktree> = {}): Worktree {
-  return {
-    id: "repo-1:/workspace/main",
-    repoId: "repo-1",
-    projectId: "project-1",
-    repoLabel: "work-radar",
-    path: "/workspace/main",
-    branch: "dev",
-    head: "abc123",
-    baseBranch: "dev",
-    mergedIntoBase: null,
-    baseAhead: 0,
-    baseBehind: 0,
-    isPrimary: true,
-    status: "clean",
-    dirty: false,
-    stagedCount: 0,
-    unstagedCount: 0,
-    ahead: 0,
-    behind: 0,
-    newestMtime: null,
-    activeChange: false,
-    lastFetchedAt: "2026-07-15T12:00:00Z",
-    ...overrides,
-  };
-}
 
 function counts(partial: Partial<WorktreeReviewCounts>): WorktreeReviewCounts {
   return {
@@ -63,37 +34,6 @@ describe("chooseInitialReviewLens", () => {
 
   it("로컬 변경이 없으면 branch vs base를 먼저 연다", () => {
     expect(chooseInitialReviewLens(counts({ baseAhead: 2 }))).toBe("vs_base");
-  });
-});
-
-describe("controlRoomBrief", () => {
-  it("counts repositories, activity, and unique attention worktrees", () => {
-    const brief = controlRoomBrief([
-      worktree({
-        activeChange: true,
-        dirty: true,
-        unstagedCount: 2,
-        baseAhead: 3,
-        baseBehind: 1,
-        mergedIntoBase: false,
-      }),
-      worktree({
-        id: "repo-1:/workspace/release",
-        path: "/workspace/release",
-        branch: "release",
-        activeChange: true,
-      }),
-      worktree({
-        id: "repo-2:/workspace/docs",
-        repoId: "repo-2",
-        repoLabel: "문서 자동화",
-        path: "/workspace/docs",
-        branch: "문서-정리",
-        mergedIntoBase: true,
-      }),
-    ]);
-
-    expect(brief).toEqual({ repositories: 2, worktrees: 3, active: 2, attention: 1 });
   });
 });
 

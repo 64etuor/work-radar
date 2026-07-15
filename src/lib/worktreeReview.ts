@@ -12,25 +12,6 @@ export type WorktreeMergeState = Pick<
   "branch" | "baseBranch" | "mergedIntoBase" | "baseAhead" | "baseBehind"
 >;
 
-export type ControlRoomBrief = {
-  readonly repositories: number;
-  readonly worktrees: number;
-  readonly active: number;
-  readonly attention: number;
-};
-
-export function controlRoomBrief(worktrees: readonly Worktree[]): ControlRoomBrief {
-  const repositories = new Set(worktrees.map((worktree) => worktree.repoId)).size;
-  const active = worktrees.filter((worktree) => worktree.activeChange).length;
-  const attention = worktrees.filter((worktree) => {
-    const hasLocalChanges = worktree.stagedCount + worktree.unstagedCount > 0;
-    const hasDiverged = (worktree.baseAhead ?? 0) > 0 || (worktree.baseBehind ?? 0) > 0;
-    return hasLocalChanges || hasDiverged || worktree.mergedIntoBase === false;
-  }).length;
-
-  return { repositories, worktrees: worktrees.length, active, attention };
-}
-
 export function localChangeCount(w: WorktreeReviewCounts): number {
   return w.stagedCount + w.unstagedCount;
 }
