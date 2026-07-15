@@ -126,10 +126,6 @@ function useMatrixCanvasView({
     const inbox = inboxRef.current;
     if (!inbox) return;
     const n = signalsRef.current.filter((s) => zoneOf(s) === "unclassified").length;
-    if (n === 0) {
-      inbox.style.height = "";
-      return;
-    }
     const w = inbox.getBoundingClientRect().width;
     inbox.style.height = `${computeInboxHeight({ itemCount: n, width: w })}px`;
   };
@@ -325,10 +321,8 @@ function useMatrixCanvasView({
     <div className="canvas" ref={canvasRef}>
       <InboxColumn
         ref={(el) => {
-          inboxRef.current = el;
           cellRefs.current.unclassified = el;
         }}
-        className="inbox"
         label="Inbox"
         ko="미분류"
         count={inboxCount}

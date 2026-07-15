@@ -21,7 +21,6 @@ import { sortSignalsForBoard } from "@/components/board/signalOrdering";
 import { useBoardKeyboard } from "@/components/board/useBoardKeyboard";
 import { usePendingDeletes } from "@/components/board/usePendingDeletes";
 import { useSignalPop } from "@/components/board/useSignalPop";
-import { captureBoardBrief } from "@/lib/captureBoardBrief";
 import { currentQuarterKey } from "@/lib/lifeOs";
 import {
   localToday,
@@ -194,7 +193,7 @@ function useCaptureBoardView() {
       if (selectedId === id) setSelectedId(null);
       pushSuccess("Today 추가");
     },
-    [promoteToday, today, selectedId, setSelectedId, pushSuccess],
+    [promoteToday, today, selectedId, pushSuccess],
   );
 
   const handleUnpromote = (id: string) => {
@@ -525,7 +524,6 @@ function useCaptureBoardView() {
   }, [applyUrgency, calendarQ.data, signals]);
 
   const loadError = signalsQ.isError || todayQ.isError || routinesQ.isError;
-  const brief = captureBoardBrief(boardSignals, todayItems, routines);
 
   const handleProjectPick = (projectId: string) => {
     if (!projectPicker) return;
@@ -556,7 +554,6 @@ function useCaptureBoardView() {
   return (
     <div className="cb">
       <CaptureBoardHeader
-        brief={brief}
         okrQuarter={okrQuarter}
         okrObjectives={objectivesQ.data ?? []}
         okrCheckIns={okrCheckInsQ.data ?? []}

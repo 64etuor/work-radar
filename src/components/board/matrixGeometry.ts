@@ -2,7 +2,6 @@ export const CARD_WIDTH = 150;
 export const CARD_HEIGHT = 92;
 export const CARD_GAP = 12;
 export const INBOX_FOOTER_HEIGHT = 48;
-const EMPTY_INBOX_HEIGHT = 120;
 
 export type MatrixZoneKey = "unclassified" | "q1" | "q2" | "q3" | "q4";
 
@@ -34,10 +33,8 @@ export function computeInboxHeight({
   gap?: number;
   footerHeight?: number;
 }): number {
-  if (itemCount === 0) return EMPTY_INBOX_HEIGHT;
-
   const cols = Math.max(1, Math.floor((width - 24) / (cardWidth + gap)));
-  const rows = Math.ceil(itemCount / cols);
+  const rows = Math.max(1, Math.ceil((itemCount || 1) / cols));
   return 40 + rows * (cardHeight + gap) + 8 + footerHeight;
 }
 

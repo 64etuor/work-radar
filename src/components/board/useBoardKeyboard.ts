@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent } from "react";
+import { useEffect } from "react";
 
 import { type ZoneKey } from "@/components/board/boardUtils";
 
@@ -33,45 +33,43 @@ export function useBoardKeyboard({
   onDone: (id: string) => void;
   onArchive: (id: string) => void;
 }) {
-  const handleKey = useEffectEvent((e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      onEscape();
-      return;
-    }
-    const ae = document.activeElement;
-    if (
-      ae instanceof HTMLInputElement ||
-      ae instanceof HTMLTextAreaElement ||
-      (ae instanceof HTMLElement && ae.isContentEditable)
-    ) {
-      return;
-    }
-    if (!selectedId) return;
-    const z = ZONE_KEY_MAP[e.key];
-    if (z) {
-      onClassify(selectedId, z);
-      e.preventDefault();
-      return;
-    }
-    const k = e.key.toLowerCase();
-    if (k === "t") {
-      onPromoteToday(selectedId);
-      e.preventDefault();
-    } else if (k === "s") {
-      onSnooze(selectedId);
-      e.preventDefault();
-    } else if (k === "d") {
-      onDone(selectedId);
-      e.preventDefault();
-    } else if (k === "e") {
-      onArchive(selectedId);
-      e.preventDefault();
-    }
-  });
-
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => handleKey(event);
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onEscape();
+        return; // App 셸의 Esc 핸들러로 위임.
+      }
+      const ae = document.activeElement;
+      if (
+        ae instanceof HTMLInputElement ||
+        ae instanceof HTMLTextAreaElement ||
+        (ae instanceof HTMLElement && ae.isContentEditable)
+      ) {
+        return;
+      }
+      if (!selectedId) return;
+      const z = ZONE_KEY_MAP[e.key];
+      if (z) {
+        onClassify(selectedId, z);
+        e.preventDefault();
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === "t") {
+        onPromoteToday(selectedId);
+        e.preventDefault();
+      } else if (k === "s") {
+        onSnooze(selectedId);
+        e.preventDefault();
+      } else if (k === "d") {
+        onDone(selectedId);
+        e.preventDefault();
+      } else if (k === "e") {
+        onArchive(selectedId);
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedId, onEscape, onClassify, onPromoteToday, onSnooze, onDone, onArchive]);
 }

@@ -2,7 +2,6 @@ import { Target } from "lucide-react";
 
 import type { Objective, OkrCheckIn } from "@/bindings";
 import { SprintTimer } from "@/components/SprintTimer";
-import type { CaptureBoardBrief } from "@/lib/captureBoardBrief";
 import { objectiveProgressRatio, uncheckedKrCount, weekStartMonday } from "@/lib/okr";
 import { useUIStore } from "@/store";
 
@@ -49,49 +48,23 @@ function OkrStrip({
 }
 
 export function CaptureBoardHeader({
-  brief,
   okrQuarter,
   okrObjectives,
   okrCheckIns,
 }: {
-  brief: CaptureBoardBrief;
   okrQuarter: string;
   okrObjectives: Objective[];
   okrCheckIns: OkrCheckIn[];
 }) {
   return (
-    <header className="cb-head">
-      <div className="cb-head-intro">
-        <span className="cb-head-eyebrow">CAPTURE / DECIDE / EXECUTE</span>
-        <div className="cb-head-title-row">
-          <h1>Decision Board</h1>
-          <p>흩어진 신호를 붙이고, 직접 분류하고, 오늘의 실행으로 옮깁니다.</p>
-        </div>
-      </div>
-
-      <dl className="cb-brief" aria-label="보드 현황">
-        <div>
-          <dt>INBOX</dt>
-          <dd>{brief.inbox}</dd>
-        </div>
-        <div>
-          <dt>DECISIONS</dt>
-          <dd>{brief.decisions}</dd>
-        </div>
-        <div>
-          <dt>TODAY</dt>
-          <dd>{brief.today}</dd>
-        </div>
-        <div>
-          <dt>ROUTINES</dt>
-          <dd>{brief.routines}</dd>
-        </div>
-      </dl>
-
-      <div className="cb-head-context" aria-label="실행 컨텍스트">
+    <div className="cb-head">
+      <span className="typo-mono-heading">◎ Work Radar / Capture</span>
+      <div className="cb-head-center">
         <SprintTimer />
+      </div>
+      <div className="cb-head-right">
         <OkrStrip quarter={okrQuarter} objectives={okrObjectives} checkIns={okrCheckIns} />
       </div>
-    </header>
+    </div>
   );
 }

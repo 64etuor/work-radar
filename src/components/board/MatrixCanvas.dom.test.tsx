@@ -83,12 +83,6 @@ function renderCanvas(workSignal = signal()) {
 }
 
 describe("MatrixCanvas card hints", () => {
-  it("exposes the Inbox as the responsive board tray", () => {
-    renderCanvas();
-
-    expect(container?.querySelector(".inbox-column.inbox")).not.toBeNull();
-  });
-
   it("does not render suggested quadrant or area hint chips on braindump cards", () => {
     renderCanvas();
 
