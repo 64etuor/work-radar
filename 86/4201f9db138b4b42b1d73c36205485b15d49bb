@@ -1,0 +1,35 @@
+src/components/jobs/JobsView.tsx
+  s_6f47e89b8b03ef::t_baa4ede35ac47d 5,21-33,56,71,77-78
+src/components/jobs/JobsHeader.tsx
+  s_6f47e89b8b03ef::t_baa4ede35ac47d 5-20,23-58
+src/components/jobs/JobCard.tsx
+  s_6f47e89b8b03ef::t_659df4b82597ca 105
+  s_6f47e89b8b03ef::t_baa4ede35ac47d 95-103,106-114,117-153,167
+src/components/jobs/JobControls.tsx
+  s_6f47e89b8b03ef::t_baa4ede35ac47d 7-8,11-12,20-21,29-36,74-113,115-117
+src/components/jobs/JobsView.dom.test.tsx
+  s_6f47e89b8b03ef::t_659df4b82597ca 58,66
+  s_6f47e89b8b03ef::t_16df7bd952adb3 1-57,59-65,67-82
+src/components/jobs/JobsView.css
+  s_6f47e89b8b03ef::t_b198410f1fe7e5 436,603-632,634-725
+  s_6f47e89b8b03ef::t_66ffd750562cd3 17-39,42-54,64-95,104,106,113-116,134-135,138-155,162-177,179-200,203-205
+  s_6f47e89b8b03ef::t_4eb2f6f5af6b93 210,213-239,241-252,259-260,262,265-284,289,294,318-320,322-323,341,347-350,352-353,355-372,375-397,402,416,426,430-435
+src/components/jobs/JobList.tsx
+  s_6f47e89b8b03ef::t_baa4ede35ac47d 27-39,44-74
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "864201f9db138b4b42b1d73c36205485b15d49bb",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
