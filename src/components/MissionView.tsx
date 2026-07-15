@@ -104,6 +104,15 @@ export function MissionView() {
     checkIns.isError ||
     horizons.isError ||
     horizonLinks.isError;
+  const isLoading =
+    mission.isLoading ||
+    objectives.isLoading ||
+    stats.isLoading ||
+    checkIns.isLoading ||
+    horizons.isLoading ||
+    horizonLinks.isLoading ||
+    tags.isLoading ||
+    projects.isLoading;
 
   return (
     <div className="mission">
@@ -118,17 +127,31 @@ export function MissionView() {
             mission={mission.data ?? null}
           />
         </div>
-        <div className="mission-top-actions">
-          <OkrImportButton quarter={quarter} />
-          <Button
-            onClick={(event) => {
-              setObjectiveDialogFocusTarget(event.currentTarget);
-              setObjectiveDialog(null);
-            }}
-          >
-            <Plus className="size-4" />
-            Objective 추가
-          </Button>
+        <div className="mission-top-side">
+          <div className="mission-season-overview" aria-label="현재 분기 상태">
+            <div className="mission-season-metric">
+              <span className="mission-muted typo-mono-label">전체 진척</span>
+              <strong className="typo-title-md">{percentLabel(overallProgress)}</strong>
+            </div>
+            <div className="mission-season-metric">
+              <span className="mission-muted typo-mono-label">분기 경과</span>
+              <strong className="typo-title-md">
+                {percentLabel(quarterElapsedRatio(quarter))}
+              </strong>
+            </div>
+          </div>
+          <div className="mission-top-actions">
+            <OkrImportButton quarter={quarter} />
+            <Button
+              onClick={(event) => {
+                setObjectiveDialogFocusTarget(event.currentTarget);
+                setObjectiveDialog(null);
+              }}
+            >
+              <Plus className="size-4" />
+              Objective 추가
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -151,28 +174,33 @@ export function MissionView() {
           </div>
           <MissionTabs tab={tab} onSelect={setTabOverride} pendingCheckIns={pendingCheckIns} />
           <p className="mission-quarter-summary typo-label-sm">
-            전체 진척 {percentLabel(overallProgress)} · 분기 경과{" "}
-            {percentLabel(quarterElapsedRatio(quarter))}
+            {pendingCheckIns > 0
+              ? `이번 주 체크인 ${pendingCheckIns}개 남음`
+              : "이번 주 체크인 완료"}
           </p>
         </section>
 
         {loadError && (
-          <div className="mission-error typo-label-sm">
-            OKR 데이터를 불러오지 못했습니다.{" "}
-            {
-              (
-                mission.error ??
-                objectives.error ??
-                stats.error ??
-                checkIns.error ??
-                horizons.error ??
-                (horizonLinks.error as Error | null)
-              )?.message
-            }
-          </div>
+          <section className="mission-error" role="alert">
+            <strong className="typo-label-sm">OKR 데이터를 불러오지 못했습니다.</strong>
+            <p className="typo-caption-sm">
+              {
+                (
+                  mission.error ??
+                  objectives.error ??
+                  stats.error ??
+                  checkIns.error ??
+                  horizons.error ??
+                  (horizonLinks.error as Error | null)
+                )?.message
+              }
+            </p>
+          </section>
         )}
 
-        {tab === "checkin" && (
+        {!loadError && isLoading && <MissionLoading />}
+
+        {!isLoading && tab === "checkin" && (
           <WeeklyCheckInPanel
             objectives={objectiveRows}
             checkIns={checkIns.data ?? []}
@@ -180,11 +208,12 @@ export function MissionView() {
           />
         )}
 
-        {tab === "objectives" && (
+        {!isLoading && tab === "objectives" && (
           <section className="mission-objectives">
-            {objectiveRows.map((objective) => (
+            {objectiveRows.map((objective, index) => (
               <ObjectiveCard
                 key={objective.id}
+                position={index + 1}
                 objective={objective}
                 tags={tags.data ?? []}
                 projects={projects.data ?? []}
@@ -204,7 +233,16 @@ export function MissionView() {
             ))}
             {!objectives.isLoading && objectiveRows.length === 0 && (
               <div className="mission-empty">
-                <span className="typo-title-sm">아직 Objective가 없습니다.</span>
+                <div className="mission-empty-mark" aria-hidden="true">
+                  <Target className="size-5" />
+                </div>
+                <div className="mission-empty-copy">
+                  <span className="mission-muted typo-mono-label">첫 분기 설계</span>
+                  <h2 className="typo-title-md">아직 Objective가 없습니다.</h2>
+                  <p className="mission-muted typo-body-md">
+                    이번 분기에 달라져야 할 결과 하나부터 시작해보세요.
+                  </p>
+                </div>
                 <div className="mission-empty-actions">
                   <Button
                     variant="outline"
@@ -223,7 +261,7 @@ export function MissionView() {
           </section>
         )}
 
-        {tab === "foundation" && (
+        {!isLoading && tab === "foundation" && (
           <div className="mission-life-grid">
             <HorizonShelf horizons={horizons.data ?? []} />
           </div>
@@ -259,9 +297,19 @@ export function MissionView() {
 
 const TAB_DEFS: { key: MissionTab; label: string }[] = [
   { key: "checkin", label: "주간 기록" },
-  { key: "objectives", label: "Objectives" },
-  { key: "foundation", label: "기반" },
+  { key: "objectives", label: "분기 목표" },
+  { key: "foundation", label: "장기 목표" },
 ];
+
+function MissionLoading() {
+  return (
+    <section className="mission-loading" role="status" aria-label="OKR 불러오는 중">
+      <span className="mission-loading-line" />
+      <span className="mission-loading-line" />
+      <span className="mission-loading-line" />
+    </section>
+  );
+}
 
 /** 세그먼트 탭 — 기록/구조/기반 분리. 남은 체크인 수를 기록 탭 배지로. */
 function MissionTabs({

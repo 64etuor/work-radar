@@ -17,6 +17,41 @@ function ruleBlock(selector: string): string {
 }
 
 describe("MissionView layout", () => {
+  it("stages the mission as an editorial header with sticky season navigation", () => {
+    const top = ruleBlock(".mission-top");
+    const overview = ruleBlock(".mission-season-overview");
+    const navigation = ruleBlock(".mission-quarter-row");
+    const tabs = ruleBlock(".mission-tabs");
+
+    expect(top).toContain("display: grid");
+    expect(top).toContain("grid-template-columns: minmax(0, 1fr) auto");
+    expect(overview).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
+    expect(navigation).toContain("position: sticky");
+    expect(navigation).toContain("z-index: var(--wr-z-raised)");
+    expect(tabs).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
+  });
+
+  it("presents objectives as numbered rule-separated document sections", () => {
+    const objective = ruleBlock(".mission-objective");
+    const head = ruleBlock(".mission-objective-head");
+    const index = ruleBlock(".mission-objective-index");
+
+    expect(objective).toContain("border-top: 1px solid var(--color-wr-border)");
+    expect(objective).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
+    expect(objective).toContain("box-shadow: none");
+    expect(head).toContain("display: grid");
+    expect(head).toContain("grid-template-columns: auto minmax(0, 1fr) auto");
+    expect(index).toContain("font-variant-numeric: tabular-nums");
+  });
+
+  it("keeps the editorial workflow usable on narrow windows", () => {
+    expect(missionCss).toContain("@media (max-width: 720px)");
+    expect(missionCss).toContain("overflow-x: auto");
+    expect(missionCss).toContain("grid-template-areas:");
+    expect(missionCss).toContain("grid-template-columns: minmax(180px, 1fr) auto");
+    expect(missionCss).not.toContain('grid-template-areas:\n      "quarter"\n      "tabs"');
+  });
+
   it("keeps the mission statement edit form in the header rhythm", () => {
     const form = ruleBlock(".mission-statement-form");
     const textarea = ruleBlock(".mission-statement-form textarea");

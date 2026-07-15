@@ -121,6 +121,7 @@ export function KeyResultRow({
       <ConfidenceBadge checkIn={latestCheckIn} />
       {!readOnly && (
         <ArmedDeleteButton
+          className="mission-kr-delete"
           disabled={pending}
           ariaLabel="KR 삭제"
           onConfirm={() => void deleteKeyResult.mutateAsync(kr.id)}

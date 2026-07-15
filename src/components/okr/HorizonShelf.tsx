@@ -72,6 +72,9 @@ export function HorizonShelf({ horizons }: { horizons: MissionHorizon[] }) {
       <div className="mission-panel-head">
         <div>
           <h2 className="mission-panel-title typo-title-sm">장기 목표</h2>
+          <p className="mission-panel-intro typo-body-md">
+            분기 목표가 향하는 더 긴 방향입니다. 제목과 기간을 바로 수정할 수 있습니다.
+          </p>
         </div>
       </div>
       <div className="mission-horizon-list">

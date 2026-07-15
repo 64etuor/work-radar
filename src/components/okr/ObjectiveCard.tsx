@@ -28,6 +28,7 @@ import { KeyResultRow, ProgressTrack } from "./KeyResultRow";
 import { parseNullableNumber } from "./okrControls";
 
 export function ObjectiveCard({
+  position,
   objective,
   tags,
   projects,
@@ -38,6 +39,7 @@ export function ObjectiveCard({
   onEdit,
   onClose,
 }: {
+  position: number;
   objective: Objective;
   tags: LifeWheelTagConfig[];
   projects: Project[];
@@ -57,10 +59,13 @@ export function ObjectiveCard({
   return (
     <article className="mission-objective" data-status={objective.status}>
       <div className="mission-objective-head">
+        <span className="mission-objective-index typo-mono-label">
+          O-{String(position).padStart(2, "0")}
+        </span>
         <div className="mission-objective-copy">
           <div className="mission-objective-eyebrow typo-mono-label">
             <Flag className="size-4" />
-            <span>Objective</span>
+            <span>분기 목표</span>
             {readOnly && <Badge variant="secondary">마감됨</Badge>}
           </div>
           <h2 className="mission-objective-title typo-title-md">{objective.title}</h2>

@@ -49,6 +49,15 @@ describe("MissionView copy", () => {
     expect(missionViewSource).not.toContain("useGuardrails");
   });
 
+  it("uses a Korean editorial workflow with complete loading and empty states", () => {
+    expect(missionViewSource).toContain('{ key: "objectives", label: "분기 목표" }');
+    expect(missionViewSource).toContain('{ key: "foundation", label: "장기 목표" }');
+    expect(missionViewSource).toContain('className="mission-season-overview"');
+    expect(missionViewSource).toContain('role="status"');
+    expect(missionViewSource).toContain("첫 분기 설계");
+    expect(objectiveCardSource).toContain('className="mission-objective-index typo-mono-label"');
+  });
+
   it("keeps long-term goal controls to title and period only", () => {
     expect(horizonShelfSource).toContain("mission-inline-period");
     expect(horizonShelfSource).not.toContain("WSC");

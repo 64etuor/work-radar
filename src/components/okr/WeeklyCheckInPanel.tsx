@@ -48,6 +48,9 @@ export function WeeklyCheckInPanel({
             주간 체크인
           </span>
           <h2 className="mission-panel-title typo-title-md">이번 주 미체크 KR</h2>
+          <p className="mission-panel-intro typo-body-md">
+            수치와 자신감을 짧게 남기면 다음 주 회고가 선명해집니다.
+          </p>
         </div>
         <span className="mission-count-pill typo-mono-label">{pending.length}개 남음</span>
       </div>
