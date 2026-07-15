@@ -1,0 +1,20 @@
+docs/plans/2026-07-15-jobs-run-ledger-redesign-design.md
+  s_6f47e89b8b03ef::t_e5fbc0e8aea3b4 1-2,5-144
+  s_6f47e89b8b03ef::t_a40b3800023766 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d187251740742f0e3ea62643d7c471d013985555",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
