@@ -12,7 +12,7 @@ interface Props {
 }
 
 export function WeekScrubber({ today, selectedOffset, countByOffset, onSelect }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const offsets: number[] = [];
   for (let o = -(WEEKS_WINDOW - 1); o <= 0; o++) offsets.push(o);
   const max = Math.max(1, ...Object.values(countByOffset));
@@ -23,7 +23,7 @@ export function WeekScrubber({ today, selectedOffset, countByOffset, onSelect }:
   }, []);
 
   return (
-    <div className="wk-scrub" ref={ref}>
+    <nav className="wk-scrub" ref={ref} aria-label="최근 12주 활동">
       {offsets.map((o) => {
         const r = weekRangeForOffset(today, o);
         const count = countByOffset[o] ?? 0;
@@ -35,6 +35,7 @@ export function WeekScrubber({ today, selectedOffset, countByOffset, onSelect }:
             className={cn("wk-week", o === selectedOffset && "on")}
             onClick={() => onSelect(o)}
             title={`${isoWeekNumber(r.end)}주차 · 완료 ${count}`}
+            aria-pressed={o === selectedOffset}
           >
             <span className="wk-spark">
               <i style={{ height: `${h}px` }} />
@@ -43,6 +44,6 @@ export function WeekScrubber({ today, selectedOffset, countByOffset, onSelect }:
           </button>
         );
       })}
-    </div>
+    </nav>
   );
 }
