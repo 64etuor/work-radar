@@ -1,0 +1,40 @@
+src/components/okr/HorizonShelf.tsx
+  s_6f47e89b8b03ef::t_f90952421b9d66 75-77
+src/components/MissionView.tsx
+  s_6f47e89b8b03ef::t_f90952421b9d66 107-115,130-154,184-198,201-203,211,213,216,236-245,264,300-301,304-312
+  s_6f47e89b8b03ef::t_203c98d8642df4 177-179
+  s_6f47e89b8b03ef::t_d23391e307c1a1 313
+src/components/okr/ObjectiveCard.tsx
+  s_6f47e89b8b03ef::t_f90952421b9d66 31,42,62-64,68
+src/components/okr/KeyResultRow.tsx
+  s_6f47e89b8b03ef::t_9082992cdcc772 124
+src/components/MissionView.layout.test.ts
+  s_6f47e89b8b03ef::t_674d5c6bb38617 51-52
+  s_6f47e89b8b03ef::t_0cc4c356f93e66 20-50,53-54
+src/components/MissionView.css
+  s_6f47e89b8b03ef::t_93cab38a056f9d 20-21,23-24,35,51-74,138,151-155,158-162,179,185-187,194,196-198,203,212-213,225,230-233,236,239-240,243-278,290,306-309
+  s_6f47e89b8b03ef::t_9082992cdcc772 422-425,487-492,497-511,538,553,573,579,671,677-694,753,837,863-864,866-890
+  s_6f47e89b8b03ef::t_de06771158b2ad 906-907,911-913,917-919,978,981-987,990-991,994-1000
+  s_6f47e89b8b03ef::t_6e49944588805e 310,904-905,908-910,914-916,920-921,929-937,945-952,971-977,979-980,988-989,992-993,1001-1066
+  s_6f47e89b8b03ef::t_5ab1fa82e3ff93 311
+src/components/MissionView.copy.test.ts
+  s_6f47e89b8b03ef::t_0cc4c356f93e66 52-60
+src/components/okr/WeeklyCheckInPanel.tsx
+  s_6f47e89b8b03ef::t_f90952421b9d66 51-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "9bc4e995cecca6f198086c31df90e8c762706de9",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
