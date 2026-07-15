@@ -1,0 +1,27 @@
+src/components/worktree/WorktreeView.tsx
+  s_6f47e89b8b03ef::t_d0e99cbdd2e19c 16
+src/components/worktree/WorktreeHeader.tsx
+  s_6f47e89b8b03ef::t_d0e99cbdd2e19c 42-49,51-95
+src/components/worktree/WorktreeReviewPanel.tsx
+  s_6f47e89b8b03ef::t_d0e99cbdd2e19c 29-33,59,64-85,87-94
+src/components/worktree/WorktreeView.css
+  s_6f47e89b8b03ef::t_d0e99cbdd2e19c 25-28,46,49,55-56,64-67,69-72,78-79,187-190,192,194,198-200,206-207,216-217,221,226-228,231,233-234,236,320-356,363,370,713-715,751-752,754,867,902,904-905,918-919,996,1006,1008,1024-1025,1028,1110,1117,1190,1198-1200,1202
+src/components/worktree/WorktreeSideList.tsx
+  s_6f47e89b8b03ef::t_d0e99cbdd2e19c 71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "125e4578828ac879e0ad98eab6dfc751675126c5",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
