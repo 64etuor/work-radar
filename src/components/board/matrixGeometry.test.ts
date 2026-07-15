@@ -12,7 +12,8 @@ import {
 
 describe("matrixGeometry", () => {
   it("computes responsive inbox height with footer space reserved", () => {
-    expect(computeInboxHeight({ itemCount: 0, width: 320 })).toBe(
+    expect(computeInboxHeight({ itemCount: 0, width: 320 })).toBe(120);
+    expect(computeInboxHeight({ itemCount: 1, width: 320 })).toBe(
       40 + CARD_HEIGHT + CARD_GAP + 8 + INBOX_FOOTER_HEIGHT,
     );
     expect(computeInboxHeight({ itemCount: 5, width: 360 })).toBe(
