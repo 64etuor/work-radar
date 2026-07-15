@@ -1,0 +1,35 @@
+src/components/WeeklyView.css
+  s_6f47e89b8b03ef::t_ea25e206c92862 21,24-57,65,78-81,94-124
+  s_6f47e89b8b03ef::t_512d915f12c445 291-295,297-299,301-304,306-307,309-348,362,364
+  s_6f47e89b8b03ef::t_42b2a1afbeda4c 125,370,373-374,376-377,383,386-389,391,393-413
+  s_6f47e89b8b03ef::t_d329fd04be6c01 187-188,193,196-197,201,211,213,223-227,233-235,237-241,251,255-258,266,269,276-277,284
+  s_6f47e89b8b03ef::t_1bee2d16965a38 496-497,592-593,600,604,622,657,661,663,676-678,751-754,769-868,876-883
+src/components/weekly/WeeklyEvidence.tsx
+  s_6f47e89b8b03ef::t_d7e5b068dea0f4 1-79
+src/components/weekly/WeeklyBriefingHeader.tsx
+  s_6f47e89b8b03ef::t_d7e5b068dea0f4 1-56
+src/components/WeeklyView.dom.test.tsx
+  s_6f47e89b8b03ef::t_17f0071d64a368 1-101
+src/components/weekly/WeekScrubber.tsx
+  s_6f47e89b8b03ef::t_e4d4dbb9a4c19d 15,26,47
+  s_6f47e89b8b03ef::t_d7e5b068dea0f4 38
+src/components/WeeklyView.tsx
+  s_6f47e89b8b03ef::t_327abba9d94b08 3,12-13,99,106-108,123-137,145,147-152,154-159,166-182,186-190,192-203
+  s_6f47e89b8b03ef::t_b3d1b652f9c88b 160-165
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "490278d35996c0419c8d6ab76fcf5fb8da748868",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
