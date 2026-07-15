@@ -1,0 +1,47 @@
+src/components/PrRadarView.tsx
+  s_6f47e89b8b03ef::t_a89dfaf5ca7b6b 52
+  s_6f47e89b8b03ef::t_096cb74c60ff41 7
+  s_6f47e89b8b03ef::t_5c7899f982f524 5,24,33,36-37,39-40,50-51,53-70,72-90,92-104,106-120
+  s_6f47e89b8b03ef::t_89000c2c58b2cd 6
+  s_6f47e89b8b03ef::t_c1670558b2aa88 121,123
+src/components/pr-radar/PrRadarDesk.dom.test.tsx
+  s_6f47e89b8b03ef::t_89000c2c58b2cd 102
+  s_6f47e89b8b03ef::t_096cb74c60ff41 7
+  s_6f47e89b8b03ef::t_fa499b77772bfd 1-6,8-101,103-108,122-136
+  s_6f47e89b8b03ef::t_d0349194bb5d0b 109-121
+src/components/pr-radar/PrRadarDesk.tsx
+  s_6f47e89b8b03ef::t_7e855aad8fe0f5 2,26,29,41
+  s_6f47e89b8b03ef::t_096cb74c60ff41 9-10
+  s_6f47e89b8b03ef::t_a89dfaf5ca7b6b 33-37,44,46-48,50,65-67,70,94-99,101-103,140,145,151-155
+  s_6f47e89b8b03ef::t_89000c2c58b2cd 71
+  s_6f47e89b8b03ef::t_38c788e4d04ec7 72
+  s_6f47e89b8b03ef::t_2f1c7ce6395d3b 1,3-8,11-25,27-28,30-32,38-40,42-43,45,49,51-64,68-69,73-93,100,104-139,141-144,146-150,156-159
+src/components/pr-radar/prRadarModel.test.ts
+  s_6f47e89b8b03ef::t_fa499b77772bfd 1-60
+src/components/pr-radar/prRadarModel.ts
+  s_6f47e89b8b03ef::t_2f1c7ce6395d3b 1-63
+src/components/PrRadarView.css
+  s_6f47e89b8b03ef::t_bc9b02fe29b243 8-27,29-33,36-58,63,65,67,71-74,76,78,80,82-83,85-103,105-106,108-112,114-115,118-119,129-133,135-139,141-144,147-148,150-160,163,165-172,175-181,183-190,192-196,198,200,202-209,212,215,217-218,220,224,228-232,237,239-240,243,247,249,251,254-258,260,262,266-270,277-282,285,289,291,293,295,297-301,303,309-310,312-314,316-317,319-321,325,330,335-337,341-347,349-350,353-355,357-362,365,368,371,375-376,378,380-381,385-386,388,390,392-393,395,402,406-410,412-417,419-420,422-454
+  s_6f47e89b8b03ef::t_5d63640fb557e3 382
+  s_6f47e89b8b03ef::t_38c788e4d04ec7 120-121,123-124,127
+src/components/pr-radar/PrRadarRow.tsx
+  s_6f47e89b8b03ef::t_a89dfaf5ca7b6b 41-42,44,51,64-65
+  s_6f47e89b8b03ef::t_89000c2c58b2cd 34-35,121-126
+  s_6f47e89b8b03ef::t_2f1c7ce6395d3b 1-33,36-40,43,45-50,52-63,66-120,127-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "da7eeb640449ebb0dc3a06203c8d854f6ef20134",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
