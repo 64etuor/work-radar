@@ -1,0 +1,24 @@
+docs/plans/2026-07-15-okr-editorial-redesign-design.md
+  s_6f47e89b8b03ef::t_c2e9d90c29bce4 65-67
+  s_6f47e89b8b03ef::t_b753e5affe8c06 1-64
+docs/plans/2026-07-15-okr-editorial-redesign.md
+  s_6f47e89b8b03ef::t_b753e5affe8c06 1-17,19-30,32-44,46-57,59-64,67,71-73
+  s_6f47e89b8b03ef::t_c2e9d90c29bce4 65-66,68-70
+  s_6f47e89b8b03ef::t_203c98d8642df4 18,31,45,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "d42d7d1412128d1dd01e77c7e392f9b9917adc0d",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
