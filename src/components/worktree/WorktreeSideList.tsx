@@ -68,13 +68,17 @@ export function WorktreeSideList({
       )}
       {grouped.map(([label, wts]) => (
         <section key={label} className="wt-group">
-          <div className="wt-group-name">{label}</div>
+          <div className="wt-group-name">
+            <span title={label}>{label}</span>
+            <strong>{wts.length} worktrees</strong>
+          </div>
           {wts.map((w) => (
             <button
               key={w.id}
               type="button"
               className={cn("wt-item", w.path === selectedPath && "wt-item-on")}
               onClick={() => onSelect(w)}
+              title={w.path}
             >
               <div className="wt-item-top">
                 <span className="wt-branch">{w.branch ?? "(detached)"}</span>
@@ -83,6 +87,7 @@ export function WorktreeSideList({
               <div className="wt-item-badges">
                 <StatusBadges w={w} />
               </div>
+              <span className="wt-item-path">{w.path}</span>
             </button>
           ))}
         </section>

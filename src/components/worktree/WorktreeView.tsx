@@ -13,7 +13,7 @@ import {
 } from "@/lib/query";
 import { useStickyToggle } from "@/lib/useStickyToggle";
 import { useViewSessionState } from "@/lib/useViewSessionState";
-import { chooseInitialReviewLens, type ReviewLens } from "@/lib/worktreeReview";
+import { chooseInitialReviewLens, controlRoomBrief, type ReviewLens } from "@/lib/worktreeReview";
 import { useUIStore } from "@/store";
 
 import { CleanupPanel } from "./CleanupPanel";
@@ -188,6 +188,7 @@ export function WorktreeView() {
       <WorktreeHeader
         projects={projects.data ?? []}
         projectFilter={projectFilter}
+        brief={controlRoomBrief(list)}
         graph={{
           enabled: !!selected,
           active: graphOpen,
