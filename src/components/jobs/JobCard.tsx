@@ -92,57 +92,68 @@ export function JobCard({
   const logText = log?.data?.trim() ? log.data : null;
 
   return (
-    <div className="jobs-card">
-      <div className="jobs-card-top">
-        <span className={`jobs-badge ${st.cls}`}>{st.label}</span>
-        <span className="jobs-kind">{run.kind}</span>
-        <span className="jobs-engine">{run.engine}</span>
-        <span className="jobs-sandbox">{run.sandbox}</span>
-        {killable && (
-          <button type="button" className="jobs-kill" onClick={onKill}>
-            <Square className="size-3" />
-            kill
-          </button>
-        )}
-      </div>
+    <article className="jobs-card" aria-label={`${st.label} ${run.kind} 실행`}>
+      <div className="jobs-card-grid">
+        <div className="jobs-card-main">
+          <div className="jobs-card-top">
+            <span className={`jobs-badge ${st.cls}`}>{st.label}</span>
+            <span className="jobs-kind">{run.kind}</span>
+            <span className="jobs-engine">{run.engine}</span>
+            <span className="jobs-sandbox">{run.sandbox}</span>
+          </div>
 
-      {run.detail && (
-        <div className={run.status === "failed" ? "jobs-detail jobs-detail-error" : "jobs-detail"}>
-          {run.detail}
+          {run.detail && run.status !== "failed" && <div className="jobs-detail">{run.detail}</div>}
+          {run.detail && run.status === "failed" && (
+            <details className="jobs-error-disclosure">
+              <summary>
+                <span className="jobs-error-label">오류 상세</span>
+                <span className="jobs-error-preview">{run.detail}</span>
+              </summary>
+              <div className="jobs-error-body">{run.detail}</div>
+            </details>
+          )}
         </div>
-      )}
 
-      <div className="jobs-meta">
-        <span className="jobs-meta-item" title="timeout bound">
-          <Timer className="size-3" />
-          {run.timeoutSec}s
-        </span>
-        <span className="jobs-meta-item" title="max turns">
-          <RotateCcw className="size-3" />
-          {run.maxTurns}턴
-        </span>
-        <span className="jobs-meta-item" title="cost cap">
-          <CircleDollarSign className="size-3" />
-          cap {(run.costCapUsd ?? 0).toFixed(2)}
-        </span>
-        {durationSec != null && (
-          <span className="jobs-meta-item" title="실행 시간">
-            <Hourglass className="size-3" />
-            {formatElapsedCompact(durationSec)}
-          </span>
-        )}
-        {run.costTokens != null && <span>· {run.costTokens} tok</span>}
-        {run.costUsd != null && <span>· ${run.costUsd.toFixed(4)}</span>}
+        <div className="jobs-card-side">
+          <div className="jobs-meta">
+            <span className="jobs-meta-item" title="timeout bound">
+              <Timer className="size-3" />
+              {run.timeoutSec}s
+            </span>
+            <span className="jobs-meta-item" title="max turns">
+              <RotateCcw className="size-3" />
+              {run.maxTurns}턴
+            </span>
+            <span className="jobs-meta-item" title="cost cap">
+              <CircleDollarSign className="size-3" />
+              cap {(run.costCapUsd ?? 0).toFixed(2)}
+            </span>
+            {durationSec != null && (
+              <span className="jobs-meta-item" title="실행 시간">
+                <Hourglass className="size-3" />
+                {formatElapsedCompact(durationSec)}
+              </span>
+            )}
+            {run.costTokens != null && <span>{run.costTokens} tok</span>}
+            {run.costUsd != null && <span>${run.costUsd.toFixed(4)}</span>}
+          </div>
+
+          <div className="jobs-card-actions">
+            <button type="button" className="jobs-log-toggle" onClick={onToggleLog}>
+              <FileText className="size-3.5" />
+              로그 {logOpen ? "닫기" : "보기"}
+            </button>
+            {killable && (
+              <button type="button" className="jobs-kill" onClick={onKill}>
+                <Square className="size-3" />
+                kill
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {run.status === "awaiting_approval" && <ProposalPanel run={run} />}
-
-      <div className="jobs-card-actions">
-        <button type="button" className="jobs-log-toggle" onClick={onToggleLog}>
-          <FileText className="size-3.5" />
-          로그 {logOpen ? "닫기" : "보기"}
-        </button>
-      </div>
 
       {logOpen && (
         <div className="jobs-log-wrap">
@@ -153,6 +164,6 @@ export function JobCard({
           <LogPane loading={log?.isLoading ?? false} text={logText} />
         </div>
       )}
-    </div>
+    </article>
   );
 }

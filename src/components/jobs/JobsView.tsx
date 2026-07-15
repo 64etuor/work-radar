@@ -2,6 +2,7 @@ import "./JobsView.css";
 
 import { useState } from "react";
 
+import type { AgentRunView } from "@/bindings";
 import {
   useAgentLogs,
   useAgentRuns,
@@ -12,11 +13,23 @@ import {
 } from "@/lib/query";
 import { useScrollRestore } from "@/lib/useScrollRestore";
 
-import { CodexStatusBanner } from "./CodexStatusBanner";
 import { JobControls } from "./JobControls";
 import { JobList } from "./JobList";
 import { isActiveJobStatus } from "./jobsConstants";
 import { JobsHeader } from "./JobsHeader";
+
+function summarizeRuns(runs: AgentRunView[]) {
+  return runs.reduce(
+    (summary, run) => {
+      if (run.status === "proposed" || run.status === "running") summary.active += 1;
+      if (run.status === "awaiting_approval") summary.approval += 1;
+      if (run.status === "failed") summary.failed += 1;
+      if (run.status === "succeeded") summary.completed += 1;
+      return summary;
+    },
+    { active: 0, approval: 0, failed: 0, completed: 0 },
+  );
+}
 
 /**
  * Jobs (Agent 스파인, Phase 7) — 잡 큐를 표시하고 테스트 잡을 트리거한다. 모든 잡은 bound되며
@@ -40,6 +53,7 @@ export function JobsView() {
   }
   const logs = useAgentLogs(openLogIdList);
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
+  const summary = summarizeRuns(list);
   const toggleLog = (runId: string) => {
     setOpenLogIds((current) => {
       const next = new Set(current);
@@ -54,16 +68,14 @@ export function JobsView() {
       <JobsHeader
         fetching={runs.isFetching}
         tracking={list.some((r) => isActiveJobStatus(r.status))}
+        summary={summary}
       />
 
       <div className="jobs-scroll" ref={scrollRef}>
-        <CodexStatusBanner
-          ready={codexReady}
-          detail={codex.data?.detail}
-          version={codex.data?.version}
-        />
         <JobControls
           codexReady={codexReady}
+          codexDetail={codex.data?.detail}
+          codexVersion={codex.data?.version}
           prompt={prompt}
           echoJob={echoJob}
           codexJob={codexJob}

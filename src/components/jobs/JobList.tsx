@@ -24,32 +24,53 @@ export function JobList({
 }) {
   if (isLoading) {
     return (
-      <div className="jobs-loading">
-        <Spinner size="md" />
-      </div>
-    );
-  }
-
-  if (runs.length === 0) {
-    return (
-      <EmptyState className="jobs-empty">
-        아직 잡이 없습니다. 위 테스트 잡으로 스파인을 확인하세요.
-      </EmptyState>
+      <section className="jobs-ledger" aria-labelledby="jobs-ledger-title">
+        <div className="jobs-list-head">
+          <div>
+            <span className="jobs-section-kicker">RUN LEDGER</span>
+            <h2 id="jobs-ledger-title">최근 실행</h2>
+          </div>
+        </div>
+        <div className="jobs-loading" aria-label="실행 기록 불러오는 중">
+          <Spinner size="md" />
+          <span className="jobs-loading-line" />
+          <span className="jobs-loading-line" />
+        </div>
+      </section>
     );
   }
 
   return (
-    <div className="jobs-list">
-      {runs.map((run) => (
-        <JobCard
-          key={run.id}
-          run={run}
-          logOpen={openLogIds.has(run.id)}
-          log={logs.get(run.id)}
-          onToggleLog={() => onToggleLog(run.id)}
-          onKill={() => onKill(run.id)}
-        />
-      ))}
-    </div>
+    <section className="jobs-ledger" aria-labelledby="jobs-ledger-title">
+      <div className="jobs-list-head">
+        <div>
+          <span className="jobs-section-kicker">RUN LEDGER</span>
+          <h2 id="jobs-ledger-title">최근 실행</h2>
+        </div>
+        <div className="jobs-list-note">
+          <span>{runs.length} RUNS</span>
+          <small>상태·한도·결과를 시간순으로 검토합니다.</small>
+        </div>
+      </div>
+
+      {runs.length === 0 ? (
+        <EmptyState className="jobs-empty">
+          아직 실행 기록이 없습니다. 새 작업을 실행하거나 진단 경로를 확인해 보세요.
+        </EmptyState>
+      ) : (
+        <div className="jobs-list">
+          {runs.map((run) => (
+            <JobCard
+              key={run.id}
+              run={run}
+              logOpen={openLogIds.has(run.id)}
+              log={logs.get(run.id)}
+              onToggleLog={() => onToggleLog(run.id)}
+              onKill={() => onKill(run.id)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
