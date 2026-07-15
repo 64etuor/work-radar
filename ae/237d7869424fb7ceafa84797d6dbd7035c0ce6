@@ -1,0 +1,46 @@
+src/components/board/CaptureBoardHeader.tsx
+  s_6f47e89b8b03ef::t_d0664b02187355 5,52,57,63-69,71-92,95
+src/lib/captureBoardBrief.test.ts
+  s_6f47e89b8b03ef::t_08e74cb25f6c75 1-30
+src/components/board/MatrixCanvas.dom.test.tsx
+  s_6f47e89b8b03ef::t_da4989310674d7 86-91
+src/components/board/MatrixCanvas.tsx
+  s_6f47e89b8b03ef::t_8340d6c788b6b1 129-132
+  s_6f47e89b8b03ef::t_d0664b02187355 328,331
+src/components/board/matrixGeometry.ts
+  s_6f47e89b8b03ef::t_878a6d29fdce1e 40
+  s_6f47e89b8b03ef::t_b5d5327e0ece78 5,37-38
+src/lib/captureBoardBrief.ts
+  s_6f47e89b8b03ef::t_d0664b02187355 1-29
+src/components/CaptureBoard.tsx
+  s_6f47e89b8b03ef::t_f2ebc32ad08f9e 197
+  s_6f47e89b8b03ef::t_d0664b02187355 24,528,559
+src/components/board/useBoardKeyboard.ts
+  s_6f47e89b8b03ef::t_f2ebc32ad08f9e 1,36-71,73-76
+src/components/board/useBoardKeyboard.dom.test.tsx
+  s_6f47e89b8b03ef::t_41be18299e28ff 1-86
+src/components/board/matrixGeometry.test.ts
+  s_6f47e89b8b03ef::t_081259043795a3 15-16
+src/components/board/CaptureBoardHeader.dom.test.tsx
+  s_6f47e89b8b03ef::t_1e7f79c6850a8b 11
+  s_6f47e89b8b03ef::t_08e74cb25f6c75 1-10,12-44
+src/components/CaptureBoard.css
+  s_6f47e89b8b03ef::t_d0664b02187355 53-54,57,60-80,82-88,91,94-95,97-117,123-125,1004-1012,1015-1028,1030,1040-1041,1043-1059,1066-1067,1072,1078-1080,1084-1085
+  s_6f47e89b8b03ef::t_8dbf2ab75dae2b 50-51,58-59,92-93,96,118-119,1029,1031-1039,1042
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ae237d7869424fb7ceafa84797d6dbd7035c0ce6",
+  "prompts": {},
+  "sessions": {
+    "s_6f47e89b8b03ef": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63dc-377b-7ee0-9945-864b1fb5701b",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
