@@ -105,6 +105,12 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 이 결합은 `surface_tests::routine_toggle_moves_a_routine_linked_key_result_by_design`이 고정한다 —
 테스트가 깨지면 결정-레일 논증을 다시 검토하라는 신호다.
 
+**도메인 단위 위임 예외 — diet(2026-07-17).** 사용자 명시 결정으로 diet 도메인(목표·계획·기록·
+라이브러리·재고·주문 원장)은 위 캡처-레인 구분을 적용하지 않고 **전권을 에이전트에 위임**했다.
+레일 논증 정본은 `src-tauri/src/mcp/tools/diet_manage.rs` 모듈 doc — 요지: 전 write가 로컬
+SQLite(외부 mutate 0), 영양은 커널 스냅샷(과거 재작성 불가), 재고 append-only 감사, 사람 게이트는
+호스트 승인 UI(ADR-0012). 다른 도메인이 이 예외를 선례로 쓰려면 동일한 사용자 결정이 필요하다.
+
 ## 2. 입력 스키마 — strict, 좁은 타입
 
 rmcp + `schemars(JsonSchema)` + serde로 스키마가 **Rust param struct에서 생성**된다.

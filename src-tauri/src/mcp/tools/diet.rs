@@ -1,13 +1,12 @@
-//! Diet 툴 — read 6개 + 사실기록 write 1개(`wr_diet_record_meal`).
+//! Diet 조회/요약 툴 + 사실기록 write(`wr_diet_record_meal`).
 //!
-//! §1.1 캡처-레인 원칙 적용: 에이전트는 "먹었다"는 **사실**을 기록할 수 있지만, 파생 판단값
-//! (목표 설정 `set_diet_goal`, 계획 승인/편집, 재고 실사 보정 `adjust_pantry_lot`, 폐기 확정
-//! `waste_pantry_lot`, 기록 삭제)은 표면에 없다 — 그건 사람 결정이다
-//! (`surface_tests::decision_rail_writes_never_reach_the_mcp_surface`가 이름으로 고정).
+//! 계획/기록 편집·라이브러리·재고/주문 관리 툴은 `tools/diet_manage.rs`에 있다 —
+//! 2026-07-17 사용자 결정으로 diet 도메인 전권이 에이전트에 위임됐다(레일 논증은 그쪽
+//! 모듈 doc이 정본). 이 모듈은 일상 조회 표면(오늘 영양·식사·재고 요약·장보기·식품 검색)을
+//! 소유한다.
 //!
-//! `wr_diet_record_meal`이 planned meal 상태를 eaten/partial로 움직이는 것은 위반이 아니다:
-//! 상태는 "먹었다" 사실의 직접 표현이고 가역이다(루틴 체크와 동형). 영양 수치는 커널 계산
-//! 스냅샷이라 에이전트가 계획 경로에서 임의 kcal을 넣을 수 없다.
+//! `wr_diet_record_meal`이 planned meal 상태를 eaten/partial로 움직이는 것과 영양 수치가
+//! 커널 계산 스냅샷(임의 kcal 주입은 자유기록 경로에서만, description 필수)이라는 계약은 유지.
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};

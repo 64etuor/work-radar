@@ -38,6 +38,7 @@ use crate::models::ProjectKind;
 pub use tools::bookkeeping::*;
 pub use tools::calendar::*;
 pub use tools::diet::*;
+pub use tools::diet_manage::*;
 pub use tools::github::*;
 pub use tools::gmail::*;
 pub use tools::notion::*;
@@ -64,6 +65,7 @@ impl WrServer {
             + Self::tool_router_gmail()
             + Self::tool_router_bookkeeping()
             + Self::tool_router_diet()
+            + Self::tool_router_diet_manage()
             + Self::tool_router_signals()
             + Self::tool_router_okr()
             + Self::tool_router_today()

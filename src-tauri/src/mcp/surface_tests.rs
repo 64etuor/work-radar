@@ -175,6 +175,32 @@ fn registered_tool_set_is_locked() {
         "wr_diet_shopping_list",
         "wr_diet_search_foods",
         "wr_diet_record_meal",
+        // diet 전권 위임(2026-07-17 사용자 결정 — tools/diet_manage.rs 모듈 doc의 레일 논증 참조).
+        "wr_diet_list_meal_plans",
+        "wr_diet_get_meal_plan",
+        "wr_diet_meal_logs",
+        "wr_diet_list_recipes",
+        "wr_diet_list_orders",
+        "wr_diet_set_goal",
+        "wr_diet_create_meal_plan",
+        "wr_diet_set_meal_plan_status",
+        "wr_diet_add_meal",
+        "wr_diet_remove_meal",
+        "wr_diet_set_meal_status",
+        "wr_diet_add_meal_item",
+        "wr_diet_remove_meal_item",
+        "wr_diet_retract_meal_log",
+        "wr_diet_upsert_food",
+        "wr_diet_create_recipe",
+        "wr_diet_update_recipe",
+        "wr_diet_add_pantry_lot",
+        "wr_diet_consume_pantry",
+        "wr_diet_adjust_pantry_lot",
+        "wr_diet_waste_pantry_lot",
+        "wr_diet_record_order",
+        "wr_diet_set_order_status",
+        "wr_diet_link_order_line",
+        "wr_diet_receive_order_line",
         "wr_list_signals",
         "wr_create_signal",
         "wr_okr_get_mission",
@@ -309,16 +335,9 @@ fn decision_rail_writes_never_reach_the_mcp_surface() {
         "wr_bookkeeping_mark_duplicate",
         "wr_bookkeeping_update_review_status",
         "wr_bookkeeping_delete_transaction",
-        // Diet 결정 레일 — 목표/계획 편집·재고 실사/폐기 확정·기록 삭제는 사람 결정.
-        // 에이전트는 `wr_diet_record_meal`로 "먹었다"는 사실만 남긴다(tools/diet.rs 모듈 doc).
-        "wr_set_diet_goal",
-        "wr_create_meal_plan",
-        "wr_set_meal_plan_status",
-        "wr_add_planned_meal",
-        "wr_add_planned_meal_item",
-        "wr_adjust_pantry_lot",
-        "wr_waste_pantry_lot",
-        "wr_delete_meal_log",
+        // Diet: 2026-07-17 사용자 결정으로 도메인 전권을 에이전트에 위임 — 이 목록에서 diet
+        // 항목을 의도적으로 제거했다(사람 게이트 = 호스트 승인 UI, ADR-0012). 레일 논증은
+        // `tools/diet_manage.rs` 모듈 doc이 정본이다.
     ] {
         assert!(
             !names.contains(forbidden),

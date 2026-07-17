@@ -187,11 +187,36 @@ pub(crate) async fn list_meal_logs_inner(
     .await?)
 }
 
+/// 로그 삭제(철회). 계획 식사를 참조하던 **마지막** 로그가 사라지면 그 식사 상태를
+/// planned로 복원한다(critic MAJOR — 로그 없는 eaten 잔존 방지). 같은 식사에 다른 로그가
+/// 남아 있으면 상태는 유지(다중 로그가 한 식사를 떠받칠 수 있음).
 pub(crate) async fn delete_meal_log_inner(db: &Db, id: &str) -> Result<(), AppError> {
+    let mut tx = db.begin().await?;
+    let planned_meal_id: Option<Option<String>> =
+        sqlx::query_scalar("SELECT planned_meal_id FROM meal_logs WHERE id = ?1")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
     sqlx::query("DELETE FROM meal_logs WHERE id = ?1")
         .bind(id)
-        .execute(db)
+        .execute(&mut *tx)
         .await?;
+    if let Some(Some(meal_id)) = planned_meal_id {
+        let remaining: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM meal_logs WHERE planned_meal_id = ?1")
+                .bind(&meal_id)
+                .fetch_one(&mut *tx)
+                .await?;
+        if remaining == 0 {
+            sqlx::query(
+                "UPDATE planned_meals SET status = 'planned', eaten_at = NULL WHERE id = ?1",
+            )
+            .bind(&meal_id)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+    tx.commit().await?;
     Ok(())
 }
 
@@ -453,5 +478,59 @@ mod tests {
             .await
             .unwrap()
             .is_empty());
+    }
+
+    /// 철회 계약: 계획 식사를 떠받치던 **마지막** 로그가 사라지면 상태가 planned로 복원되고,
+    /// 다른 로그가 남아 있으면 유지된다(로그 없는 eaten 잔존 금지 — critic MAJOR).
+    #[tokio::test]
+    async fn retracting_the_sole_log_reverts_planned_meal_status() {
+        let db = fresh_db().await;
+        let chicken = seed_food(&db, "닭다리살", 120.0, 22.0).await;
+        let plan = seed_plan(&db, "2026-07-20", "2026-07-26").await;
+        let meal = seed_meal(&db, &plan, "2026-07-20", MealType::Lunch).await;
+        crate::commands::diet::plans::add_planned_meal_item_inner(
+            &db,
+            AddPlannedMealItemInput {
+                planned_meal_id: meal.clone(),
+                recipe_id: None,
+                food_id: Some(chicken),
+                servings: None,
+                qty_g: Some(200.0),
+                note: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        // 반씩 두 번 기록 → 로그 2개가 같은 식사를 참조.
+        for _ in 0..2 {
+            let mut input = base_log("2026-07-20");
+            input.planned_meal_id = Some(meal.clone());
+            input.ratio = Some(0.5);
+            super::record_meal_log_inner(&db, input).await.unwrap();
+        }
+        let logs = super::list_meal_logs_inner(&db, "2026-07-20", "2026-07-20")
+            .await
+            .unwrap();
+        assert_eq!(logs.len(), 2);
+
+        // 하나 철회 — 다른 로그가 남아 있으므로 상태 유지.
+        super::delete_meal_log_inner(&db, &logs[0].id)
+            .await
+            .unwrap();
+        let after_first = crate::commands::diet::plans::fetch_planned_meal(&db, &meal)
+            .await
+            .unwrap();
+        assert_eq!(after_first.status, PlannedMealStatus::Partial);
+
+        // 마지막 로그 철회 — planned 복원 + eaten_at 제거.
+        super::delete_meal_log_inner(&db, &logs[1].id)
+            .await
+            .unwrap();
+        let reverted = crate::commands::diet::plans::fetch_planned_meal(&db, &meal)
+            .await
+            .unwrap();
+        assert_eq!(reverted.status, PlannedMealStatus::Planned);
+        assert!(reverted.eaten_at.is_none());
     }
 }

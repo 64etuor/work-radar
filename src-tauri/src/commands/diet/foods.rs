@@ -126,7 +126,9 @@ pub(crate) async fn upsert_food_inner(db: &Db, input: UpsertFoodInput) -> Result
     let name = clean_required(&input.name, "diet.food.name", "food name")?;
     validate_food_input(&input)?;
     let preparation = clean_optional(input.preparation.clone());
-    let source = clean_optional(input.source.clone()).unwrap_or_else(|| "manual".to_string());
+    // source/source_ref는 provenance — UPDATE에서 caller가 안 보내면 기존 값을 보존한다
+    // (COALESCE). 에이전트 갱신이 사용자 등록 식품을 조용히 'agent' 소유로 뒤집지 않게(critic).
+    let source = clean_optional(input.source.clone());
     let source_ref = clean_optional(input.source_ref.clone());
 
     let id = match input.id {
@@ -135,7 +137,8 @@ pub(crate) async fn upsert_food_inner(db: &Db, input: UpsertFoodInput) -> Result
                 "UPDATE foods SET name = ?2, food_type = ?3, preparation = ?4, \
                    default_serving_g = ?5, kcal_per_100g = ?6, protein_g_per_100g = ?7, \
                    fat_g_per_100g = ?8, carb_g_per_100g = ?9, fiber_g_per_100g = ?10, \
-                   sodium_mg_per_100g = ?11, source = ?12, source_ref = ?13, \
+                   sodium_mg_per_100g = ?11, source = COALESCE(?12, source), \
+                   source_ref = COALESCE(?13, source_ref), \
                    updated_at = datetime('now') \
                  WHERE id = ?1",
             )
@@ -178,7 +181,8 @@ pub(crate) async fn upsert_food_inner(db: &Db, input: UpsertFoodInput) -> Result
             .bind(input.carb_g_per_100g)
             .bind(input.fiber_g_per_100g)
             .bind(input.sodium_mg_per_100g)
-            .bind(&source)
+            // INSERT는 NOT NULL — 미지정이면 'manual'(UPDATE는 COALESCE로 기존 값 보존).
+            .bind(source.clone().unwrap_or_else(|| "manual".to_string()))
             .bind(source_ref.as_deref())
             .execute(db)
             .await?;

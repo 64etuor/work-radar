@@ -5,6 +5,7 @@
 pub mod bookkeeping;
 pub mod calendar;
 pub mod diet;
+pub mod diet_manage;
 pub mod github;
 pub mod gmail;
 pub mod notion;

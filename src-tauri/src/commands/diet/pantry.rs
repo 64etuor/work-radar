@@ -185,6 +185,14 @@ pub(crate) async fn consume_pantry_inner(
     reason: Option<String>,
 ) -> Result<ConsumePantryResult, AppError> {
     validate_positive(qty_g, "diet.pantry.consume_qty")?;
+    // 존재 확인 — 오타 food_id가 "재고 0 = 전량 shortfall"로 조용히 위장하지 않게(critic).
+    let exists: Option<String> = sqlx::query_scalar("SELECT id FROM foods WHERE id = ?1")
+        .bind(food_id)
+        .fetch_optional(db)
+        .await?;
+    if exists.is_none() {
+        return Err(AppError::not_found("diet.food.missing", "food not found"));
+    }
     let reason = clean_optional(reason);
     let meal_log_id = clean_optional(meal_log_id);
 

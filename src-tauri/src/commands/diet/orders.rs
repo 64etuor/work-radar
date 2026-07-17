@@ -81,6 +81,15 @@ pub(crate) async fn record_grocery_order_inner(
             "an order needs at least one line",
         ));
     }
+    // 금액은 DB CHECK(>=0)로도 막히지만, 친절한 validation 에러로 경계에서 먼저 잡는다.
+    for (value, code) in [
+        (input.total_krw, "diet.order.total_krw"),
+        (input.shipping_krw, "diet.order.shipping_krw"),
+    ] {
+        if value.is_some_and(|v| v < 0) {
+            return Err(AppError::validation(code, "amount must be non-negative"));
+        }
+    }
     for line in &input.lines {
         clean_required(
             &line.product_name,
@@ -90,6 +99,13 @@ pub(crate) async fn record_grocery_order_inner(
         validate_positive(line.quantity, "diet.order.quantity")?;
         if let Some(g) = line.total_g {
             validate_positive(g, "diet.order.total_g")?;
+        }
+        if line.unit_price_krw.is_some_and(|v| v < 0) || line.line_total_krw.is_some_and(|v| v < 0)
+        {
+            return Err(AppError::validation(
+                "diet.order.line_amount",
+                "amount must be non-negative",
+            ));
         }
     }
 
