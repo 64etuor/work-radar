@@ -1,0 +1,31 @@
+src/components/diet/PantrySection.tsx
+  s_b916f088ec8cbe::t_6300618dc8c2eb 699
+  s_b916f088ec8cbe::t_06c06b684c3ab7 707
+  s_b916f088ec8cbe::t_9ba85a80204d2b 50
+src/components/diet/LibrarySection.tsx
+  s_b916f088ec8cbe::t_4c63aca3fd5985 487
+  s_b916f088ec8cbe::t_4d0cb9b7983eee 32
+src/components/diet/dietFormat.test.ts
+  s_b916f088ec8cbe::t_c68e39bf8363fe 62-67
+  s_b916f088ec8cbe::t_0e7438e92540ef 10
+src/components/diet/dietFormat.ts
+  s_b916f088ec8cbe::t_1e8c4b5e92e602 110-115
+src/lib/query/diet.ts
+  s_b916f088ec8cbe::t_c73f100be1fee2 48-49
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "4bb5383910067c1e19a4b7a254cb374cbe5b8f2a",
+  "prompts": {},
+  "sessions": {
+    "s_b916f088ec8cbe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35877f3b-40d5-4add-8079-28f1e26102d7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
