@@ -9,6 +9,7 @@ import { CaptureBoard } from "@/components/CaptureBoard";
 import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
 import ControlRoomView from "@/components/control-room/ControlRoomView";
+import { DietView } from "@/components/diet/DietView";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
 import HermesView from "@/components/HermesView";
 import { JobsView } from "@/components/jobs/JobsView";
@@ -53,6 +54,7 @@ function renderView(renderedView: View) {
   if (renderedView === "mission") return <MissionView />;
   if (renderedView === "weekly") return <WeeklyView />;
   if (renderedView === "bookkeeping") return <BookkeepingView />;
+  if (renderedView === "diet") return <DietView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
   if (renderedView === "radar") return <PrRadarView />;
   if (renderedView === "worktree") return <WorktreeView />;

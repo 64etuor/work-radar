@@ -1,0 +1,594 @@
+/* ── 식단 뷰 (히스토리 / 재고·장보기 / 라이브러리) ───────────────────────── */
+.diet {
+  /* component-local tokens */
+  --diet-gutter: 22px;
+  --diet-content-max: 1180px;
+  --diet-strip-h: 84px;
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--color-wr-bg);
+}
+
+.diet .diet-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  width: min(100%, var(--diet-content-max));
+  margin: 0 auto;
+  padding: 26px var(--diet-gutter) 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-head-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.diet .diet-head-copy > span {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-head-copy p {
+  color: var(--color-wr-muted);
+}
+
+.diet .diet-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-elevated);
+}
+
+.diet .diet-tab {
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-lg) - 3px);
+  color: var(--color-wr-muted);
+}
+
+.diet .diet-tab:hover {
+  color: var(--color-wr-fg);
+}
+
+.diet .diet-tab.is-active {
+  background: var(--color-wr-bg);
+  color: var(--color-wr-fg);
+  border: 1px solid var(--color-wr-border);
+}
+
+.diet .diet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.diet .diet-section {
+  display: grid;
+  gap: 18px;
+  width: min(100%, var(--diet-content-max));
+  margin: 0 auto;
+  padding: 20px var(--diet-gutter) 40px;
+}
+
+.diet .diet-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.diet .diet-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.diet .diet-datenav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diet .diet-search {
+  width: 180px;
+}
+
+.diet .diet-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-wr-muted);
+}
+
+/* ── 히스토리 ── */
+.diet .diet-stat-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.diet .diet-stat {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-surface);
+}
+
+.diet .diet-stat > span:first-child {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-stat-note {
+  color: var(--color-wr-muted);
+}
+
+.diet .diet-stat-note.is-ok {
+  color: var(--color-wr-green);
+}
+
+.diet .diet-stat-note.is-off {
+  color: var(--color-wr-danger);
+}
+
+.diet .diet-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+}
+
+.diet .diet-strip-day {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 8px 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--color-wr-muted);
+}
+
+.diet .diet-strip-day:hover {
+  background: var(--color-wr-hover);
+}
+
+.diet .diet-strip-day.is-selected {
+  border-color: var(--color-wr-border);
+  background: var(--color-wr-surface);
+  color: var(--color-wr-fg);
+}
+
+.diet .diet-strip-barwrap {
+  display: flex;
+  align-items: flex-end;
+  width: 100%;
+  max-width: 46px;
+  height: var(--diet-strip-h);
+  border-radius: 4px;
+  background: var(--color-wr-elevated);
+  overflow: hidden;
+}
+
+.diet .diet-strip-bar {
+  width: 100%;
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+}
+
+.diet .diet-strip-bar.tone-ok {
+  background: var(--color-wr-green);
+}
+
+.diet .diet-strip-bar.tone-off {
+  background: var(--color-wr-coral);
+}
+
+.diet .diet-strip-bar.tone-none {
+  background: var(--color-wr-subtle);
+}
+
+.diet .diet-strip-date {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-panel {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-surface);
+}
+
+.diet .diet-empty {
+  padding: 26px 0;
+}
+
+.diet .diet-log-list,
+.diet .diet-meal-list,
+.diet .diet-lot-list,
+.diet .diet-shopping-list,
+.diet .diet-goal-list,
+.diet .diet-food-list,
+.diet .diet-order-lines {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.diet .diet-log-row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-log-row:last-child {
+  border-bottom: none;
+}
+
+.diet .diet-log-time {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-log-desc {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.diet .diet-log-source {
+  flex: 0 0 auto;
+}
+
+.diet .diet-log-feel {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-wr-muted);
+}
+
+.diet .diet-meal-row {
+  display: grid;
+  grid-template-columns: 96px 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-meal-row:last-child {
+  border-bottom: none;
+}
+
+.diet .diet-meal-status.status-eaten {
+  color: var(--color-wr-green);
+}
+
+.diet .diet-meal-status.status-partial {
+  color: var(--color-wr-status-working);
+}
+
+.diet .diet-meal-status.status-skipped {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-plan-badge {
+  margin-left: 8px;
+}
+
+/* ── 재고 ── */
+.diet .diet-expiring-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--color-wr-danger-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-danger-soft);
+}
+
+.diet .diet-expiring-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.diet .diet-expiry.tone-expired {
+  color: var(--color-wr-danger);
+  border-color: var(--color-wr-danger-border);
+}
+
+.diet .diet-expiry.tone-soon {
+  color: var(--color-wr-coral);
+}
+
+.diet .diet-pantry-groups {
+  display: grid;
+  gap: 12px;
+}
+
+.diet .diet-pantry-group {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-surface);
+}
+
+.diet .diet-pantry-grouphead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-pantry-grouphead > span:first-child {
+  flex: 1 1 auto;
+}
+
+.diet .diet-lot-list {
+  padding: 4px 8px;
+}
+
+.diet .diet-lot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.diet .diet-lot-qty {
+  margin-left: auto;
+}
+
+.diet .diet-lot-actions {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.diet .diet-shopping-row {
+  display: grid;
+  grid-template-columns: 1fr repeat(4, 84px);
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-shopping-row:last-child {
+  border-bottom: none;
+}
+
+.diet .diet-shopping-head {
+  color: var(--color-wr-subtle);
+}
+
+.diet .diet-shopping-need {
+  color: var(--color-wr-coral);
+  font-weight: 600;
+}
+
+.diet .diet-order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.diet .diet-order-card {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-surface);
+}
+
+.diet .diet-order-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-order-head > span:first-child {
+  flex: 1 1 auto;
+}
+
+.diet .diet-order-lines {
+  padding: 4px 8px;
+}
+
+.diet .diet-order-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 6px;
+}
+
+.diet .diet-order-product {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.diet .diet-received {
+  color: var(--color-wr-green);
+}
+
+.diet .diet-select {
+  min-width: 150px;
+}
+
+.diet .diet-select-compact,
+.diet .diet-order-line .diet-select {
+  min-width: 120px;
+}
+
+.diet .diet-shortfall {
+  color: var(--color-wr-coral);
+}
+
+/* ── 라이브러리 ── */
+.diet .diet-food-row {
+  display: grid;
+  grid-template-columns: 1fr 90px 90px 110px 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.diet .diet-food-head {
+  color: var(--color-wr-subtle);
+  border-bottom: 1px solid var(--color-wr-border);
+}
+
+.diet .diet-food-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.diet .diet-food-btn:hover {
+  background: var(--color-wr-hover);
+}
+
+.diet .diet-food-btn.is-archived {
+  opacity: 0.55;
+}
+
+.diet .diet-alias-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.diet .diet-archived {
+  margin-left: 6px;
+}
+
+.diet .diet-recipe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.diet .diet-recipe-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-lg);
+  background: var(--color-wr-bg);
+  text-align: left;
+}
+
+.diet .diet-recipe-card:hover {
+  border-color: var(--color-wr-border);
+  background: var(--color-wr-hover);
+}
+
+.diet .diet-recipe-card.is-archived {
+  opacity: 0.55;
+}
+
+/* ── 폼/다이얼로그 공통 ── */
+.diet-dialog .diet-form {
+  display: grid;
+  gap: 14px;
+}
+
+.diet-dialog.diet-dialog-wide {
+  max-width: 640px;
+}
+
+.diet-dialog .diet-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px 14px;
+}
+
+.diet-dialog .diet-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.diet-dialog .diet-field > span:first-child {
+  color: var(--color-wr-muted);
+}
+
+.diet-dialog .diet-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.diet-dialog .diet-draftlines {
+  display: grid;
+  gap: 6px;
+}
+
+.diet-dialog .diet-draftline {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.8fr auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.diet-dialog .diet-draftline-ingredient {
+  grid-template-columns: 1.4fr 0.6fr auto auto;
+  align-items: center;
+}
+
+.diet-dialog .diet-alias-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.diet-dialog .diet-alias-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.diet-dialog .diet-alias-chip button {
+  display: inline-flex;
+  color: var(--color-wr-subtle);
+}
+
+.diet-dialog .diet-alias-chip button:hover {
+  color: var(--color-wr-danger);
+}
+
+.diet-dialog .diet-alias-input {
+  width: 120px;
+}
+
+.diet-dialog .diet-goal-history {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.diet-dialog .diet-goal-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+}

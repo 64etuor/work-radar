@@ -11,6 +11,7 @@ import {
   Repeat,
   Settings,
   Target,
+  Utensils,
   WalletCards,
 } from "lucide-react";
 
@@ -93,6 +94,13 @@ export const NAV_ITEMS: NavItem[] = [
     icon: WalletCards,
     group: "review",
     defaultShortcut: "Cmd+5",
+  },
+  {
+    view: "diet",
+    label: "식단",
+    search: "diet 식단 영양 칼로리 단백질 재고 팬트리 pantry 장보기 식품 레시피 유통기한 주문",
+    icon: Utensils,
+    group: "review",
   },
   {
     view: "routines",

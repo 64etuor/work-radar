@@ -7,6 +7,7 @@ export type View =
   | "mission"
   | "weekly"
   | "bookkeeping"
+  | "diet"
   | "routines"
   | "settings"
   | "radar"
