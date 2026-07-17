@@ -47,6 +47,7 @@ import {
   LOCATION_LABEL,
   num,
   ORDER_STATUS_LABEL,
+  parseOptionalInt,
   parseOptionalNumber,
   PLAN_STATUS_LABEL,
 } from "./dietFormat";
@@ -695,10 +696,7 @@ function RecordOrderBody({ today, onDone }: { today: string; onDone: () => void 
         quantity: 1,
         totalG: parseOptionalNumber(l.totalG),
         unitPriceKrw: null,
-        lineTotalKrw: (() => {
-          const v = parseOptionalNumber(l.lineTotalKrw);
-          return v == null ? null : Math.round(v);
-        })(),
+        lineTotalKrw: parseOptionalInt(l.lineTotalKrw),
         note: null,
       }));
     if (merchant.trim().length === 0 || cleanLines.length === 0) return;
@@ -706,10 +704,7 @@ function RecordOrderBody({ today, onDone }: { today: string; onDone: () => void 
       merchant: merchant.trim(),
       orderedAt: orderedOn,
       externalOrderNo: null,
-      totalKrw: (() => {
-        const v = parseOptionalNumber(totalKrw);
-        return v == null ? null : Math.round(v);
-      })(),
+      totalKrw: parseOptionalInt(totalKrw),
       shippingKrw: null,
       note: null,
       lines: cleanLines,

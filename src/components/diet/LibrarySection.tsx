@@ -29,7 +29,7 @@ import {
   useUpsertFood,
 } from "@/lib/query";
 
-import { fmtG, fmtKcal, num, parseOptionalNumber } from "./dietFormat";
+import { fmtG, fmtKcal, num, parseOptionalInt } from "./dietFormat";
 import { FoodSelect } from "./FoodSelect";
 
 const FOOD_TYPE_LABEL: Record<FoodType, string> = {
@@ -484,10 +484,7 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
     const shared = {
       name: name.trim(),
       servings: servingsN,
-      cookMinutes: (() => {
-        const v = parseOptionalNumber(cookMinutes);
-        return v == null ? null : Math.round(v);
-      })(),
+      cookMinutes: parseOptionalInt(cookMinutes),
       mealTags: tags
         .split(",")
         .map((t) => t.trim())

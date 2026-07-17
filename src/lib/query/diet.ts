@@ -45,8 +45,8 @@ function invalidateDiet(qc: QueryClient) {
   return qc.invalidateQueries({ queryKey: dietKeys.all });
 }
 
-/** diet mutation 들이 공유하는 invalidate 헬퍼 — 인라인 invalidateQueries 금지. */
-export function useInvalidateDiet() {
+/** diet mutation 들이 공유하는 invalidate 헬퍼 — 인라인 invalidateQueries 금지. 모듈 내부 전용. */
+function useInvalidateDiet() {
   const qc = useQueryClient();
   return () => invalidateDiet(qc);
 }

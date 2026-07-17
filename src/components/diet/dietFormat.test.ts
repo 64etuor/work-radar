@@ -7,6 +7,7 @@ import {
   fmtKcal,
   kcalBand,
   num,
+  parseOptionalInt,
   parseOptionalNumber,
 } from "./dietFormat";
 
@@ -57,6 +58,12 @@ describe("parseOptionalNumber", () => {
     expect(parseOptionalNumber("   ")).toBeNull();
     expect(parseOptionalNumber("abc")).toBeNull();
     expect(parseOptionalNumber("-5")).toBeNull();
+  });
+
+  it("parseOptionalInt rounds and inherits the same guards", () => {
+    expect(parseOptionalInt("12.5")).toBe(13);
+    expect(parseOptionalInt("")).toBeNull();
+    expect(parseOptionalInt("abc")).toBeNull();
   });
 });
 

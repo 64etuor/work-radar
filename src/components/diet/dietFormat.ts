@@ -107,6 +107,12 @@ export function parseOptionalNumber(raw: string): number | null {
   return Number.isFinite(v) && v >= 0 ? v : null;
 }
 
+/** 정수 필드(분·KRW)용 — parseOptionalNumber + 반올림. */
+export function parseOptionalInt(raw: string): number | null {
+  const v = parseOptionalNumber(raw);
+  return v == null ? null : Math.round(v);
+}
+
 const KRW_FMT = new Intl.NumberFormat(APP_LOCALE, { maximumFractionDigits: 0 });
 
 export function fmtKrw(v: number | null | undefined): string {
