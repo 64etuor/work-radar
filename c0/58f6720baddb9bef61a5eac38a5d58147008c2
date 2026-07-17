@@ -1,0 +1,52 @@
+src/lib/query/calendarSync.ts
+  s_0330abe5350291::t_fdfcc98095fb4a 49-51
+  s_0330abe5350291::t_35d6eff3ba8e8f 4
+src/components/jobs/JobsView.tsx
+  s_0330abe5350291::t_4996c343a0bffa 51,53-56,58
+src/components/agents/AgentRunModal.tsx
+  s_0330abe5350291::t_e3140195f937b1 36-39
+  s_0330abe5350291::t_42aa4dfde1da31 40
+src/lib/query/agents.ts
+  s_0330abe5350291::t_7e5a7e1a6d9d8e 2
+  s_0330abe5350291::t_b34d318cefa738 125
+  s_0330abe5350291::t_0ee9e4a8cbbb18 114-119
+  s_0330abe5350291::t_dadfdf82ad7ddb 120,129-143
+  s_057aa56210cc7d::t_1ebd83f81cfdd9 144-145
+src/components/SprintTimer.tsx
+  s_0330abe5350291::t_865280a1c35782 49-53,55,61,64
+  s_0330abe5350291::t_871043ad544fbc 57-59
+src/App.tsx
+  s_0330abe5350291::t_3f117652995472 28-66
+  s_0330abe5350291::t_c5c1749fa91110 275-279
+  s_0330abe5350291::t_d43495840ed65d 1
+  s_0330abe5350291::t_f773be91eff3f2 242
+docs/decisions.md
+  s_0330abe5350291::t_0df220459feb10 671-672
+src/styles/fonts.css
+  s_0330abe5350291::t_3345649e3738a5 44
+  s_0330abe5350291::t_14f492cd2f1ab9 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "c058f6720baddb9bef61a5eac38a5d58147008c2",
+  "prompts": {},
+  "sessions": {
+    "s_0330abe5350291": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0975114c-b90f-4ca3-aec8-9184a6a0dc90",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_057aa56210cc7d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f6ea5-16f5-7943-8b44-43c08e39e577",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
