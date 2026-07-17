@@ -1,0 +1,57 @@
+src-tauri/src/mcp/mod.rs
+  s_b916f088ec8cbe::t_d55cf4cdfebddc 41
+  s_b916f088ec8cbe::t_f8ca0799b3c093 68
+src-tauri/src/mcp/surface_tests.rs
+  s_b916f088ec8cbe::t_f8abe5808b7534 338-340
+  s_b916f088ec8cbe::t_41044106dd48b1 178-203
+src-tauri/src/commands/diet/orders.rs
+  s_b916f088ec8cbe::t_d607890885ce4c 84-92,103-109
+src-tauri/src/mcp/tools/diet.rs
+  s_b916f088ec8cbe::t_06fcd9c5191795 1,3-6,8-9
+src-tauri/src/commands/diet/foods.rs
+  s_b916f088ec8cbe::t_13724e391828d8 129-131
+  s_b916f088ec8cbe::t_4309cf51198b98 140-141
+  s_b916f088ec8cbe::t_4e2b4197dee4a1 184-185
+docs/areas/mcp-server-conventions.md
+  s_b916f088ec8cbe::t_6303a8d7ded9b8 108-113
+docs/plans/2026-07-17-diet-domain.md
+  s_b916f088ec8cbe::t_3a1d505e12458c 58-63
+docs/decisions.md
+  s_b916f088ec8cbe::t_bd810fc39e0d58 669-670
+src-tauri/src/mcp/tools/mod.rs
+  s_b916f088ec8cbe::t_860245a4db7863 8
+src-tauri/src/commands/diet/pantry.rs
+  s_b916f088ec8cbe::t_87eb7b28cb3f9e 188-195
+src-tauri/src/commands/diet/logs.rs
+  s_b916f088ec8cbe::t_735bc7c91ac71b 482-535
+  s_b916f088ec8cbe::t_d9b3de02eae4a7 190-192,194-199,202,204-219
+src-tauri/src/mcp/tools/diet_manage.rs
+  s_b916f088ec8cbe::t_6e37bf43f425f8 322
+  s_b916f088ec8cbe::t_fc316d25cba379 1016
+  s_b916f088ec8cbe::t_99d6b14a2f0e63 1-321,323-411,413-969,971-999,1001-1014,1021-1043,1045-1073,1075-1218,1220-1320,1333-1597,1638-1665
+  s_b916f088ec8cbe::t_7def87e0ce9452 1074
+  s_b916f088ec8cbe::t_12ec8bdafd0640 1321-1332
+  s_b916f088ec8cbe::t_45fd9c37586949 1598-1637
+  s_b916f088ec8cbe::t_781dff5a9b59a2 412
+  s_b916f088ec8cbe::t_30af1418de0d4d 1000
+  s_b916f088ec8cbe::t_cb6d84cb99fc2b 970
+  s_b916f088ec8cbe::t_59346a64aa7cb7 1015,1017-1020
+  s_b916f088ec8cbe::t_18200cc2c8b96a 1044
+  s_b916f088ec8cbe::t_4dffe2d2d1f2a6 1219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "ec2806f2529600713c05fe00089794ff16fc1ef4",
+  "prompts": {},
+  "sessions": {
+    "s_b916f088ec8cbe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35877f3b-40d5-4add-8079-28f1e26102d7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
