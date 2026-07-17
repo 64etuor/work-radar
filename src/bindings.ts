@@ -89,6 +89,55 @@ export const commands = {
 	findBookkeepingDuplicateCandidates: (input: FindBookkeepingDuplicateCandidatesInput) => typedError<BookkeepingDuplicateCandidate[], AppError>(__TAURI_INVOKE("find_bookkeeping_duplicate_candidates", { input })),
 	markBookkeepingDuplicate: (id: string, duplicateOfTransactionId: string) => typedError<BookkeepingTransaction, AppError>(__TAURI_INVOKE("mark_bookkeeping_duplicate", { id, duplicateOfTransactionId })),
 	listBookkeepingSyncCursors: () => typedError<BookkeepingSyncCursor[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_cursors")),
+	upsertFood: (input: UpsertFoodInput) => typedError<Food, AppError>(__TAURI_INVOKE("upsert_food", { input })),
+	listFoods: (query: string | null, includeArchived: boolean) => typedError<Food[], AppError>(__TAURI_INVOKE("list_foods", { query, includeArchived })),
+	setFoodArchived: (id: string, archived: boolean) => typedError<Food, AppError>(__TAURI_INVOKE("set_food_archived", { id, archived })),
+	addFoodAlias: (foodId: string, alias: string) => typedError<Food, AppError>(__TAURI_INVOKE("add_food_alias", { foodId, alias })),
+	removeFoodAlias: (alias: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_food_alias", { alias })),
+	setDietGoal: (input: SetDietGoalInput) => typedError<DietGoal, AppError>(__TAURI_INVOKE("set_diet_goal", { input })),
+	activeDietGoal: (date: string) => typedError<{
+	id: string,
+	effectiveDate: string,
+	calorieTarget: number | null,
+	calorieTolerancePct: number | null,
+	proteinMinG: number | null,
+	fatMinG: number | null,
+	carbTargetG: number | null,
+	fiberMinG: number | null,
+	note: string | null,
+	createdAt: string,
+} | null, AppError>(__TAURI_INVOKE("active_diet_goal", { date })),
+	listDietGoals: () => typedError<DietGoal[], AppError>(__TAURI_INVOKE("list_diet_goals")),
+	createRecipe: (input: CreateRecipeInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("create_recipe", { input })),
+	updateRecipe: (input: UpdateRecipeInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("update_recipe", { input })),
+	getRecipe: (id: string) => typedError<Recipe, AppError>(__TAURI_INVOKE("get_recipe", { id })),
+	listRecipes: (query: string | null, includeArchived: boolean) => typedError<Recipe[], AppError>(__TAURI_INVOKE("list_recipes", { query, includeArchived })),
+	setRecipeArchived: (id: string, archived: boolean) => typedError<Recipe, AppError>(__TAURI_INVOKE("set_recipe_archived", { id, archived })),
+	createMealPlan: (input: CreateMealPlanInput) => typedError<MealPlan, AppError>(__TAURI_INVOKE("create_meal_plan", { input })),
+	listMealPlans: () => typedError<MealPlan[], AppError>(__TAURI_INVOKE("list_meal_plans")),
+	getMealPlan: (id: string) => typedError<MealPlanDetail, AppError>(__TAURI_INVOKE("get_meal_plan", { id })),
+	setMealPlanStatus: (id: string, status: MealPlanStatus) => typedError<MealPlan, AppError>(__TAURI_INVOKE("set_meal_plan_status", { id, status })),
+	addPlannedMeal: (input: AddPlannedMealInput) => typedError<PlannedMeal, AppError>(__TAURI_INVOKE("add_planned_meal", { input })),
+	removePlannedMeal: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_planned_meal", { id })),
+	setPlannedMealStatus: (id: string, status: PlannedMealStatus) => typedError<PlannedMeal, AppError>(__TAURI_INVOKE("set_planned_meal_status", { id, status })),
+	addPlannedMealItem: (input: AddPlannedMealItemInput) => typedError<PlannedMealItem, AppError>(__TAURI_INVOKE("add_planned_meal_item", { input })),
+	removePlannedMealItem: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("remove_planned_meal_item", { id })),
+	recordMealLog: (input: RecordMealLogInput) => typedError<MealLog, AppError>(__TAURI_INVOKE("record_meal_log", { input })),
+	listMealLogs: (from: string, to: string) => typedError<MealLog[], AppError>(__TAURI_INVOKE("list_meal_logs", { from, to })),
+	deleteMealLog: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_meal_log", { id })),
+	dailyDietNutrition: (date: string) => typedError<DailyNutrition, AppError>(__TAURI_INVOKE("daily_diet_nutrition", { date })),
+	addPantryLot: (input: AddPantryLotInput) => typedError<PantryLot, AppError>(__TAURI_INVOKE("add_pantry_lot", { input })),
+	listPantry: () => typedError<PantryFoodSummary[], AppError>(__TAURI_INVOKE("list_pantry")),
+	consumePantry: (foodId: string, qtyG: number | null, mealLogId: string | null, reason: string | null) => typedError<ConsumePantryResult, AppError>(__TAURI_INVOKE("consume_pantry", { foodId, qtyG, mealLogId, reason })),
+	adjustPantryLot: (lotId: string, newRemainingG: number | null, reason: string | null) => typedError<PantryLot, AppError>(__TAURI_INVOKE("adjust_pantry_lot", { lotId, newRemainingG, reason })),
+	wastePantryLot: (lotId: string, qtyG: number | null, kind: PantryEventKind, reason: string | null) => typedError<PantryLot, AppError>(__TAURI_INVOKE("waste_pantry_lot", { lotId, qtyG, kind, reason })),
+	expiringPantry: (today: string, withinDays: number) => typedError<PantryLot[], AppError>(__TAURI_INVOKE("expiring_pantry", { today, withinDays })),
+	recordGroceryOrder: (input: RecordGroceryOrderInput) => typedError<GroceryOrder, AppError>(__TAURI_INVOKE("record_grocery_order", { input })),
+	listGroceryOrders: (limit: number) => typedError<GroceryOrder[], AppError>(__TAURI_INVOKE("list_grocery_orders", { limit })),
+	setGroceryOrderStatus: (id: string, status: GroceryOrderStatus) => typedError<GroceryOrder, AppError>(__TAURI_INVOKE("set_grocery_order_status", { id, status })),
+	setOrderLineFood: (lineId: string, foodId: string | null) => typedError<GroceryOrderLine, AppError>(__TAURI_INVOKE("set_order_line_food", { lineId, foodId })),
+	receiveOrderLine: (input: ReceiveOrderLineInput) => typedError<PantryLot, AppError>(__TAURI_INVOKE("receive_order_line", { input })),
+	dietShoppingList: (planId: string) => typedError<ShoppingListEntry[], AppError>(__TAURI_INVOKE("diet_shopping_list", { planId })),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
@@ -878,6 +927,34 @@ export type AccountDuplicate = {
 	projects: AuditProjectRef[],
 	/**  그룹이 개인·업무 프로젝트를 **모두** 포함 → 토큰 분리 권장 위반 가능(강조 경고). */
 	crossKind: boolean,
+};
+
+export type AddPantryLotInput = {
+	foodId: string,
+	location: PantryLocation,
+	acquiredOn: string,
+	expiresOn: string | null,
+	initialQtyG: number | null,
+	note: string | null,
+};
+
+export type AddPlannedMealInput = {
+	planId: string,
+	date: string,
+	mealType: MealType,
+	scheduledTime: string | null,
+	note: string | null,
+	sortRank: number,
+};
+
+export type AddPlannedMealItemInput = {
+	plannedMealId: string,
+	/**  recipe_id XOR food_id. recipe면 servings, food면 qty_g가 필수. */
+	recipeId: string | null,
+	foodId: string | null,
+	servings: number | null,
+	qtyG: number | null,
+	note: string | null,
 };
 
 /**  설정 > Agents에서 보이는 내부 프롬프트 실행 설정. */
@@ -1798,6 +1875,12 @@ export type ConnectionAudit = {
 	environment: EnvWarning[],
 };
 
+export type ConsumePantryResult = {
+	taken: PantryTake[],
+	/**  재고 부족으로 차감 못 한 양(0이면 완전 충족). */
+	shortfallG: number | null,
+};
+
 export type ControlRoomSnapshot = {
 	/**  RFC3339 newest state-file mtime; None if nothing has been projected yet. */
 	generatedAt: string | null,
@@ -1919,6 +2002,12 @@ export type CreateKeyResultInput = {
 	sortRank: number,
 };
 
+export type CreateMealPlanInput = {
+	startDate: string,
+	endDate: string,
+	note: string | null,
+};
+
 export type CreateMissionHorizonInput = {
 	title: string,
 	description: string | null,
@@ -1943,6 +2032,15 @@ export type CreateProjectInput = {
 	kind: ProjectKind,
 	notionBacklogDbId: string | null,
 	notionAgendaDbId: string | null,
+};
+
+export type CreateRecipeInput = {
+	name: string,
+	servings: number | null,
+	cookMinutes: number | null,
+	mealTags: string[],
+	instructions: string | null,
+	ingredients: RecipeIngredientInput[],
 };
 
 /**  레포 추가 입력. */
@@ -2004,6 +2102,17 @@ export type CreatedCalendarEvent = {
 	url: string | null,
 };
 
+export type DailyNutrition = {
+	date: string,
+	/**  meal_logs 합산(실제 섭취). */
+	actual: DietMacros,
+	/**  그 날짜의 active/draft 계획 항목 합(있으면). */
+	planned: DietMacros,
+	logsCount: number,
+	/**  그 날짜 기준 활성 목표 대비 검증(목표 없으면 None). */
+	goal: DietGoalCheck | null,
+};
+
 /**  부채 추세 한 점(일별 스냅샷). 11a부터 전진 누적 — 7일 미만이면 있는 만큼만. */
 export type DebtPoint = {
 	date: string,
@@ -2012,6 +2121,38 @@ export type DebtPoint = {
 	staleBacklog: number,
 	cleanupNeeded: number,
 	prAttention: number,
+};
+
+export type DietGoal = {
+	id: string,
+	effectiveDate: string,
+	calorieTarget: number | null,
+	calorieTolerancePct: number | null,
+	proteinMinG: number | null,
+	fatMinG: number | null,
+	carbTargetG: number | null,
+	fiberMinG: number | null,
+	note: string | null,
+	createdAt: string,
+};
+
+export type DietGoalCheck = {
+	calorieTarget: number | null,
+	calorieTolerancePct: number | null,
+	proteinMinG: number | null,
+	/**  actual − target (음수 = 부족). */
+	kcalDelta: number | null,
+	kcalOk: boolean,
+	/**  protein_min_g 미설정이면 None. */
+	proteinOk: boolean | null,
+};
+
+/**  매크로 영양 묶음. 문맥에 따라 "100g당" 또는 "절대량"을 담는다(커널 함수 시그니처가 구분). */
+export type DietMacros = {
+	kcal: number | null,
+	proteinG: number | null,
+	fatG: number | null,
+	carbG: number | null,
 };
 
 /**  diff 파일 목록 한 항목 (통계만 — 파일별 hunk는 지연 로드). specta i64/u64 금지 → adds/dels u32. */
@@ -2126,6 +2267,28 @@ export type FlushSummary = {
 	failed: number,
 };
 
+export type Food = {
+	id: string,
+	name: string,
+	foodType: FoodType,
+	preparation: string | null,
+	defaultServingG: number | null,
+	kcalPer100g: number | null,
+	proteinGPer100g: number | null,
+	fatGPer100g: number | null,
+	carbGPer100g: number | null,
+	fiberGPer100g: number | null,
+	sodiumMgPer100g: number | null,
+	source: string,
+	sourceRef: string | null,
+	archived: boolean,
+	aliases: string[],
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type FoodType = "ingredient" | "product" | "dish";
+
 export type GenerateLifeOsReviewInput = {
 	weekStart: string,
 	quarter: string,
@@ -2142,6 +2305,45 @@ export type GoogleCalendarStatus = {
 	/**  사람이 읽을 상태 상세. */
 	detail: string,
 };
+
+export type GroceryOrder = {
+	id: string,
+	merchant: string,
+	orderedAt: string,
+	externalOrderNo: string | null,
+	totalKrw: number | null,
+	shippingKrw: number | null,
+	status: GroceryOrderStatus,
+	note: string | null,
+	lines: GroceryOrderLine[],
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type GroceryOrderLine = {
+	id: string,
+	orderId: string,
+	productName: string,
+	foodId: string | null,
+	quantity: number | null,
+	totalG: number | null,
+	unitPriceKrw: number | null,
+	lineTotalKrw: number | null,
+	received: boolean,
+	note: string | null,
+};
+
+export type GroceryOrderLineInput = {
+	productName: string,
+	foodId: string | null,
+	quantity: number | null,
+	totalG: number | null,
+	unitPriceKrw: number | null,
+	lineTotalKrw: number | null,
+	note: string | null,
+};
+
+export type GroceryOrderStatus = "ordered" | "delivered" | "cancelled";
 
 export type GuardrailTargetKind = "routine_count" | "weekly_minutes" | "manual_check";
 
@@ -2396,6 +2598,48 @@ export type LinkSprintGoalInput = {
 	replaceExisting: boolean,
 };
 
+export type MealLog = {
+	id: string,
+	date: string,
+	at: string,
+	plannedMealId: string | null,
+	recipeId: string | null,
+	foodId: string | null,
+	description: string | null,
+	servings: number | null,
+	qtyG: number | null,
+	kcal: number | null,
+	proteinG: number | null,
+	fatG: number | null,
+	carbG: number | null,
+	satisfaction: number | null,
+	fullness: number | null,
+	note: string | null,
+	createdAt: string,
+};
+
+export type MealPlan = {
+	id: string,
+	startDate: string,
+	endDate: string,
+	status: MealPlanStatus,
+	/**  생성 시점 활성 목표 스냅샷(이후 목표 변경 무영향). */
+	calorieTarget: number | null,
+	proteinMinG: number | null,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type MealPlanDetail = {
+	plan: MealPlan,
+	meals: PlannedMeal[],
+};
+
+export type MealPlanStatus = "draft" | "active" | "archived";
+
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack" | "pre_workout" | "post_workout" | "free";
+
 export type Mission = {
 	id: number,
 	statement: string,
@@ -2606,6 +2850,39 @@ export type Ownership = "user_owned" | "orchestrator_owned" | "external_owned" |
 /**  Drift-resilient fallback: any wire value not in the known set. */
 "unknown";
 
+export type PantryEventKind = "purchased" | "consumed" | "adjusted" | "wasted" | "expired";
+
+export type PantryFoodSummary = {
+	foodId: string,
+	foodName: string,
+	totalRemainingG: number | null,
+	nearestExpiry: string | null,
+	lots: PantryLot[],
+};
+
+export type PantryLocation = "fridge" | "freezer" | "pantry" | "other";
+
+export type PantryLot = {
+	id: string,
+	foodId: string,
+	foodName: string,
+	location: PantryLocation,
+	acquiredOn: string,
+	expiresOn: string | null,
+	openedOn: string | null,
+	initialQtyG: number | null,
+	remainingQtyG: number | null,
+	orderLineId: string | null,
+	note: string | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type PantryTake = {
+	lotId: string,
+	qtyG: number | null,
+};
+
 export type PendingAction = {
 	id: string,
 	kind: string,
@@ -2653,6 +2930,37 @@ export type PlanRow = {
 	title: string,
 	phase: PlanPhase,
 };
+
+export type PlannedMeal = {
+	id: string,
+	planId: string,
+	date: string,
+	mealType: MealType,
+	scheduledTime: string | null,
+	status: PlannedMealStatus,
+	eatenAt: string | null,
+	note: string | null,
+	sortRank: number,
+	items: PlannedMealItem[],
+};
+
+export type PlannedMealItem = {
+	id: string,
+	plannedMealId: string,
+	recipeId: string | null,
+	foodId: string | null,
+	/**  조회 시점의 recipe/food 이름(표시용). */
+	label: string,
+	servings: number | null,
+	qtyG: number | null,
+	kcal: number | null,
+	proteinG: number | null,
+	fatG: number | null,
+	carbG: number | null,
+	note: string | null,
+};
+
+export type PlannedMealStatus = "planned" | "eaten" | "partial" | "skipped";
 
 /**
  *  PR Radar 한 항목 (프런트 표시용). ambient 상태라 매 폴링마다 GitHub에서 새로 도출된다.
@@ -2868,10 +3176,65 @@ export type RebaseResult = {
 	message: string,
 };
 
+export type ReceiveOrderLineInput = {
+	lineId: string,
+	location: PantryLocation,
+	/**  입고일(로컬 날짜, 호출자 주입). */
+	acquiredOn: string,
+	expiresOn: string | null,
+	/**  라인의 total_g가 없거나 실측과 다를 때 로트 수량 override. */
+	totalGOverride: number | null,
+};
+
+export type Recipe = {
+	id: string,
+	name: string,
+	servings: number | null,
+	cookMinutes: number | null,
+	mealTags: string[],
+	instructions: string | null,
+	archived: boolean,
+	ingredients: RecipeIngredient[],
+	/**  전체(모든 재료 합) — 쿼리타임 커널 계산(저장 안 함). */
+	total: DietMacros,
+	/**  1인분(total / servings). */
+	perServing: DietMacros,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type RecipeIngredient = {
+	id: string,
+	recipeId: string,
+	foodId: string,
+	foodName: string,
+	qtyG: number | null,
+	optional: boolean,
+	note: string | null,
+	sortRank: number,
+};
+
+export type RecipeIngredientInput = {
+	foodId: string,
+	qtyG: number | null,
+	optional: boolean,
+	note: string | null,
+};
+
 export type RecordBookkeepingSyncFailureInput = {
 	source: BookkeepingSource,
 	errorCode: string,
 	rawErrorMessage: string,
+};
+
+export type RecordGroceryOrderInput = {
+	merchant: string,
+	orderedAt: string,
+	externalOrderNo: string | null,
+	totalKrw: number | null,
+	shippingKrw: number | null,
+	note: string | null,
+	lines: GroceryOrderLineInput[],
 };
 
 export type RecordLifeOsAuditInput = {
@@ -2879,6 +3242,31 @@ export type RecordLifeOsAuditInput = {
 	targetKind: LifeOsTargetKind,
 	targetId: string,
 	outcome: LifeOsAuditOutcome,
+	note: string | null,
+};
+
+/**
+ *  섭취 기록 입력. 영양 출처는 다음 중 정확히 하나:
+ *  1) `planned_meal_id` — 계획 항목 스냅샷 합 × `ratio`(기본 1.0), 계획 상태도 eaten/partial로 전이.
+ *  2) `recipe_id` + `servings` — 레시피 현재 재료로 커널 계산.
+ *  3) `food_id` + `qty_g` — 식품 100g당 값으로 커널 계산.
+ *  4) `manual` — 자유 기록(외식 등): 매크로 직접 입력 + `description` 필수.
+ */
+export type RecordMealLogInput = {
+	date: string,
+	/**  RFC3339 또는 'YYYY-MM-DDTHH:MM'. None이면 서버가 now로 채운다. */
+	at: string | null,
+	plannedMealId: string | null,
+	/**  planned 경로에서만 의미(0<ratio<=1). 1 미만이면 계획 상태 partial. */
+	ratio: number | null,
+	recipeId: string | null,
+	servings: number | null,
+	foodId: string | null,
+	qtyG: number | null,
+	manual: DietMacros | null,
+	description: string | null,
+	satisfaction: number | null,
+	fullness: number | null,
 	note: string | null,
 };
 
@@ -3090,6 +3478,17 @@ export type SetBouleConfigInput_Serialize = {
 	priceTable: string | null,
 };
 
+export type SetDietGoalInput = {
+	effectiveDate: string,
+	calorieTarget: number | null,
+	calorieTolerancePct: number | null,
+	proteinMinG: number | null,
+	fatMinG: number | null,
+	carbTargetG: number | null,
+	fiberMinG: number | null,
+	note: string | null,
+};
+
 /**  프로젝트별 캘린더 표시 색상 변경 입력. `color=NULL`은 기본 팔레트로 되돌림. */
 export type SetProjectCalendarColorInput = {
 	projectId: string,
@@ -3111,6 +3510,19 @@ export type SetProjectNotionDbIdsInput = {
 	projectId: string,
 	backlogDbId: string | null,
 	agendaDbId: string | null,
+};
+
+export type ShoppingListEntry = {
+	foodId: string,
+	foodName: string,
+	/**  계획 필요량(레시피 전개 포함). */
+	requiredG: number | null,
+	/**  현재 재고 잔량 합. */
+	availableG: number | null,
+	/**  주문했지만 미입고인 라인의 중량 합. */
+	pendingG: number | null,
+	/**  max(0, required − available − pending). */
+	netNeededG: number | null,
 };
 
 /**
@@ -3621,6 +4033,17 @@ export type UpdateObjectiveInput = {
 	linkedProjectIds: string[],
 };
 
+export type UpdateRecipeInput = {
+	id: string,
+	name: string,
+	servings: number | null,
+	cookMinutes: number | null,
+	mealTags: string[],
+	instructions: string | null,
+	/**  전체 교체(replace-all) — 부분 patch 아님. */
+	ingredients: RecipeIngredientInput[],
+};
+
 /**
  *  루틴 수정 입력. area/kind는 카드에서 즉시 갱신(set_routine_area_tag_key/set_routine_kind)되므로
  *  이 입력으로는 변경하지 않는다(폼은 schedule 관련만 편집).
@@ -3659,6 +4082,23 @@ export type UpdateStatus = {
 	lastCheckedAt: string | null,
 	/**  staging에 installed와 다른 commit가 받아져 있으면 true(적용 가능). */
 	updateAvailable: boolean,
+};
+
+export type UpsertFoodInput = {
+	/**  None = 새 식품 생성, Some = 해당 식품 갱신. */
+	id: string | null,
+	name: string,
+	foodType: FoodType,
+	preparation: string | null,
+	defaultServingG: number | null,
+	kcalPer100g: number | null,
+	proteinGPer100g: number | null,
+	fatGPer100g: number | null,
+	carbGPer100g: number | null,
+	fiberGPer100g: number | null,
+	sodiumMgPer100g: number | null,
+	source: string | null,
+	sourceRef: string | null,
 };
 
 export type UpsertGuardrailInput = {

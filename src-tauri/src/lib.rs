@@ -23,6 +23,7 @@ mod commands;
 // Phase 1: MCP 라운드트립 integration test(tests/mcp_roundtrip)가 `init_db`로 tempdir 풀을
 // 만들 수 있도록 crate 밖에서 보이게 한다(앱 마이그레이션 경로 재사용 — 하드코딩 금지).
 pub mod db;
+mod diet; // 식단 순수 계산 커널 — 영양/목표/FEFO 결정론(docs/plans/2026-07-17-diet-domain.md).
 mod error;
 // Phase 1: integration test(tests/compile_fail)가 `Acceptance` 타입을 보고 `mint` visibility를
 // 검증하려면 모듈이 crate 밖에서 보여야 한다(타입은 이미 pub). mint은 `pub(in ...)`로 잠겨 있어
@@ -135,6 +136,45 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::mark_bookkeeping_duplicate,
         // Bookkeeping sync cursors (Phase E) — per-source incremental polling state (read).
         commands::list_bookkeeping_sync_cursors,
+        // Diet — 식단/재고/장보기/주문내역 로컬 원장(2026-07-17 plan). 외부 mutate 없음.
+        commands::upsert_food,
+        commands::list_foods,
+        commands::set_food_archived,
+        commands::add_food_alias,
+        commands::remove_food_alias,
+        commands::set_diet_goal,
+        commands::active_diet_goal,
+        commands::list_diet_goals,
+        commands::create_recipe,
+        commands::update_recipe,
+        commands::get_recipe,
+        commands::list_recipes,
+        commands::set_recipe_archived,
+        commands::create_meal_plan,
+        commands::list_meal_plans,
+        commands::get_meal_plan,
+        commands::set_meal_plan_status,
+        commands::add_planned_meal,
+        commands::remove_planned_meal,
+        commands::set_planned_meal_status,
+        commands::add_planned_meal_item,
+        commands::remove_planned_meal_item,
+        commands::record_meal_log,
+        commands::list_meal_logs,
+        commands::delete_meal_log,
+        commands::daily_diet_nutrition,
+        commands::add_pantry_lot,
+        commands::list_pantry,
+        commands::consume_pantry,
+        commands::adjust_pantry_lot,
+        commands::waste_pantry_lot,
+        commands::expiring_pantry,
+        commands::record_grocery_order,
+        commands::list_grocery_orders,
+        commands::set_grocery_order_status,
+        commands::set_order_line_food,
+        commands::receive_order_line,
+        commands::diet_shopping_list,
         // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
         commands::gh_cli_status,
         commands::import_github_token,

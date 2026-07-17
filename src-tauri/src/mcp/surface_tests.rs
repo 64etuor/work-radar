@@ -168,6 +168,13 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_flag_duplicate",
         "wr_bookkeeping_budget_status",
         "wr_bookkeeping_list_recurring_expenses",
+        "wr_diet_daily_nutrition",
+        "wr_diet_meals_for_date",
+        "wr_diet_pantry_summary",
+        "wr_diet_expiring_pantry",
+        "wr_diet_shopping_list",
+        "wr_diet_search_foods",
+        "wr_diet_record_meal",
         "wr_list_signals",
         "wr_create_signal",
         "wr_okr_get_mission",
@@ -302,6 +309,16 @@ fn decision_rail_writes_never_reach_the_mcp_surface() {
         "wr_bookkeeping_mark_duplicate",
         "wr_bookkeeping_update_review_status",
         "wr_bookkeeping_delete_transaction",
+        // Diet 결정 레일 — 목표/계획 편집·재고 실사/폐기 확정·기록 삭제는 사람 결정.
+        // 에이전트는 `wr_diet_record_meal`로 "먹었다"는 사실만 남긴다(tools/diet.rs 모듈 doc).
+        "wr_set_diet_goal",
+        "wr_create_meal_plan",
+        "wr_set_meal_plan_status",
+        "wr_add_planned_meal",
+        "wr_add_planned_meal_item",
+        "wr_adjust_pantry_lot",
+        "wr_waste_pantry_lot",
+        "wr_delete_meal_log",
     ] {
         assert!(
             !names.contains(forbidden),
