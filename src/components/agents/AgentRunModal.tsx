@@ -33,7 +33,11 @@ export function AgentRunModal() {
   const [logOpen, setLogOpen] = useState(false);
   // 로그 펼친 동안에만 폴링 — JobsView와 동일 패턴(INVARIANT #5 bounded).
   const logIds = logOpen && openAgentRunId ? [openAgentRunId] : [];
-  const logs = useAgentLogs(logIds);
+  // 잡이 running/proposed일 때만 로그도 폴링 — terminal 잡은 로그가 더 변하지 않는다.
+  const isRunActive = run?.status === "running" || run?.status === "proposed";
+  const activeLogRunIds =
+    isRunActive && openAgentRunId ? new Set([openAgentRunId]) : new Set<string>();
+  const logs = useAgentLogs(logIds, activeLogRunIds);
 
   const handleOpenChange = (next: boolean) => {
     if (next) return;

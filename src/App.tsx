@@ -1,30 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 
 import { AgentRunModal } from "@/components/agents/AgentRunModal";
 import { AgentStatusBar } from "@/components/AgentStatusBar";
 import { CalendarDrawer } from "@/components/board/CalendarDrawer";
-import { BookkeepingView } from "@/components/bookkeeping/BookkeepingView";
 import { CaptureBoard } from "@/components/CaptureBoard";
 import { CmdKnob } from "@/components/CmdKnob";
 import { CommandPalette } from "@/components/CommandPalette";
-import ControlRoomView from "@/components/control-room/ControlRoomView";
-import { DietView } from "@/components/diet/DietView";
 import { useHermesTabsBootstrap } from "@/components/hermes/useHermesTabsStore";
-import HermesView from "@/components/HermesView";
-import { JobsView } from "@/components/jobs/JobsView";
-import { MissionView } from "@/components/MissionView";
 import { NewsTicker } from "@/components/news/NewsTicker";
-import { PrRadarView } from "@/components/PrRadarView";
-import { RoutineTrackingView } from "@/components/RoutineTrackingView";
-import { SettingsView } from "@/components/SettingsView";
-import { SkillsView } from "@/components/SkillsView";
 import { ToastHost } from "@/components/ToastHost";
-import { TodayView } from "@/components/TodayView";
 import { cn } from "@/components/ui/cn";
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
-import { WeeklyView } from "@/components/WeeklyView";
-import { WorktreeView } from "@/components/WorktreeView";
 import { type AppAction } from "@/lib/appActions";
 import { fontFamilyFor } from "@/lib/fontPresets";
 import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
@@ -37,6 +24,45 @@ import { useUIStore, type View } from "@/store";
 
 /** 팔레트 exit 유지 시간 — `.cmdk-*` closed 애니메이션(--wr-motion-fast)보다 살짝 길게. */
 const PALETTE_EXIT_MS = Math.round(WR_MOTION.fast * 1000) + 40;
+
+// 뷰 코드 스플리팅 — 초기 뷰(board=CaptureBoard)만 eager, 나머지는 뷰 진입 시 청크 로드.
+// 메인 번들 파싱 비용(앱 기동 체감)을 줄인다. 청크는 로컬 asset이라 로드 지연은 ms 단위이고,
+// 뷰 슬라이드 중에는 snapshot 오버레이가 덮어 fallback 공백이 보이지 않는다.
+const BookkeepingView = lazy(() =>
+  import("@/components/bookkeeping/BookkeepingView").then((m) => ({ default: m.BookkeepingView })),
+);
+const ControlRoomView = lazy(() => import("@/components/control-room/ControlRoomView"));
+const DietView = lazy(() =>
+  import("@/components/diet/DietView").then((m) => ({ default: m.DietView })),
+);
+const HermesView = lazy(() => import("@/components/HermesView"));
+const JobsView = lazy(() =>
+  import("@/components/jobs/JobsView").then((m) => ({ default: m.JobsView })),
+);
+const MissionView = lazy(() =>
+  import("@/components/MissionView").then((m) => ({ default: m.MissionView })),
+);
+const PrRadarView = lazy(() =>
+  import("@/components/PrRadarView").then((m) => ({ default: m.PrRadarView })),
+);
+const RoutineTrackingView = lazy(() =>
+  import("@/components/RoutineTrackingView").then((m) => ({ default: m.RoutineTrackingView })),
+);
+const SettingsView = lazy(() =>
+  import("@/components/SettingsView").then((m) => ({ default: m.SettingsView })),
+);
+const SkillsView = lazy(() =>
+  import("@/components/SkillsView").then((m) => ({ default: m.SkillsView })),
+);
+const TodayView = lazy(() =>
+  import("@/components/TodayView").then((m) => ({ default: m.TodayView })),
+);
+const WeeklyView = lazy(() =>
+  import("@/components/WeeklyView").then((m) => ({ default: m.WeeklyView })),
+);
+const WorktreeView = lazy(() =>
+  import("@/components/WorktreeView").then((m) => ({ default: m.WorktreeView })),
+);
 
 type ViewMotion = "forward" | "back";
 type ViewSnapshot = {
@@ -213,7 +239,7 @@ export default function App() {
       <div className="view-stage" data-slide-motion={viewSnapshot?.motion}>
         <div className="view-shell">
           <div key={view} className="view-content">
-            {renderView(view)}
+            <Suspense fallback={null}>{renderView(view)}</Suspense>
           </div>
         </div>
         {viewSnapshot && (
@@ -246,8 +272,11 @@ export default function App() {
       <CalendarDrawer open={calendarOpen} onClose={() => setCalendarOpen(false)} />
       {/* 글로벌 에이전트 결과 모달 — 에이전트 바 박스 클릭으로만 열림(자동 오픈 없음). */}
       <AgentRunModal />
-      {/* Hermes 플로팅 패널 — 전역 1회 마운트, state.open=false 시 null 렌더. */}
-      <HermesView />
+      {/* Hermes 플로팅 패널 — 전역 1회 마운트, state.open=false 시 null 렌더.
+          lazy: 청크 로드는 마운트 직후 비동기로 시작돼 초기 파싱 경로에서 빠진다. */}
+      <Suspense fallback={null}>
+        <HermesView />
+      </Suspense>
       {/* 전역 토스트 스택 (A7) — 모든 뷰 위에 상주, 화면 우하단 고정. */}
       <ToastHost />
       {/* 전역 오락실 조이스틱 — 트리거 hold 시 커서 위치에 등장(useCmdKnob). 페이지 메뉴 칩 클릭은

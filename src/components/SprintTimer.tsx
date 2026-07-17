@@ -46,15 +46,23 @@ export function SprintTimer() {
     "closed",
   );
 
-  // 1s tick — 표시 갱신용(now ms). 경계는 statusQ가 분 단위로 재조회한다.
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, []);
-
   const status = statusQ.data ?? null;
   const config = configQ.data ?? null;
+  // 활성 스프린트(설정+상태 둘 다 로드됨)일 때만 카운트다운이 존재 — 미설정이면 tick 자체가 무의미.
+  const sprintActive = !!(status && config);
+
+  // 1s tick — 표시 갱신용(now ms). 경계는 statusQ가 분 단위로 재조회한다.
+  // 스프린트가 활성일 때만 인터벌을 돌린다 — 미설정 상태에서 매초 재렌더링을 유발하지 않는다.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  // 알려진 nit(수용): 같은 마운트에서 비활성→재활성되면 첫 tick(≤1s)까지 nowMs가 비활성
+  // 구간 값으로 잠깐 표시된다. 렌더 중 Date.now()는 컴파일러 purity 에러, effect 내 즉시
+  // setState는 cascading-render 경고라 1s 자가 치유를 선택.
+  useEffect(() => {
+    if (!sprintActive) return undefined;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [sprintActive]);
+
   let meter: { display: ReturnType<typeof formatCountdown>; pct: number } | null = null;
   if (status && config) {
     const secs = remainingSecondsUntil(status.nextBoundary, nowMs);

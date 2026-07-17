@@ -41,7 +41,7 @@
 
 @font-face {
   font-family: "JetBrains Mono Hangul";
-  src: url("../assets/fonts/JetBrainsMonoHangul-Regular.ttf") format("truetype");
+  src: url("../assets/fonts/JetBrainsMonoHangul-Regular.woff2") format("woff2");
   font-weight: 400;
   font-display: swap;
   font-style: normal;
@@ -51,7 +51,7 @@
 
 @font-face {
   font-family: "JetBrains Mono Hangul";
-  src: url("../assets/fonts/JetBrainsMonoHangul-Bold.ttf") format("truetype");
+  src: url("../assets/fonts/JetBrainsMonoHangul-Bold.woff2") format("woff2");
   font-weight: 700;
   font-display: swap;
   font-style: normal;

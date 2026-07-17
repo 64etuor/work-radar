@@ -48,10 +48,14 @@ export function JobsView() {
   const scrollRef = useScrollRestore("jobs");
   const list = runs.data ?? [];
   const openLogIdList: string[] = [];
+  const activeLogRunIds = new Set<string>();
   for (const run of list) {
-    if (openLogIds.has(run.id)) openLogIdList.push(run.id);
+    if (!openLogIds.has(run.id)) continue;
+    openLogIdList.push(run.id);
+    // 로그 폴링은 running/proposed 동안만 — 종료된 잡 로그는 더 변하지 않는다.
+    if (run.status === "running" || run.status === "proposed") activeLogRunIds.add(run.id);
   }
-  const logs = useAgentLogs(openLogIdList);
+  const logs = useAgentLogs(openLogIdList, activeLogRunIds);
   const codexReady = !!codex.data?.installed && !!codex.data?.authed;
   const summary = summarizeRuns(list);
   const toggleLog = (runId: string) => {

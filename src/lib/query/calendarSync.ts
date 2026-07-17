@@ -1,7 +1,7 @@
 /**
  * Today×Timeline pending_calendar_writes 큐 관찰/제어 hooks(PR 5 Task 5).
  *
- * - `usePendingWrites`: 큐 스냅샷(폴링 2s, 디바운스/staged 표시용).
+ * - `usePendingWrites`: 큐 스냅샷(이벤트+invalidate가 주 경로, 15s 폴링은 safety-net).
  * - `useCommitStagedWrites`: cross-cal Acceptance 게이트(staged=true 행을 풀어 워커가 즉시 가져감).
  * - `useCancelPendingWrites`: staged 행 취소(외부 호출 없음 — cross-cal 이동 롤백).
  *
@@ -46,7 +46,9 @@ export function usePendingWrites() {
   return useQuery<PendingWrite[]>({
     queryKey: ["pendingWrites"],
     queryFn: () => unwrap(commands.listPendingWrites()),
-    refetchInterval: 2000,
+    // 이벤트(위 CalendarSyncFlushed/Failed)+드래그 액션의 직접 invalidate가 주 freshness 경로 —
+    // 폴링은 그 둘이 못 잡는 경우를 위한 safety-net이라 15s로 완화.
+    refetchInterval: 15_000,
   });
 }
 

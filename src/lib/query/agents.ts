@@ -1,4 +1,5 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef } from "react";
 
 import {
   type BatchEnrichProposal,
@@ -110,14 +111,36 @@ export function useAckAgentRun() {
   });
 }
 
-/** 여러 잡 로그 tail. JobsView가 log-open state와 query ownership을 함께 소유한다. */
-export function useAgentLogs(runIds: string[]) {
+/**
+ * 여러 잡 로그 tail. JobsView가 log-open state와 query ownership을 함께 소유한다.
+ * `activeRunIds`에 없는(=terminal) runId는 폴링 중단 — `useAgentRuns`와 동일한 가드
+ * 패턴(INVARIANT #5: 무한 폴링 금지). 생략 시 이전 동작(전부 폴링)을 보존한다.
+ */
+export function useAgentLogs(runIds: string[], activeRunIds?: ReadonlySet<string>) {
+  const qc = useQueryClient();
   const results = useQueries({
     queries: runIds.map((runId) => ({
       queryKey: ["agentLog", runId],
       queryFn: () => unwrap(commands.readAgentLog(runId)),
-      refetchInterval: JOBS_POLL_MS,
+      refetchInterval: (activeRunIds?.has(runId) ?? true) ? JOBS_POLL_MS : (false as const),
     })),
+  });
+
+  // terminal 전환 시 마지막 tail 1회 보장 — runs 폴과 로그 폴이 같은 주기(2s)라 종료 감지가
+  // 로그 폴보다 먼저 오면 대기 중 타이머가 취소돼 최종 출력 구간을 놓친다. active→inactive로
+  // 떨어진 runId는 로그를 한 번 강제 재조회한다(1회성 — 폴링 재개 아님, INVARIANT #5 유지).
+  const prevActiveRef = useRef<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!activeRunIds) return; // 레거시(생략) 경로 — 전부 폴링 중이라 최종 tail 레이스 없음.
+    const prev = prevActiveRef.current;
+    if (prev) {
+      for (const runId of prev) {
+        if (!activeRunIds.has(runId)) {
+          void qc.invalidateQueries({ queryKey: ["agentLog", runId] });
+        }
+      }
+    }
+    prevActiveRef.current = new Set(activeRunIds);
   });
 
   return new Map(runIds.map((runId, index) => [runId, results[index]]));
