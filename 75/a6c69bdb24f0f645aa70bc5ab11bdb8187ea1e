@@ -1,0 +1,104 @@
+src-tauri/src/commands/diet/plans.rs
+  s_b916f088ec8cbe::t_ad7c845fd7c918 201,209
+  s_b916f088ec8cbe::t_9ef057a6f5c4f6 115-137
+  s_b916f088ec8cbe::t_c4f7a0f06d3643 1-114,138-200,202-208,210-622
+  s_b916f088ec8cbe::t_df4b0fecf827a7 623-625
+  s_b916f088ec8cbe::t_d143e0e3c2b1cf 626-636
+src-tauri/src/commands/diet/orders.rs
+  s_b916f088ec8cbe::t_3c5a0eb9623ba2 1-201,205-208,213-214,216,230,238-250,253-263,266-404,407-419,432-474
+  s_b916f088ec8cbe::t_e96cc2c659029d 405-406,420-431
+  s_b916f088ec8cbe::t_4c681abc5a2109 202-204,209-212,215,217-229,231-237,251-252,264-265
+  s_b916f088ec8cbe::t_d3cf87c6e54be2 475-477
+  s_b916f088ec8cbe::t_d560e8a0fe76b4 478-484
+src-tauri/src/mcp/tools/diet.rs
+  s_b916f088ec8cbe::t_f9b79957337902 1-721
+  s_b916f088ec8cbe::t_5c79eea656384b 722-724
+src-tauri/src/mcp/mod.rs
+  s_b916f088ec8cbe::t_88471ada71f4b6 40
+  s_b916f088ec8cbe::t_23ee6a1c256f9c 66
+src-tauri/src/mcp/surface_tests.rs
+  s_b916f088ec8cbe::t_2448a64d262aa1 171-177
+  s_b916f088ec8cbe::t_3f798e9f4f882f 312-321
+src-tauri/src/commands/diet/pantry.rs
+  s_b916f088ec8cbe::t_a0f9f5f03e0eea 1-87,93-94,96-103,105-123,125-126,128-134,136-141,146-190,195-200,202-254,256,265-298,308-310,312-318,320-321,324-558
+  s_b916f088ec8cbe::t_b5ab96ef9c648c 299-307,311,319,322-323
+  s_b916f088ec8cbe::t_a5dc77f2440946 255,257-264
+  s_b916f088ec8cbe::t_07399369f2f4a7 88-92,95,104,124,127,135,142-145
+  s_b916f088ec8cbe::t_acbb5b9eaaa897 191-194,201
+  s_b916f088ec8cbe::t_daaa981316284f 559-561
+  s_b916f088ec8cbe::t_586ab5e2529451 562-570
+src-tauri/src/commands/diet/mod.rs
+  s_b916f088ec8cbe::t_8412fe13aa542f 6-8
+  s_b916f088ec8cbe::t_9f0dbf90ac7654 1-5,9-92
+  s_b916f088ec8cbe::t_ef9792e9e095c7 93-95
+src-tauri/src/commands/diet/foods.rs
+  s_b916f088ec8cbe::t_ac24450152b4c4 1-440
+  s_b916f088ec8cbe::t_89323a9f7784a7 441-443
+  s_b916f088ec8cbe::t_7c66dab802ed42 444-445
+src-tauri/src/lib.rs
+  s_b916f088ec8cbe::t_3f09c134440f5c 139-177
+  s_b916f088ec8cbe::t_509b1ebb72f3a1 26
+src-tauri/src/diet.rs
+  s_b916f088ec8cbe::t_7ae2981c702ded 1-249
+src-tauri/src/commands/diet/shopping.rs
+  s_b916f088ec8cbe::t_a0aaa2fc00ca93 1-72,76,78-79,81-185,204-236
+  s_b916f088ec8cbe::t_c3cde272a71a36 77
+  s_b916f088ec8cbe::t_4a0eee64768763 73-75,80
+  s_b916f088ec8cbe::t_ebcac4b160a5c5 186-203
+  s_b916f088ec8cbe::t_baada1e18dcf19 237-239
+  s_b916f088ec8cbe::t_fdcc8483b4ce6a 240-245
+src-tauri/src/commands/mod.rs
+  s_b916f088ec8cbe::t_e658fee447318f 57
+  s_b916f088ec8cbe::t_32e4ed29bd2c8e 23
+src-tauri/src/models/diet.rs
+  s_b916f088ec8cbe::t_a3dbab6500b7d7 1-437,439-518
+  s_b916f088ec8cbe::t_f237c36f1c8109 438
+src-tauri/src/mcp/tools/mod.rs
+  s_b916f088ec8cbe::t_e2f71b375ac505 7
+docs/areas/area-map.md
+  s_b916f088ec8cbe::t_816febb5207d81 56
+  s_b916f088ec8cbe::t_b17058a18d1a6e 55
+docs/decisions.md
+  s_b916f088ec8cbe::t_c4a61b7cb05d86 665-666
+src-tauri/migrations/0073_diet_foundation.sql
+  s_b916f088ec8cbe::t_c6502c2b8b2f3d 1-228
+src-tauri/src/commands/diet/logs.rs
+  s_b916f088ec8cbe::t_9c35d4e58c6aed 1-129,148-168,173-207,212-219,222-451
+  s_b916f088ec8cbe::t_fccf09402f5f49 130-147,169-172
+  s_b916f088ec8cbe::t_7eda7afbaec7e1 220-221
+  s_b916f088ec8cbe::t_a97ffe68d3c72f 208-211
+  s_b916f088ec8cbe::t_30190409b342fa 452-454
+  s_b916f088ec8cbe::t_0c902a9319f8c0 455-457
+src-tauri/src/commands/diet/recipes.rs
+  s_b916f088ec8cbe::t_8f54225c47cc04 1-86,103-470
+  s_b916f088ec8cbe::t_29de70e7ce8e3c 87-102
+  s_b916f088ec8cbe::t_4ebbcc0e3bbcd9 471-473
+  s_b916f088ec8cbe::t_8e007594c973c7 474-482
+src-tauri/src/commands/diet/goals.rs
+  s_b916f088ec8cbe::t_ff19c32a4ad7d0 1-154
+  s_b916f088ec8cbe::t_18304cb03e862e 155-157
+src-tauri/src/models.rs
+  s_b916f088ec8cbe::t_03f0c4a6d65b99 10
+  s_b916f088ec8cbe::t_3b6fd785d7db92 31
+docs/plans/2026-07-17-diet-domain.md
+  s_b916f088ec8cbe::t_02e8bc1aaba623 26-39
+  s_b916f088ec8cbe::t_cd93e4a15cd74a 1-25,40-66
+src/bindings.ts
+  s_b916f088ec8cbe::t_c4cb1857e866eb 92-140,932-959,1878-1883,2005-2010,2037-2045,2105-2115,2126-2157,2270-2291,2309-2347,2601-2642,2853-2885,2934-2964,3179-3223,3230-3239,3248-3272,3481-3491,3515-3527,4036-4046,4087-4103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "75a6c69bdb24f0f645aa70bc5ab11bdb8187ea1e",
+  "prompts": {},
+  "sessions": {
+    "s_b916f088ec8cbe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35877f3b-40d5-4add-8079-28f1e26102d7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
