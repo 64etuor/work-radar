@@ -1,0 +1,77 @@
+src/store.ts
+  s_b916f088ec8cbe::t_cab55e4f1edfb1 10
+docs/decisions.md
+  s_b916f088ec8cbe::t_2fa7d5797d4b37 667-668
+src/components/diet/PantrySection.tsx
+  s_b916f088ec8cbe::t_aa434a278fc942 772-781
+  s_b916f088ec8cbe::t_2e7bd0365d0d15 712-715
+  s_b916f088ec8cbe::t_da1e21c6bec350 840
+  s_b916f088ec8cbe::t_916b58dddaff19 2-41,43-49,51-52,54-159,163-698,700,705-711,716-747,749-771,782-839,841-902
+  s_b916f088ec8cbe::t_0bfe4ef3eb9b40 50
+  s_b916f088ec8cbe::t_6f41cdb1c982eb 748
+  s_b916f088ec8cbe::t_9c051a873621de 699,701-704
+  s_b916f088ec8cbe::t_aab00c01e9de63 53
+  s_b916f088ec8cbe::t_cea19a1f4012ca 1
+  s_b916f088ec8cbe::t_b5b27b75679658 160-162
+  s_b916f088ec8cbe::t_7ea4dd9f417407 42
+  s_b916f088ec8cbe::t_bd8985eb849b43 903
+src/lib/nav.ts
+  s_b916f088ec8cbe::t_0502dfd54e3653 14
+  s_b916f088ec8cbe::t_8d0fb22358dfff 99-104
+  s_b916f088ec8cbe::t_81f35eab585c5a 98
+src/components/diet/HistorySection.tsx
+  s_b916f088ec8cbe::t_84bbfdf1ab8bf3 1-368
+  s_b916f088ec8cbe::t_bbd392bcf9b2ce 369-378
+src/components/diet/LibrarySection.tsx
+  s_b916f088ec8cbe::t_f88c558ebf1593 477-480
+  s_b916f088ec8cbe::t_98a35af348ffd3 141
+  s_b916f088ec8cbe::t_dc48e296b85a3e 32
+  s_b916f088ec8cbe::t_41d3576365a23c 1-31,34-55,63-105,107-140,142-476,481-610
+  s_b916f088ec8cbe::t_de350d6f0ec664 58-60,62
+  s_b916f088ec8cbe::t_3e91e812ad711b 56-57,61
+  s_b916f088ec8cbe::t_aab00c01e9de63 33
+  s_b916f088ec8cbe::t_de7f11e0f6e09b 106
+  s_b916f088ec8cbe::t_663d1ac67177d1 611-627
+src/lib/query/index.ts
+  s_b916f088ec8cbe::t_1aae06aa12e9fa 10
+src/components/diet/FoodSelect.tsx
+  s_b916f088ec8cbe::t_07845b45ea2606 1-35
+src/components/diet/dietFormat.test.ts
+  s_b916f088ec8cbe::t_3f432b4d77a277 1-2,12-51,63-70
+  s_b916f088ec8cbe::t_1d668b73c04f30 3-11
+  s_b916f088ec8cbe::t_da10328faf5eb3 52-62
+src/components/diet/DietView.tsx
+  s_b916f088ec8cbe::t_2d35b485afb1dd 1-2,6-42,44-51,53-59
+  s_b916f088ec8cbe::t_aab00c01e9de63 3-5
+  s_b916f088ec8cbe::t_9477165bb9729d 43,52
+src/components/diet/DietView.css
+  s_b916f088ec8cbe::t_c32c8f77e27bed 1-544,547-594
+  s_b916f088ec8cbe::t_a7bb722f6bb7f6 545-546
+src/lib/query/diet.ts
+  s_b916f088ec8cbe::t_c26cb4e2c22dd1 112,138,155,172,191,217,227,237,246,265,275,285,294,311,320,330
+  s_b916f088ec8cbe::t_aab00c01e9de63 12
+  s_b916f088ec8cbe::t_0ccf6a736b4381 23
+  s_b916f088ec8cbe::t_f67e8b8999985c 1-11,13-22,24-111,113-137,139-154,156-171,173-190,192-216,218-226,228-236,238-245,247-264,266-274,276-284,286-293,295-310,312-319,321-329,331-332
+src/components/diet/dietFormat.ts
+  s_b916f088ec8cbe::t_259c31dbd34a78 1-98,110-115
+  s_b916f088ec8cbe::t_b99e047b575a1e 99-109
+src/App.tsx
+  s_b916f088ec8cbe::t_3f5b71d3e20f4f 12
+  s_b916f088ec8cbe::t_07762d404f3773 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "9b8a7741045f9c1271b65e15ec364acdf60ba7a6",
+  "prompts": {},
+  "sessions": {
+    "s_b916f088ec8cbe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "35877f3b-40d5-4add-8079-28f1e26102d7",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
