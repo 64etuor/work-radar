@@ -1,0 +1,63 @@
+src-tauri/src/skills/resolve.rs
+  s_2e82f490c82d37::t_2aec98794ff162 397,530
+src-tauri/src/commands/audit.rs
+  s_2e82f490c82d37::t_b655b876ff1da4 25,348-350
+src-tauri/src/commands/cmux_bridge.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 7,12-19
+src-tauri/src/lib.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 708-713
+  s_2e82f490c82d37::t_bc00ab2db3fe2b 48
+  s_2e82f490c82d37::t_6ca263c7d2f3fe 677-680
+src-tauri/src/agent.rs
+  s_2e82f490c82d37::t_b655b876ff1da4 23,581-587
+  s_2e82f490c82d37::t_1def70dce35f97 156,159-162,164-188
+  s_2e82f490c82d37::t_f83d5eb55dbda1 492-494,515-516,524-536,657-703,827-830
+  s_2e82f490c82d37::t_86cff6aac25fb9 814-826,831-858
+src-tauri/src/skills/scan.rs
+  s_2e82f490c82d37::t_b655b876ff1da4 14,220
+src-tauri/src/commands/cmux.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 10,91-92,94-99
+src-tauri/src/commands/hermes_agent.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 5,31-36
+src-tauri/src/governance/ticker.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 6,831-833
+src-tauri/Cargo.toml
+  s_2e82f490c82d37::t_f70b0e68455306 99-108
+  s_2e82f490c82d37::t_e0be42eae77aa2 109
+src-tauri/src/hermes_agent/detect.rs
+  s_2e82f490c82d37::t_30a8ea1520b573 2,32-51,72,75
+src-tauri/src/skills/vendor.rs
+  s_2e82f490c82d37::t_2aec98794ff162 318,391
+src-tauri/src/commands/tokens.rs
+  s_2e82f490c82d37::t_2cba2f9b24376d 295
+  s_2e82f490c82d37::t_6a474ee53c18ed 370,372-373
+  s_2e82f490c82d37::t_b655b876ff1da4 10,144-146,153-159
+  s_2e82f490c82d37::t_d8fccfd826b1b0 355,358
+src-tauri/src/skills/divergence.rs
+  s_2e82f490c82d37::t_2aec98794ff162 256
+src-tauri/src/platform.rs
+  s_2e82f490c82d37::t_bc00ab2db3fe2b 154-177,184-197,202-217,230
+  s_2e82f490c82d37::t_def47cbf67c832 178-183
+  s_2e82f490c82d37::t_6a474ee53c18ed 10,36,46,66-69,198-201
+  s_2e82f490c82d37::t_33b8a18955a8d6 14-20,34-35,37
+  s_2e82f490c82d37::t_83232cb83e5dce 1-9,11-13,21-33,38-45,47-65,70-153
+  s_2e82f490c82d37::t_576c7c2416ab70 218-229
+src-tauri/Cargo.lock
+  s_2e82f490c82d37::t_8415619ed2ced0 2235,2239
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "b4f993cf358807dd7551bf280a5015f2bb6d421e",
+  "prompts": {},
+  "sessions": {
+    "s_2e82f490c82d37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8223-aa94-7cc2-a0a3-fa424e162b47",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
