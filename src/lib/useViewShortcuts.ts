@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { actionForKeymapKey, type AppAction, findKeymapAction } from "@/lib/appActions";
-import { eventToHotkeySpec } from "@/lib/hotkey";
+import { eventHotkeyCandidates } from "@/lib/hotkey";
 import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 
 /**
@@ -81,9 +81,9 @@ export function useViewShortcuts(
 
       // 1) 조합 단축키(modifier 동반) — 입력 포커스에서도 동작(조합키는 타이핑과 무관).
       if (e.metaKey || e.ctrlKey || e.altKey) {
-        const spec = eventToHotkeySpec(e);
-        if (!spec) return;
-        const action = resolve(spec);
+        const action = eventHotkeyCandidates(e)
+          .map(resolve)
+          .find((candidate) => candidate !== null);
         if (action) {
           e.preventDefault();
           clearPrefix();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { eventToHotkeySpec, formatHotkeySpec } from "./hotkey";
+import { eventHotkeyCandidates, eventToHotkeySpec, formatHotkeySpec } from "./hotkey";
 
 describe("formatHotkeySpec", () => {
   it("modifier를 심볼로 바꾸고 구분자 없이 결합", () => {
@@ -11,6 +11,26 @@ describe("formatHotkeySpec", () => {
   });
   it("빈 spec은 빈 문자열", () => {
     expect(formatHotkeySpec("")).toBe("");
+  });
+  it("Windows에서는 Cmd 저장값을 Ctrl로 표시", () => {
+    expect(formatHotkeySpec("Cmd+Shift+K", "windows")).toBe("Ctrl+Shift+K");
+  });
+});
+
+describe("eventHotkeyCandidates", () => {
+  it("Windows Ctrl 조합은 exact Ctrl 뒤에 semantic Cmd 후보를 둔다", () => {
+    expect(
+      eventHotkeyCandidates(
+        {
+          key: "1",
+          ctrlKey: true,
+          metaKey: false,
+          altKey: false,
+          shiftKey: false,
+        },
+        "windows",
+      ),
+    ).toEqual(["Ctrl+1", "Cmd+1"]);
   });
 });
 

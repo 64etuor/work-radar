@@ -26,6 +26,14 @@ describe("parseTrigger", () => {
   it("Ctrl → ctrl only", () => {
     expect(parseTrigger("Ctrl")).toEqual({ ctrl: true, meta: false, alt: false, shift: false });
   });
+  it("Windows에서 Cmd 기본값은 Ctrl로 해석", () => {
+    expect(parseTrigger("Cmd", "windows")).toEqual({
+      ctrl: true,
+      meta: false,
+      alt: false,
+      shift: false,
+    });
+  });
   it("빈 값/undefined → Cmd 폴백", () => {
     const fallback = { ctrl: false, meta: true, alt: false, shift: false };
     expect(parseTrigger("")).toEqual(fallback);

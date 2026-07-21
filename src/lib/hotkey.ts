@@ -38,6 +38,17 @@ type KeyEventLike = {
   shiftKey: boolean;
 };
 
+export type HostPlatform = "macos" | "windows" | "other";
+
+export function currentHostPlatform(): HostPlatform {
+  if (typeof navigator === "undefined") return "macos";
+  const platform = navigator.platform.toLowerCase();
+  const userAgent = navigator.userAgent.toLowerCase();
+  if (platform.includes("mac") || userAgent.includes("mac os")) return "macos";
+  if (platform.includes("win") || userAgent.includes("windows")) return "windows";
+  return "other";
+}
+
 /**
  * 키 이벤트 → "Cmd+1" 류 조합 spec. modifier가 하나도 없거나 modifier-only면 null
  * (조합 단축키만 — 단일 키/체인은 별도 레거시 경로). label 미지원도 null.
@@ -53,6 +64,20 @@ export function eventToHotkeySpec(e: KeyEventLike): string | null {
   const label = keyLabel(e.key);
   if (!label) return null;
   return [...mods, label].join("+");
+}
+
+export function eventHotkeyCandidates(
+  event: KeyEventLike,
+  platform: HostPlatform = currentHostPlatform(),
+): string[] {
+  const exact = eventToHotkeySpec(event);
+  if (!exact) return [];
+  if (platform === "macos" || !event.ctrlKey || event.metaKey) return [exact];
+  const semanticPrimary = exact
+    .split("+")
+    .map((token) => (token === "Ctrl" ? "Cmd" : token))
+    .join("+");
+  return semanticPrimary === exact ? [exact] : [exact, semanticPrimary];
 }
 
 /** spec 토큰 → 표시용 심볼. 매처/저장 포맷은 그대로 두고 표시(치트시트)만 변환. */
@@ -80,12 +105,21 @@ const DISPLAY_SYMBOLS: Record<string, string> = {
  * "Cmd+Shift+K" → 표시용 "⌘⇧K"(순수). modifier는 심볼로, 그 외 라벨은 그대로 두고 구분자 없이 결합.
  * 매핑 없는 토큰은 원문 유지. 빈 spec은 빈 문자열.
  */
-export function formatHotkeySpec(spec: string): string {
-  return spec
-    .split("+")
-    .flatMap((p) => {
-      const t = p.trim();
-      return t ? [DISPLAY_SYMBOLS[t] ?? t] : [];
+export function formatHotkeySpec(
+  spec: string,
+  platform: HostPlatform = currentHostPlatform(),
+): string {
+  const tokens = spec.split("+").flatMap((part) => {
+    const token = part.trim();
+    return token ? [token] : [];
+  });
+  if (platform === "macos") {
+    return tokens.map((token) => DISPLAY_SYMBOLS[token] ?? token).join("");
+  }
+  return tokens
+    .map((token) => {
+      if (token === "Cmd" || token === "Meta" || token === "Control") return "Ctrl";
+      return token;
     })
-    .join("");
+    .join("+");
 }

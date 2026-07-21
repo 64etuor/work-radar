@@ -13,7 +13,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { knobActionFor, knobActionOptions, knobTokenForAction } from "@/lib/appActions";
-import { eventToHotkeySpec } from "@/lib/hotkey";
+import {
+  currentHostPlatform,
+  eventToHotkeySpec,
+  formatHotkeySpec,
+  type HostPlatform,
+} from "@/lib/hotkey";
 import {
   EXTRA_ACTIONS,
   isKnobKeymapKey,
@@ -53,6 +58,8 @@ const KEYMAP_ROWS: { key: string; label: string }[] = [
  * 중복 단축키는 빨갛게 경고만 — 저장은 허용(사용자 정책). 저장 포맷은 spec 문자열.
  */
 export function NavigationSettings({ onToast }: { onToast: (msg: string) => void }) {
+  const hostPlatform = currentHostPlatform();
+  const isHermesSupported = hostPlatform === "macos";
   const hotkey = useGlobalHotkey();
   const setHotkey = useSetGlobalHotkey();
   const resetHotkey = useResetGlobalHotkey();
@@ -66,6 +73,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
   const { data: hermesHotkeyData } = useQuery({
     queryKey: ["hermes-toggle-hotkey"],
     queryFn: async () => unwrap(commands.hermesGetToggleHotkey()),
+    enabled: isHermesSupported,
   });
   const setHermesHotkey = useMutation({
     mutationFn: async (spec: string) => unwrap(commands.hermesSetToggleHotkey(spec)),
@@ -87,21 +95,30 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         onToast={onToast}
       />
       <p className="text-muted-foreground text-xs">
-        캡처 버튼 클릭 후 원하는 단축키를 누르세요 (예: Ctrl+Space, Cmd+Shift+K). 변경 시 즉시
-        재등록되며, 충돌 또는 지원하지 않는 키이면 이전 핫키를 유지합니다.
+        캡처 후 단축키를 누르세요 (예: Ctrl+Space,
+        {hostPlatform === "macos" ? " Cmd+Shift+K" : " Ctrl+Shift+K"}). 변경은 즉시 적용됩니다.
+        충돌하거나 지원하지 않는 키면 기존 설정을 유지합니다.
       </p>
 
       {/* Hermes 패널 토글 — OS 글로벌 단축키 */}
-      <div className="flex items-center gap-2">
-        <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
-        <HotkeyCapture
-          value={hermesHotkeyData ?? "Cmd+Shift+Space"}
-          onChange={(spec) => setHermesHotkey.mutate(spec)}
-        />
-      </div>
-      {setHermesHotkey.isError && (
-        <p className="text-xs text-[color:var(--destructive)]">
-          단축키 등록 실패 — 다른 앱이나 nav 단축키와 충돌일 수 있습니다.
+      {isHermesSupported ? (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground min-w-[96px] text-xs">Hermes 패널 토글</span>
+            <HotkeyCapture
+              value={hermesHotkeyData ?? "Cmd+Shift+Space"}
+              onChange={(spec) => setHermesHotkey.mutate(spec)}
+            />
+          </div>
+          {setHermesHotkey.isError && (
+            <p className="text-xs text-[color:var(--destructive)]">
+              단축키 등록 실패 — 다른 앱이나 nav 단축키와 충돌일 수 있습니다.
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-muted-foreground text-xs">
+          Hermes 패널은 macOS에서만 사용할 수 있습니다.
         </p>
       )}
 
@@ -112,6 +129,7 @@ export function NavigationSettings({ onToast }: { onToast: (msg: string) => void
         setKeymap={setKeymap}
         resetKeymap={resetKeymap}
         onToast={onToast}
+        platform={hostPlatform}
       />
 
       {hotkey.isError && (
@@ -194,11 +212,13 @@ function KeymapEditor({
   setKeymap,
   resetKeymap,
   onToast,
+  platform,
 }: {
   initialDraft: Record<string, string>;
   setKeymap: NavKeymapMutation;
   resetKeymap: ResetNavKeymapMutation;
   onToast: (msg: string) => void;
+  platform: HostPlatform;
 }) {
   // keymap 드래프트 (action → shortcut spec string).
   const [kmDraft, setKmDraft] = useState(() => initialDraft);
@@ -243,7 +263,9 @@ function KeymapEditor({
   return (
     <>
       <div className="flex flex-col gap-1.5">
-        <SectionLabel>메뉴 단축키 (기본 Cmd+숫자 · 빈 값 = 끔)</SectionLabel>
+        <SectionLabel>
+          메뉴 단축키 (기본 {platform === "macos" ? "Cmd+숫자" : "Ctrl+숫자"} · 빈 값 = 끔)
+        </SectionLabel>
         <div className="flex flex-col gap-1">
           {KEYMAP_ROWS.map((row) => (
             <div key={row.key} className="flex items-center gap-3 py-1">
@@ -253,6 +275,7 @@ function KeymapEditor({
                 onChange={(v) => setKmDraft((prev) => ({ ...prev, [row.key]: v }))}
                 label={row.label}
                 duplicate={isDup(kmDraft[row.key] ?? "")}
+                platform={platform}
               />
             </div>
           ))}
@@ -277,6 +300,7 @@ function KeymapEditor({
           <TriggerPicker
             value={kmDraft[KNOB_TRIGGER_KEY] ?? ""}
             onChange={(v) => setKmDraft((prev) => ({ ...prev, [KNOB_TRIGGER_KEY]: v }))}
+            platform={platform}
           />
         </div>
         {KNOB_DIRECTIONS.map((d) => (
@@ -305,8 +329,8 @@ function KeymapEditor({
         </Button>
       </div>
       <p className="text-muted-foreground text-xs">
-        캡처 버튼 클릭 후 조합 단축키(예: Cmd+1, Cmd+Shift+C)를 누르세요. ✕로 끄기. 조합 단축키는
-        입력 중에도 동작합니다.
+        캡처 버튼 클릭 후 조합 단축키(예: {platform === "macos" ? "Cmd+1" : "Ctrl+1"},
+        Ctrl+Shift+C)를 누르세요. ✕로 끄기. 조합 단축키는 입력 중에도 동작합니다.
       </p>
     </>
   );
@@ -324,11 +348,13 @@ function ViewKeymapCapture({
   onChange,
   label,
   duplicate,
+  platform,
 }: {
   value: string;
   onChange: (v: string) => void;
   label: string;
   duplicate: boolean;
+  platform: HostPlatform;
 }) {
   const [recording, setRecording] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -367,7 +393,9 @@ function ViewKeymapCapture({
         onBlur={() => setRecording(false)}
         aria-label={`${label} 단축키 캡처`}
         title={
-          recording ? "조합 단축키를 누르세요 (Esc = 취소)" : "클릭 후 조합 단축키 입력 (예: Cmd+1)"
+          recording
+            ? "조합 단축키를 누르세요 (Esc = 취소)"
+            : `클릭 후 조합 단축키 입력 (예: ${platform === "macos" ? "Cmd+1" : "Ctrl+1"})`
         }
       >
         {recording ? (
@@ -379,7 +407,7 @@ function ViewKeymapCapture({
             단축키를 누르세요…
           </span>
         ) : (
-          value || "—"
+          formatHotkeySpec(value, platform) || "—"
         )}
       </button>
       {value && !recording && (
@@ -446,37 +474,62 @@ const TRIGGER_CHIPS: { mod: string; glyph: string }[] = [
 ];
 
 /** "Cmd+Shift" 류 spec ↔ 칩 토글. 모디파이어 순서는 Ctrl→Cmd→Alt→Shift 고정. */
-function TriggerPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function TriggerPicker({
+  value,
+  onChange,
+  platform,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  platform: HostPlatform;
+}) {
   const active = new Set(
     value.split("+").flatMap((p) => {
       const t = p.trim();
       return t ? [t] : [];
     }),
   );
+  const windowsPrimaryActive = platform === "windows" && (active.has("Cmd") || active.has("Ctrl"));
+  const chips =
+    platform === "windows"
+      ? [
+          { mod: "Cmd", glyph: "Ctrl" },
+          { mod: "Alt", glyph: "Alt" },
+          { mod: "Shift", glyph: "Shift" },
+        ]
+      : TRIGGER_CHIPS;
   const toggle = (mod: string) => {
     const next = new Set(active);
-    if (next.has(mod)) next.delete(mod);
+    if (platform === "windows" && mod === "Cmd") {
+      next.delete("Cmd");
+      next.delete("Ctrl");
+      if (!windowsPrimaryActive) next.add("Cmd");
+    } else if (next.has(mod)) next.delete(mod);
     else next.add(mod);
     const ordered = ["Ctrl", "Cmd", "Alt", "Shift"].filter((m) => next.has(m));
     onChange(ordered.join("+"));
   };
   return (
     <div className="flex items-center gap-1.5">
-      {TRIGGER_CHIPS.map((c) => (
-        <button
-          key={c.mod}
-          type="button"
-          className={cn(
-            "border-input bg-background text-foreground flex h-8 min-w-[40px] items-center justify-center rounded-md border font-mono text-sm transition-colors",
-            active.has(c.mod) && "border-primary ring-ring ring-2",
-          )}
-          onClick={() => toggle(c.mod)}
-          aria-pressed={active.has(c.mod)}
-          title={`${c.mod} 토글`}
-        >
-          {c.glyph}
-        </button>
-      ))}
+      {chips.map((c) => {
+        const pressed =
+          platform === "windows" && c.mod === "Cmd" ? windowsPrimaryActive : active.has(c.mod);
+        return (
+          <button
+            key={c.mod}
+            type="button"
+            className={cn(
+              "border-input bg-background text-foreground flex h-8 min-w-[40px] items-center justify-center rounded-md border font-mono text-sm transition-colors",
+              pressed && "border-primary ring-ring ring-2",
+            )}
+            onClick={() => toggle(c.mod)}
+            aria-pressed={pressed}
+            title={`${c.glyph} 토글`}
+          >
+            {c.glyph}
+          </button>
+        );
+      })}
     </div>
   );
 }

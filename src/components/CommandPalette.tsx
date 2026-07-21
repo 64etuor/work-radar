@@ -13,6 +13,7 @@ import {
   CommandList,
   CommandShortcut,
 } from "@/components/ui/command";
+import { formatHotkeySpec } from "@/lib/hotkey";
 import { NAV_GROUP_LABELS, navItemsByGroup } from "@/lib/nav";
 import { useNavKeymap, useProjects, useSearchSignals, useSkills } from "@/lib/query";
 import { skillSearchValue } from "@/lib/skillGrouping";
@@ -93,7 +94,7 @@ export function CommandPalette() {
                     >
                       <Icon className="text-wr-subtle size-4" />
                       <span>{item.label}</span>
-                      {sc && <CommandShortcut>{sc}</CommandShortcut>}
+                      {sc && <CommandShortcut>{formatHotkeySpec(sc)}</CommandShortcut>}
                     </CommandItem>
                   );
                 })}

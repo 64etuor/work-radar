@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { isOverlayOpen } from "@/components/ui/overlay-stack";
 import { type AppAction, knobActionFor } from "@/lib/appActions";
+import { currentHostPlatform, type HostPlatform } from "@/lib/hotkey";
 import { KEYDOWN_PRIORITY, registerKeydown } from "@/lib/keydownBus";
 import type { KnobDir } from "@/lib/knobGeometry";
 import { KNOB_DIRECTIONS, KNOB_TRIGGER_DEFAULT, KNOB_TRIGGER_KEY } from "@/lib/nav";
@@ -13,7 +14,10 @@ const MODIFIER_KEYS = new Set(["Meta", "Control", "Alt", "Shift"]);
 type TriggerMods = { ctrl: boolean; meta: boolean; alt: boolean; shift: boolean };
 
 /** "Cmd+Shift" 류 트리거 spec → 모디파이어 집합. 빈 값/무효는 Cmd 단독으로 폴백. (테스트용 export) */
-export function parseTrigger(spec: string | undefined): TriggerMods {
+export function parseTrigger(
+  spec: string | undefined,
+  platform: HostPlatform = currentHostPlatform(),
+): TriggerMods {
   const mods: TriggerMods = { ctrl: false, meta: false, alt: false, shift: false };
   const parts = (spec && spec.trim() ? spec : KNOB_TRIGGER_DEFAULT).split("+").flatMap((p) => {
     const t = p.trim().toLowerCase();
@@ -21,11 +25,17 @@ export function parseTrigger(spec: string | undefined): TriggerMods {
   });
   for (const p of parts) {
     if (p === "ctrl") mods.ctrl = true;
-    else if (p === "cmd" || p === "meta") mods.meta = true;
+    else if (p === "cmd") {
+      if (platform === "macos") mods.meta = true;
+      else mods.ctrl = true;
+    } else if (p === "meta") mods.meta = true;
     else if (p === "alt") mods.alt = true;
     else if (p === "shift") mods.shift = true;
   }
-  if (!mods.ctrl && !mods.meta && !mods.alt && !mods.shift) mods.meta = true;
+  if (!mods.ctrl && !mods.meta && !mods.alt && !mods.shift) {
+    if (platform === "macos") mods.meta = true;
+    else mods.ctrl = true;
+  }
   return mods;
 }
 
