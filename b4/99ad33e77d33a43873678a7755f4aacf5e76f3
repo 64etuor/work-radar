@@ -1,0 +1,26 @@
+scripts/tauri-wrapper.test.mjs
+  s_2e82f490c82d37::t_ea08a3e6709525 2-3,7,20-36
+  s_2e82f490c82d37::t_84e33448dbf9aa 1,4-6,8-19,37-46,48-56,58
+  s_2e82f490c82d37::t_cd02aca660fe39 47,57
+package.json
+  s_2e82f490c82d37::t_25aa89a5d8c562 24
+scripts/tauri-wrapper.mjs
+  s_2e82f490c82d37::t_25aa89a5d8c562 1-38
+  s_2e82f490c82d37::t_912aa81666f80d 39-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.14",
+  "base_commit_sha": "b499ad33e77d33a43873678a7755f4aacf5e76f3",
+  "prompts": {},
+  "sessions": {
+    "s_2e82f490c82d37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8223-aa94-7cc2-a0a3-fa424e162b47",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
