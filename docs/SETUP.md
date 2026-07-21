@@ -9,7 +9,7 @@
 | --------------------- | --------- | ------------------------------------------------------------------- |
 | Rust (stable) + Cargo | 필수      | Tauri 백엔드 빌드                                                   |
 | Node.js + pnpm        | 필수      | 프런트 빌드                                                         |
-| macOS                 | 현재 기준 | 다른 OS는 미검증(트레이/키체인 경로 macOS 전제)                     |
+| macOS / Windows 11    | 필수      | Windows는 MSVC C++ Build Tools와 WebView2 필요                      |
 | Codex CLI (`codex`)   | 선택      | 에이전트 잡 실행. 없으면 관련 기능이 "미설치"로 표시될 뿐 앱은 정상 |
 | cmux / Hermes / Boule | 선택      | 원저자 스택 통합. 없어도 앱은 우아하게 동작(아래 §5)                |
 
@@ -21,12 +21,17 @@ pnpm tauri dev     # 개발 모드 부팅
 pnpm tauri build   # 배포용 번들
 ```
 
+Windows PowerShell에서도 같은 명령을 사용한다. Tauri 실행기는 Node 기반이며, macOS 개발
+코드사인 스크립트는 Windows에서 호출되지 않는다. Windows 11에는 보통 WebView2가 포함되어
+있지만 빠져 있다면 Microsoft WebView2 Runtime을 먼저 설치한다.
+
 - 데이터: SQLite 단일 파일 — `{OS app-data dir}/co.kr.mirrorless.workradar/work-radar.db`.
   스키마는 내장 마이그레이션이 첫 부팅에 자동 적용한다.
 - 오버라이드: `WORK_RADAR_DEV_DB=/path/to.db` (헤드리스 MCP/프로필 환경용 — 일반 사용 불필요).
-- 비밀은 전부 OS 키체인에 저장된다(SQLite 평문 금지 — 레포 불변).
+- 비밀은 전부 OS 보안 저장소(macOS Keychain / Windows Credential Manager)에 저장된다
+  (SQLite 평문 금지 — 레포 불변).
 
-첫 부팅은 빈 상태로 뜬다. **설정(⌘,) → 프로젝트**에서 첫 프로젝트를 만들면
+첫 부팅은 빈 상태로 뜬다. **설정(macOS Cmd+, / Windows Ctrl+,) → 프로젝트**에서 첫 프로젝트를 만들면
 각 뷰가 채워지기 시작한다.
 
 ## 3. 통합(Integrations) 설정 — 전부 UI에서, 코드 수정 불필요
@@ -79,14 +84,14 @@ pnpm tauri build   # 배포용 번들
 
 ## 5. 선택 통합이 없을 때의 동작 (fresh-machine 계약)
 
-| 없는 것                | 동작                                                                                                                          |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `codex` CLI            | 에이전트 잡 버튼이 "미설치" 안내. 잡은 스폰되지 않음(fail-closed)                                                             |
-| cmux                   | 상태바가 unavailable 표시. 폴링은 로컬 no-op                                                                                  |
-| Hermes                 | 설치 감지 false. 탭 열기 전까지 아무것도 스폰 안 됨                                                                           |
-| Boule(governance)      | Control Room이 unavailable 안내. 자동 티커는 tick 활성 프로젝트가 생기기 전까지 runner를 아예 resolve하지 않는다(로그 무소음) |
-| `~/.claude`·`~/.codex` | 사용량 게이지 "정보 없음", 스킬 스캔 빈 목록                                                                                  |
-| 키체인 토큰 없음       | 각 통합 status가 "미연결"로 표시, 네트워크 호출 없음                                                                          |
+| 없는 것                | 동작                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `codex` CLI            | 에이전트 잡 버튼이 "미설치" 안내. 잡은 스폰되지 않음(fail-closed)                          |
+| cmux                   | macOS 선택 통합. Windows에서는 unavailable이며 폴링은 로컬 no-op                           |
+| Hermes                 | macOS 선택 통합. Windows에서는 미지원 상태를 반환하고 프로세스·글로벌 핫키를 등록하지 않음 |
+| Boule(governance)      | 원저자용 macOS 통합. Windows에서는 runner와 자동 ticker를 시작하지 않음                    |
+| `~/.claude`·`~/.codex` | 사용량 게이지 "정보 없음", 스킬 스캔 빈 목록                                               |
+| 키체인 토큰 없음       | 각 통합 status가 "미연결"로 표시, 네트워크 호출 없음                                       |
 
 ## 6. 리브랜딩 체크리스트 (fork해서 다른 이름/ID로 배포할 때)
 
@@ -108,6 +113,7 @@ pnpm tauri build   # 배포용 번들
 ## 7. 알려진 배포 갭 (의도적으로 미해결)
 
 - **LICENSE 없음** — 공개 배포 전 라이선스 결정 필요(소유자 판단 사항).
-- 자동 업데이터/코드사이닝/릴리스 CI 없음 — 배포는 수동 `pnpm tauri build`.
+- 자동 업데이터/릴리스 코드사이닝 없음 — 배포는 수동 `pnpm tauri build`.
+- Windows 검증은 `.github/workflows/windows-compat.yml`의 수동 `workflow_dispatch`로 수행한다.
 - `governance/`는 원저자의 별도 하네스(앱 실행에 불필요) — 분리 후보.
 - 전면 i18n·커스텀 RSS UI — `docs/plans/2026-07-10-generalization-plan.md` Non-goals 참조.
