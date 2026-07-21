@@ -7,7 +7,7 @@ use tokio::process::Command;
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{CliToolStatus, PingResult, TokenKind, TokenStatus};
-use crate::{api, keychain};
+use crate::{api, keychain, platform};
 
 /// CLI 보조 서브프로세스 호출 상한 (무한 대기 금지 — INVARIANT #5, agent.rs AUX_TIMEOUT 선례).
 const CLI_TIMEOUT: Duration = Duration::from_secs(20);
@@ -141,25 +141,24 @@ pub async fn ping_project_token(
 
 /// `~`를 home으로 확장(알려진 경로 후보의 `~/.local/bin` 처리).
 fn expand_home(p: &str) -> String {
-    if let Some(rest) = p.strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
-            return Path::new(&home).join(rest).to_string_lossy().into_owned();
-        }
-    }
-    p.to_string()
+    platform::expand_home(Path::new(p), platform::home_dir().as_deref())
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// PATH(또는 알려진 Homebrew/local 경로)에서 CLI 바이너리를 찾는다. GUI 앱은 launchd PATH가
 /// 셸과 달라 `gh`/`ntn`이 PATH에 없을 수 있으므로 알려진 경로를 함께 시도한다(codex 선례).
 /// 반환값은 항상 spawn 가능한 형태(절대 경로 또는 PATH 해석용 bare 이름).
 fn resolve_cli_bin(name: &str, known: &[&str]) -> String {
-    for c in known {
-        let expanded = expand_home(c);
-        if Path::new(&expanded).is_file() {
-            return expanded;
+    let known_paths: Vec<_> = known
+        .iter()
+        .map(|candidate| Path::new(&expand_home(candidate)).to_path_buf())
+        .collect();
+    for candidate in platform::process_executable_candidates(name, &known_paths) {
+        if candidate.is_file() || candidate == Path::new(name) {
+            return candidate.to_string_lossy().into_owned();
         }
     }
-    // bare 이름은 PATH 해석을 서브프로세스에 맡긴다(spawn 실패는 호출부에서 미설치로 처리).
     name.to_string()
 }
 
@@ -293,8 +292,7 @@ pub async fn ntn_cli_status() -> Result<CliToolStatus, AppError> {
 /// 토큰 emit 서브커맨드가 없어 file-auth 경로를 import 메커니즘으로 쓴다(Phase 14 §14 결정).
 /// 토큰 본문은 여기서만 잠시 다뤄지고 호출부에서 즉시 keychain으로 간다.
 fn ntn_token_from_file() -> Option<String> {
-    let home = std::env::var_os("HOME")?;
-    let path = Path::new(&home).join(".config/notion/api_key");
+    let path = platform::home_dir()?.join(".config/notion/api_key");
     let raw = std::fs::read_to_string(path).ok()?;
     let token = raw.trim().to_string();
     if token.is_empty() {
@@ -354,10 +352,10 @@ mod tests {
 
     #[test]
     fn expand_home_resolves_tilde() {
-        let home = std::env::var("HOME").expect("HOME set in test env");
+        let home = platform::home_dir().expect("home directory available in test env");
         assert_eq!(
             expand_home("~/.local/bin/ntn"),
-            format!("{home}/.local/bin/ntn"),
+            home.join(".local/bin/ntn").to_string_lossy(),
         );
     }
 
@@ -369,10 +367,10 @@ mod tests {
 
     #[test]
     fn resolve_cli_bin_falls_back_to_bare_name() {
-        // 존재하지 않는 후보만 주면 bare 이름으로 떨어진다(PATH 해석을 spawn에 위임).
+        let name = "work-radar-missing-cli-for-test";
         assert_eq!(
-            resolve_cli_bin("gh", &["/nonexistent/path/gh"]),
-            "gh".to_string(),
+            resolve_cli_bin(name, &["/nonexistent/path/work-radar-missing-cli-for-test"]),
+            name.to_string(),
         );
     }
 }

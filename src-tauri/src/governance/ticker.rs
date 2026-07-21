@@ -3,6 +3,7 @@
 use crate::db::Db;
 use crate::error::AppError;
 use crate::governance::boule_config::{get_boule_config_core, BouleAutonomyLevel};
+use crate::platform::{self, OptionalIntegration};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -827,6 +828,9 @@ fn error_report_json(code: &str, message: &str) -> String {
 }
 
 pub(crate) async fn resolve_node_bin() -> Option<PathBuf> {
+    if !platform::supports_integration(platform::current_host(), OptionalIntegration::Boule) {
+        return None;
+    }
     let mut candidates = Vec::new();
     if let Ok(node) = std::env::var("BOULE_NODE") {
         if !node.trim().is_empty() {

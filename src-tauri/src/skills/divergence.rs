@@ -253,6 +253,7 @@ mod tests {
         assert_eq!(out[0].status, DivergenceStatus::Diverged);
     }
 
+    #[cfg(unix)]
     #[test]
     fn detect_omits_symlinked_member() {
         let tmp = tempfile::tempdir().unwrap();

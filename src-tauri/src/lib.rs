@@ -45,6 +45,7 @@ mod models;
 pub mod moneymanager;
 mod news;
 mod notion;
+mod platform;
 mod retry;
 mod routines;
 mod scheduler;
@@ -673,7 +674,10 @@ pub fn run() {
 
             // Hermes 패널 토글 핫키 등록. 저장된 값(app_config)이 있으면 그것으로, 없으면
             // 기본 Cmd+Shift+Space로 등록(feat/hermes-floating A2). 등록 실패는 graceful.
-            {
+            if platform::supports_integration(
+                platform::current_host(),
+                platform::OptionalIntegration::Hermes,
+            ) {
                 let hk_db: db::Db = app.state::<db::Db>().inner().clone();
                 let hermes_spec = tauri::async_runtime::block_on(
                     commands::hermes_panel::current_toggle_hotkey(&hk_db),
@@ -701,7 +705,12 @@ pub fn run() {
             // Boule auto ticker (Phase T2): app-bound operator clock only. This is not a daemon and
             // it does not add a governance loop; every due row delegates to the T1 bounded tick path.
             let ticker_db: db::Db = app.state::<db::Db>().inner().clone();
-            governance::ticker_scheduler::spawn_loop(ticker_db);
+            if platform::supports_integration(
+                platform::current_host(),
+                platform::OptionalIntegration::Boule,
+            ) {
+                governance::ticker_scheduler::spawn_loop(ticker_db);
+            }
 
             // 캘린더 sync 워커(Today×Timeline PR 2): pending_calendar_writes 큐를 200ms tick +
             // Notify로 굴린다. 외부 호출 Rust only(INVARIANT) · bounded retry [1s,3s,9s]×3(#5) ·

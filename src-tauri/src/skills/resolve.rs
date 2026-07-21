@@ -394,6 +394,7 @@ mod tests {
         assert!(trees_equal(&proj_root.join("foo"), &src));
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn pull_refuses_symlink_target() {
         let pool = crate::commands::shared::test_support::fresh_db().await;
@@ -526,6 +527,7 @@ mod tests {
         assert!(!backups.exists()); // 백업 안 함.
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn push_refuses_symlink_no_backup() {
         let pool = crate::commands::shared::test_support::fresh_db().await;

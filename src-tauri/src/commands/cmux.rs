@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::error::AppError;
+use crate::platform::{self, OptionalIntegration};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
@@ -87,21 +88,15 @@ pub(crate) fn parse_cmux_top(stdout: &str) -> Vec<CmuxWorkspace> {
 /// cmux 바이너리 경로를 찾는다. PATH의 `cmux` 우선(검증용 `--version`), 없으면 Applications 번들 경로.
 /// 둘 다 없으면 None.
 fn resolve_cmux_bin() -> Option<std::path::PathBuf> {
-    // 1) PATH에서 `cmux` 검색: `/usr/bin/env cmux --version` 으로 존재 확인 후 절대 경로 획득
-    //    (which 크레이트 없이 OS 경로 탐색)
-    let path_dirs = std::env::var("PATH").unwrap_or_default();
-    for dir in std::env::split_paths(&path_dirs) {
-        let candidate = dir.join("cmux");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
+    if !platform::supports_integration(platform::current_host(), OptionalIntegration::Cmux) {
+        return None;
     }
-    // 2) Applications 번들 고정 경로
-    let bundle = std::path::PathBuf::from("/Applications/cmux.app/Contents/Resources/bin/cmux");
-    if bundle.exists() {
-        return Some(bundle);
-    }
-    None
+    let known = [std::path::PathBuf::from(
+        "/Applications/cmux.app/Contents/Resources/bin/cmux",
+    )];
+    platform::process_executable_candidates("cmux", &known)
+        .into_iter()
+        .find(|candidate| candidate.is_file())
 }
 
 /// cmux 워크스페이스 상태 조회 (best-effort, 표시 전용).

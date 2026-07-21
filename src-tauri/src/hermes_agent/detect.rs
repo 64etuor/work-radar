@@ -1,4 +1,5 @@
 use crate::error::AppError;
+use crate::platform::{self, OptionalIntegration};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use std::time::Duration;
@@ -28,11 +29,26 @@ async fn run_with_timeout(cmd: &mut Command, secs: u64) -> Option<std::process::
 }
 
 pub async fn detect() -> Result<HermesDetectResult, AppError> {
-    // 1. version
-    let mut version_cmd = Command::new("hermes");
-    version_cmd.arg("--version");
-    let out = run_with_timeout(&mut version_cmd, 5).await;
-    let Some(out) = out else {
+    if !platform::supports_integration(platform::current_host(), OptionalIntegration::Hermes) {
+        return Ok(HermesDetectResult {
+            installed: false,
+            version: None,
+            path: None,
+            acp_ready: false,
+            error: Some("Hermes is not supported on this platform".into()),
+        });
+    }
+
+    let mut detected = None;
+    for candidate in platform::process_executable_candidates("hermes", &[]) {
+        let mut version_cmd = Command::new(&candidate);
+        version_cmd.arg("--version");
+        if let Some(output) = run_with_timeout(&mut version_cmd, 5).await {
+            detected = Some((candidate, output));
+            break;
+        }
+    }
+    let Some((hermes_bin, out)) = detected else {
         return Ok(HermesDetectResult {
             installed: false,
             version: None,
@@ -53,23 +69,10 @@ pub async fn detect() -> Result<HermesDetectResult, AppError> {
     let version_text = String::from_utf8_lossy(&out.stdout);
     let version = parse_version(&version_text);
 
-    // 2. path via `which hermes`
-    let mut which_cmd = Command::new("which");
-    which_cmd.arg("hermes");
-    let path = run_with_timeout(&mut which_cmd, 2)
-        .await
-        .and_then(|o| {
-            if o.status.success() {
-                String::from_utf8(o.stdout).ok()
-            } else {
-                None
-            }
-        })
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty());
+    let path = Some(hermes_bin.to_string_lossy().into_owned());
 
     // 3. acp ready
-    let mut acp_cmd = Command::new("hermes");
+    let mut acp_cmd = Command::new(&hermes_bin);
     acp_cmd.arg("acp").arg("--check");
     let acp_out = run_with_timeout(&mut acp_cmd, 5).await;
     let acp_ready = acp_out.as_ref().is_some_and(|o| o.status.success());

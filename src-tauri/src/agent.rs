@@ -20,6 +20,7 @@ use tokio::process::Command;
 use tokio_util::sync::CancellationToken;
 
 use crate::models::{AgentRail, AgentReasoningEffort, CodexAvailability, Engine, Sandbox};
+use crate::platform;
 
 /// codex 감지/worktree 등 보조 서브프로세스 호출 상한 (무한 대기 금지 — INVARIANT #5).
 const AUX_TIMEOUT: Duration = Duration::from_secs(20);
@@ -137,7 +138,6 @@ async fn collect_stderr_tail(stderr: tokio::process::ChildStderr) -> String {
 
 // ── EchoRunner (codex 없이 bound/kill/로그 캡처 검증) ───────────────────────────────
 
-/// 테스트 잡 러너. 고정 셸 스크립트 + 위치 인자(인젝션 방지)로 `seconds`초 동안 1초 틱을 출력한다.
 /// happy = 짧은 seconds(즉시 완료) / timeout 테스트 = 긴 seconds + 짧은 timeout(JobManager가 kill).
 /// engine은 codex 스파인의 테스트 하네스라 `Engine::Codex`로 보고한다(실제 DB engine은 커맨드가 결정).
 pub struct EchoRunner {
@@ -153,36 +153,39 @@ impl AgentRunner for EchoRunner {
     async fn run(
         &self,
         _bounds: Bounds,
-        _cancel: CancellationToken,
+        cancel: CancellationToken,
         log_path: PathBuf,
     ) -> Result<AgentOutcome, AgentError> {
-        // 스크립트는 상수, seconds/message는 위치 인자($1/$2) → 셸 인젝션 없음.
-        const SCRIPT: &str = r#"printf '%s\n' "$2"; n="$1"; i=0; while [ "$i" -lt "$n" ]; do printf 'tick %s\n' "$i"; i=$((i+1)); sleep 1; done"#;
-        let mut child = Command::new("sh")
-            .arg("-c")
-            .arg(SCRIPT)
-            .arg("sh") // $0
-            .arg(self.seconds.to_string()) // $1
-            .arg(&self.message) // $2
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .kill_on_drop(true)
-            .spawn()
-            .map_err(|e| AgentError::Spawn(format!("echo 잡 시작 실패: {e}")))?;
-
-        let stdout = child
-            .stdout
-            .take()
-            .ok_or_else(|| AgentError::Failed("echo stdout 캡처 실패".into()))?;
-        // 틱은 통과(bounds 강제는 JobManager의 timeout/kill이 담당).
-        let count = stream_to_log(stdout, &log_path, |_| None).await?;
-
-        let status = child
-            .wait()
+        let mut file = tokio::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log_path)
             .await
-            .map_err(|e| AgentError::Failed(format!("echo wait 실패: {e}")))?;
-        if !status.success() {
-            return Err(AgentError::Failed(format!("echo 비정상 종료: {status}")));
+            .map_err(|e| AgentError::Failed(format!("echo 로그 파일 열기 실패: {e}")))?;
+        file.write_all(self.message.as_bytes())
+            .await
+            .map_err(|e| AgentError::Failed(format!("echo 로그 쓰기 실패: {e}")))?;
+        file.write_all(b"\n")
+            .await
+            .map_err(|e| AgentError::Failed(format!("echo 로그 쓰기 실패: {e}")))?;
+        file.flush()
+            .await
+            .map_err(|e| AgentError::Failed(format!("echo 로그 flush 실패: {e}")))?;
+
+        let mut count = 1_u32;
+        for tick in 0..self.seconds {
+            let line = format!("tick {tick}\n");
+            file.write_all(line.as_bytes())
+                .await
+                .map_err(|e| AgentError::Failed(format!("echo 로그 쓰기 실패: {e}")))?;
+            file.flush()
+                .await
+                .map_err(|e| AgentError::Failed(format!("echo 로그 flush 실패: {e}")))?;
+            count = count.saturating_add(1);
+            tokio::select! {
+                () = cancel.cancelled() => return Err(AgentError::Cancelled),
+                () = tokio::time::sleep(Duration::from_secs(1)) => {}
+            }
         }
         Ok(AgentOutcome {
             detail: format!("echo 잡 완료 ({count} 줄 캡처)"),
@@ -486,8 +489,9 @@ impl AgentRunner for CodexRunner {
         let cwd_str = cwd
             .to_str()
             .ok_or_else(|| AgentError::Spawn("작업 디렉터리 인코딩 실패".into()))?;
-        // codex exec --json --sandbox <flag> --color never [-M <model>] -C <cwd> --skip-git-repo-check -- <prompt>
-        // (실 설치본 0.125 플래그 검증.) `--`로 prompt가 플래그로 오인되지 않게 한다.
+        // codex exec --json --sandbox <flag> --color never [-M <model>] -C <cwd> --skip-git-repo-check -
+        // prompt는 stdin으로 전달한다. Windows npm shim(codex.cmd)은 개행이 든 argv를 거부하므로
+        // 셸 escaping 없이 동일한 안전 경로를 모든 플랫폼에서 쓴다(`-` = stdin prompt).
         let mut cmd = Command::new(&self.codex_bin);
         cmd.arg("exec")
             .arg("--json")
@@ -508,14 +512,27 @@ impl AgentRunner for CodexRunner {
         cmd.arg("-C")
             .arg(cwd_str)
             .arg("--skip-git-repo-check")
-            .arg("--")
-            .arg(&self.prompt)
+            .arg("-")
+            .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true);
         let mut child = cmd
             .spawn()
             .map_err(|e| AgentError::Spawn(format!("codex 시작 실패(설치/PATH 확인): {e}")))?;
+
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AgentError::Failed("codex stdin 캡처 실패".into()))?;
+        stdin
+            .write_all(self.prompt.as_bytes())
+            .await
+            .map_err(|e| AgentError::Failed(format!("codex prompt 전달 실패: {e}")))?;
+        stdin
+            .shutdown()
+            .await
+            .map_err(|e| AgentError::Failed(format!("codex stdin 종료 실패: {e}")))?;
 
         let stdout = child
             .stdout
@@ -561,10 +578,13 @@ impl AgentRunner for CodexRunner {
 /// PATH 또는 알려진 경로에서 codex 바이너리를 찾는다(GUI 앱은 launchd PATH가 셸과 다를 수 있음).
 /// `--version`이 도는 첫 후보를 반환. 못 찾으면 None → 자동화 UI 비활성(graceful degrade).
 pub async fn resolve_codex_bin() -> Option<PathBuf> {
-    let candidates = ["codex", "/opt/homebrew/bin/codex", "/usr/local/bin/codex"];
-    for c in candidates {
-        if codex_version(Path::new(c)).await.is_some() {
-            return Some(PathBuf::from(c));
+    let known_paths = [
+        PathBuf::from("/opt/homebrew/bin/codex"),
+        PathBuf::from("/usr/local/bin/codex"),
+    ];
+    for candidate in platform::process_executable_candidates("codex", &known_paths) {
+        if codex_version(&candidate).await.is_some() {
+            return Some(candidate);
         }
     }
     None
@@ -633,6 +653,53 @@ pub async fn codex_availability(bin: Option<&Path>) -> CodexAvailability {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn codex_runner_sends_multiline_prompt_through_windows_npm_shim_stdin() {
+        let tmp = tempfile::tempdir().unwrap();
+        let shim = tmp.path().join("codex.cmd");
+        let received = tmp.path().join("received-prompt.txt");
+        std::fs::write(
+            &shim,
+            format!(
+                "@echo off\r\nmore > \"{}\"\r\necho {{\"type\":\"agent_message\",\"message\":\"done\"}}\r\n",
+                received.display()
+            ),
+        )
+        .unwrap();
+
+        let runner = CodexRunner {
+            codex_bin: shim,
+            run_id: "windows-stdin".into(),
+            prompt: "first line\nsecond line".into(),
+            sandbox: Sandbox::ReadOnly,
+            rail: AgentRail::Proposal,
+            repo_path: None,
+            worktree_root: tmp.path().join("worktrees"),
+            scratch_dir: tmp.path().join("scratch"),
+            input_files: Vec::new(),
+            model: None,
+            reasoning_effort: None,
+        };
+        let outcome = runner
+            .run(
+                Bounds {
+                    timeout: Duration::from_secs(10),
+                    max_turns: 2,
+                    cost_cap_usd: 1.0,
+                },
+                CancellationToken::new(),
+                tmp.path().join("codex.jsonl"),
+            )
+            .await
+            .unwrap();
+
+        let prompt = std::fs::read_to_string(received).unwrap();
+        assert!(prompt.contains("first line"));
+        assert!(prompt.contains("second line"));
+        assert_eq!(outcome.proposal.as_deref(), Some(r#"{"raw":"done"}"#));
+    }
 
     #[test]
     fn parse_event_cost_and_usage() {
@@ -743,5 +810,50 @@ mod tests {
             "log should capture message, got: {logged:?}"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn echo_runner_does_not_require_a_shell_on_path() {
+        let status = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "agent::tests::echo_runner_child_without_shell",
+                "--nocapture",
+            ])
+            .env("PATH", "")
+            .env("WORK_RADAR_ECHO_CHILD", "1")
+            .status()
+            .unwrap();
+        assert!(
+            status.success(),
+            "echo runner failed without a shell on PATH"
+        );
+    }
+
+    #[tokio::test]
+    async fn echo_runner_child_without_shell() {
+        if std::env::var_os("WORK_RADAR_ECHO_CHILD").is_none() {
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("wr-echo-shell-free-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("echo.log");
+        let runner = EchoRunner {
+            seconds: 0,
+            message: "shell-free".into(),
+        };
+        let result = runner
+            .run(
+                Bounds {
+                    timeout: Duration::from_secs(10),
+                    max_turns: 1,
+                    cost_cap_usd: 1.0,
+                },
+                CancellationToken::new(),
+                log,
+            )
+            .await;
+        std::fs::remove_dir_all(&dir).ok();
+        result.expect("echo runner should not depend on sh");
     }
 }

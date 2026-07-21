@@ -11,6 +11,7 @@ use crate::error::AppError;
 use crate::models::{
     ExternalSkill, Provider, Repo, SkillEnvironment, SkillProvider, SkillWorkspace, UserSkillRoot,
 };
+use crate::platform;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
@@ -216,7 +217,7 @@ impl SkillRootEnv {
     fn from_process() -> Self {
         let var = |k: &str| std::env::var_os(k).map(PathBuf::from);
         Self {
-            home: var("HOME"),
+            home: platform::home_dir(),
             claude_config_dir: var("CLAUDE_CONFIG_DIR"),
             codex_home: var("CODEX_HOME"),
             xdg_config_home: var("XDG_CONFIG_HOME"),

@@ -22,6 +22,7 @@ use crate::models::{
     DuplicateWarnings, EnvWarning, Project, ProjectConnectionStatus, ProjectKind, Provider, Repo,
     TokenKind,
 };
+use crate::platform;
 
 /// 동시 검증 상한 — 무상한 fan-out 금지(INVARIANT #5 정신). 각 ping은 자체 timeout·retry 0.
 const AUDIT_CONCURRENCY: usize = 6;
@@ -344,12 +345,9 @@ pub(crate) fn multi_install_warning(
 }
 
 fn expand_home(p: &str) -> String {
-    if let Some(rest) = p.strip_prefix("~/") {
-        if let Some(home) = std::env::var_os("HOME") {
-            return Path::new(&home).join(rest).to_string_lossy().into_owned();
-        }
-    }
-    p.to_string()
+    platform::expand_home(Path::new(p), platform::home_dir().as_deref())
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn existing_files(candidates: &[&str]) -> Vec<String> {

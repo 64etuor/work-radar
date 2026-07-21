@@ -315,6 +315,7 @@ mod tests {
         assert!(!proj_root.join("foo/SKILL.md").exists()); // 복사되지 않음(덮어쓰기 없음).
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn vendor_collision_on_symlink_untouched() {
         let pool = crate::commands::shared::test_support::fresh_db().await;
@@ -387,6 +388,7 @@ mod tests {
         assert!(proj_root.join("foo/SKILL.md").exists()); // 무손상.
     }
 
+    #[cfg(unix)]
     #[tokio::test]
     async fn unvendor_refuses_symlink_target() {
         let pool = crate::commands::shared::test_support::fresh_db().await;

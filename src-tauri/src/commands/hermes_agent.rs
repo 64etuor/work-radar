@@ -2,6 +2,7 @@
 
 use crate::error::AppError;
 use crate::hermes_agent::acp_client::{AcpSession, ImageTransport};
+use crate::platform::{self, OptionalIntegration};
 use base64::Engine as _;
 use serde_json::json;
 use std::collections::HashMap;
@@ -27,6 +28,12 @@ async fn ensure_session(
     db: &crate::db::Db,
     tab_id: &str,
 ) -> Result<(), AppError> {
+    if !platform::supports_integration(platform::current_host(), OptionalIntegration::Hermes) {
+        return Err(AppError::terminal(
+            "hermes.unsupported_platform",
+            "Hermes is not supported on this platform",
+        ));
+    }
     {
         let map = holder.read().await;
         if map.contains_key(tab_id) {
