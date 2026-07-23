@@ -16,7 +16,6 @@ mod mmbak_options;
 mod mmbak_recurring;
 mod mmbak_taxonomy;
 mod recurring;
-mod recurring_rules;
 mod reporting;
 mod sync_jobs;
 mod taxonomy;
@@ -35,7 +34,6 @@ pub use mmbak_options::*;
 pub(crate) use mmbak_recurring::*;
 pub(crate) use mmbak_taxonomy::*;
 pub use recurring::*;
-pub(crate) use recurring_rules::*;
 pub use reporting::*;
 pub use sync_jobs::*;
 pub use taxonomy::*;
@@ -53,13 +51,12 @@ mod tests {
         BookkeepingAliasMatchKind, BookkeepingAliasSource, BookkeepingCashflowInput,
         BookkeepingCategoryTrendInput, BookkeepingDirection, BookkeepingExpenseKind,
         BookkeepingExportFormat, BookkeepingPaymentMethodKind, BookkeepingReconcileAccountInput,
-        BookkeepingRecurringOccurrenceStatus, BookkeepingReviewStatus, BookkeepingSource,
-        CreateBookkeepingLineItemInput, CreateBookkeepingRecurringExpenseInput,
-        CreateBookkeepingTransactionInput, CreateProjectInput, ExportBookkeepingInput,
-        FindBookkeepingDuplicateCandidatesInput, OverrideBookkeepingCategoryInput, ProjectKind,
-        RecordBookkeepingSyncFailureInput, SetBookkeepingBudgetInput, SetBookkeepingLineItemsInput,
-        SyncBookkeepingGmailReceiptsInput, UpdateBookkeepingTransactionInput,
-        WriteBookkeepingExportInput,
+        BookkeepingReviewStatus, BookkeepingSource, CreateBookkeepingLineItemInput,
+        CreateBookkeepingRecurringExpenseInput, CreateBookkeepingTransactionInput,
+        CreateProjectInput, ExportBookkeepingInput, FindBookkeepingDuplicateCandidatesInput,
+        OverrideBookkeepingCategoryInput, ProjectKind, RecordBookkeepingSyncFailureInput,
+        SetBookkeepingBudgetInput, SetBookkeepingLineItemsInput, SyncBookkeepingGmailReceiptsInput,
+        UpdateBookkeepingTransactionInput, WriteBookkeepingExportInput,
     };
     use std::sync::Mutex;
 
@@ -805,12 +802,12 @@ mod tests {
             Some(personal.id.as_str())
         );
 
-        let occurrences =
-            ensure_bookkeeping_recurring_occurrences_inner(&db, "2026-06", Some(&personal.id))
+        let month_status =
+            bookkeeping_recurring_month_status_inner(&db, "2026-06", Some(&personal.id))
                 .await
-                .expect("personal occurrences");
-        assert_eq!(occurrences.len(), 1);
-        assert_eq!(occurrences[0].recurring_name, "월세");
+                .expect("personal recurring month status");
+        assert_eq!(month_status.rows.len(), 1);
+        assert_eq!(month_status.rows[0].name, "월세");
     }
 
     #[tokio::test]
@@ -1534,84 +1531,167 @@ mod tests {
         assert_eq!(err.code, "bookkeeping.gmail.filter");
     }
 
+    /// 고정비는 MoneyManager 미러 전용 — 납부 여부는 임포트 거래 매칭으로 파생되고,
+    /// 앱이 거래를 새로 만들지 않는다(이중집계 금지).
     #[tokio::test]
-    async fn recurring_expense_generates_monthly_occurrence_and_posts_transaction() {
+    async fn recurring_month_status_derives_paid_from_imported_transactions() {
         let db = pool().await;
-        let project = crate::commands::projects::insert_project(
-            &db,
-            &CreateProjectInput {
-                name: "Personal".to_string(),
-                kind: ProjectKind::Personal,
-                notion_backlog_db_id: None,
-                notion_agenda_db_id: None,
-            },
-        )
-        .await
-        .expect("project");
+        let rule =
+            create_bookkeeping_recurring_expense_inner(&db, recurring_input(None, "월세", 900_000))
+                .await
+                .expect("recurring rule");
 
-        let recurring = create_bookkeeping_recurring_expense_inner(
-            &db,
-            CreateBookkeepingRecurringExpenseInput {
-                project_id: Some(project.id.clone()),
-                name: "월세".to_string(),
-                merchant: Some("건물주".to_string()),
-                amount_minor: 900_000,
-                currency: "KRW".to_string(),
-                category: "housing".to_string(),
-                payment_method_kind: BookkeepingPaymentMethodKind::BankTransfer,
-                payment_method_label: Some("주거래 계좌".to_string()),
-                payment_method_last4: Some("4821".to_string()),
-                expense_kind: BookkeepingExpenseKind::Fixed,
-                schedule_day: 25,
-                start_month: "2026-06".to_string(),
-                end_month: None,
-                note: Some("메일로 관측 불가".to_string()),
-            },
-        )
-        .await
-        .expect("create recurring expense");
-
-        let occurrences = ensure_bookkeeping_recurring_occurrences_inner(&db, "2026-06", None)
+        // 매칭 거래가 없으면 미납 — planned만 잡히고 remaining = planned.
+        let before = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
             .await
-            .expect("ensure occurrences");
-        assert_eq!(occurrences.len(), 1);
-        assert_eq!(occurrences[0].recurring_expense_id, recurring.id);
-        assert_eq!(occurrences[0].due_date, "2026-06-25");
+            .expect("month status before payment");
+        assert_eq!(before.rows.len(), 1);
+        assert_eq!(before.rows[0].rule_id, rule.id);
+        assert_eq!(before.rows[0].due_date, "2026-06-25");
+        assert!(!before.rows[0].paid);
+        assert_eq!(before.planned_total_minor, 900_000);
+        assert_eq!(before.paid_total_minor, 0);
+        assert_eq!(before.remaining_total_minor, 900_000);
+
+        // 금액이 다른 거래는 매칭되지 않는다.
+        create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("월세", 850_000, "2026-06-25", "housing"),
+        )
+        .await
+        .expect("wrong-amount tx");
+        // merchant·금액이 일치하는 임포트 거래 → 납부로 판정된다.
+        let paid_tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("월세", 900_000, "2026-06-25", "housing"),
+        )
+        .await
+        .expect("matching tx");
+
+        let after = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
+            .await
+            .expect("month status after payment");
+        assert!(after.rows[0].paid);
         assert_eq!(
-            occurrences[0].payment_method_kind,
-            BookkeepingPaymentMethodKind::BankTransfer
+            after.rows[0].matched_transaction_id.as_deref(),
+            Some(paid_tx.id.as_str())
         );
+        assert_eq!(
+            after.rows[0].matched_spent_at.as_deref(),
+            Some("2026-06-25")
+        );
+        assert_eq!(after.paid_total_minor, 900_000);
+        assert_eq!(after.remaining_total_minor, 0);
 
-        let posted = post_bookkeeping_recurring_occurrence_inner(&db, &occurrences[0].id)
+        // 다음 달에는 다시 미납으로 시작한다(매칭은 월 스코프).
+        let next = bookkeeping_recurring_month_status_inner(&db, "2026-07", None)
             .await
-            .expect("post occurrence");
-        assert_eq!(posted.status, BookkeepingRecurringOccurrenceStatus::Posted);
-        assert!(posted.transaction_id.is_some());
+            .expect("next month status");
+        assert!(!next.rows[0].paid);
+        assert_eq!(next.remaining_total_minor, 900_000);
 
+        // 거래 합계는 그대로 — 고정비 반영은 파생값일 뿐 거래를 만들지 않는다.
         let rows = list_bookkeeping_transactions_inner(&db, None, None)
             .await
             .expect("transactions");
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].expense_kind, BookkeepingExpenseKind::Fixed);
-        assert_eq!(
-            rows[0].payment_method_kind,
-            BookkeepingPaymentMethodKind::BankTransfer
-        );
-        assert_eq!(rows[0].payment_method_label.as_deref(), Some("주거래 계좌"));
-        assert_eq!(rows[0].payment_method_last4.as_deref(), Some("4821"));
-        assert_eq!(
-            rows[0].recurring_expense_id.as_deref(),
-            Some(recurring.id.as_str())
-        );
-        assert_eq!(
-            rows[0].recurring_occurrence_id.as_deref(),
-            Some(posted.id.as_str())
-        );
+        assert_eq!(rows.len(), 2);
+    }
 
-        let summary = bookkeeping_monthly_summary_inner(&db, "2026-06", None)
+    /// merchant가 없는 규칙은 이름으로 폴백 매칭하고, ignored 거래는 납부로 치지 않는다.
+    #[tokio::test]
+    async fn recurring_month_status_name_fallback_and_ignored_exclusion() {
+        let db = pool().await;
+        let mut input = recurring_input(None, "컬리구독", 1_900);
+        input.merchant = None;
+        create_bookkeeping_recurring_expense_inner(&db, input)
             .await
-            .expect("summary");
-        assert_eq!(summary.total_amount_minor, 900_000);
+            .expect("rule without merchant");
+
+        let tx = create_bookkeeping_transaction_inner(
+            &db,
+            manual_input("컬리구독", 1_900, "2026-06-03", "구독료"),
+        )
+        .await
+        .expect("name-matching tx");
+        let matched = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status");
+        assert!(matched.rows[0].paid, "merchant 없으면 name으로 매칭");
+
+        update_bookkeeping_review_status_inner(&db, &tx.id, BookkeepingReviewStatus::Ignored)
+            .await
+            .expect("ignore tx");
+        let unmatched = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status after ignore");
+        assert!(!unmatched.rows[0].paid, "ignored 거래는 납부가 아니다");
+    }
+
+    /// 통화가 다르면 금액이 같아도 납부로 치지 않는다(KRW 단일 가정의 방어선).
+    #[tokio::test]
+    async fn recurring_month_status_requires_matching_currency() {
+        let db = pool().await;
+        create_bookkeeping_recurring_expense_inner(&db, recurring_input(None, "해외구독", 9_900))
+            .await
+            .expect("rule");
+        let mut tx = manual_input("해외구독", 9_900, "2026-06-05", "구독료");
+        tx.currency = "USD".to_string();
+        create_bookkeeping_transaction_inner(&db, tx)
+            .await
+            .expect("usd tx");
+
+        let status = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status");
+        assert!(!status.rows[0].paid, "통화 불일치는 매칭 제외");
+    }
+
+    /// 활성·월 범위 규칙만 집계하고, 결제일은 짧은 달 말일로 클램프된다.
+    #[tokio::test]
+    async fn recurring_month_status_filters_window_and_clamps_due_date() {
+        let db = pool().await;
+        let mut ended = recurring_input(None, "종료된 규칙", 10_000);
+        ended.end_month = Some("2026-05".to_string());
+        create_bookkeeping_recurring_expense_inner(&db, ended)
+            .await
+            .expect("ended rule");
+
+        let mut future = recurring_input(None, "미래 규칙", 20_000);
+        future.start_month = "2026-08".to_string();
+        create_bookkeeping_recurring_expense_inner(&db, future)
+            .await
+            .expect("future rule");
+
+        let mut clamped = recurring_input(None, "말일 규칙", 30_000);
+        clamped.schedule_day = 31;
+        clamped.start_month = "2026-01".to_string();
+        create_bookkeeping_recurring_expense_inner(&db, clamped)
+            .await
+            .expect("clamped rule");
+
+        let archived = create_bookkeeping_recurring_expense_inner(
+            &db,
+            recurring_input(None, "보관된 규칙", 40_000),
+        )
+        .await
+        .expect("archived rule");
+        sqlx::query("UPDATE bookkeeping_recurring_expenses SET status='archived' WHERE id=?1")
+            .bind(&archived.id)
+            .execute(&db)
+            .await
+            .expect("archive");
+
+        let status = bookkeeping_recurring_month_status_inner(&db, "2026-06", None)
+            .await
+            .expect("status");
+        assert_eq!(status.rows.len(), 1, "활성 + 월 범위 규칙만");
+        assert_eq!(status.rows[0].name, "말일 규칙");
+        assert_eq!(status.planned_total_minor, 30_000);
+
+        let feb = bookkeeping_recurring_month_status_inner(&db, "2026-02", None)
+            .await
+            .expect("feb status");
+        assert_eq!(feb.rows[0].due_date, "2026-02-28", "말일 클램프");
     }
 
     #[tokio::test]

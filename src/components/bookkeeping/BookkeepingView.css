@@ -727,7 +727,7 @@
 
 /* 행 내부 액션 버튼 압축 — 기본 sm(32px)이 행 높이를 지배하므로 26px로.
    .bk-row-actions를 쓰는 컨테이너 전수(grep 기준):
-   - .bk-transaction read-row: TransactionReadRow / RecurringOccurrenceRow / TrashTransactionRow → 압축 대상
+   - .bk-transaction read-row: TransactionReadRow / TrashTransactionRow → 압축 대상
    - .bk-review-read: ReviewReadRow → 압축 대상
    - TransactionEditForm 푸터는 .bk-edit-footer(파일 하단)로 분리 — 압축 비대상(:not은 방어용 유지)
    폼/카드 헤더의 버튼은 건드리지 않는다. */

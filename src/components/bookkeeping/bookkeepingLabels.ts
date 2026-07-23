@@ -49,9 +49,3 @@ export function expenseKindLabel(kind: BookkeepingExpenseKind) {
 export function paymentMethodLabel(kind: BookkeepingPaymentMethodKind) {
   return PAYMENT_METHOD_OPTIONS.find((option) => option.value === kind)?.label ?? kind;
 }
-
-export function occurrenceStatusLabel(status: string) {
-  if (status === "posted") return "확정";
-  if (status === "skipped") return "건너뜀";
-  return "예정";
-}

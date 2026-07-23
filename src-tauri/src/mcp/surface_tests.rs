@@ -12,15 +12,9 @@ use crate::external_actions::{store, ExecOutcome, ExternalAction};
 use crate::mcp::tools::bookkeeping_budgets::{
     BookkeepingBudgetIdParams, BookkeepingBudgetScopeParams, BookkeepingSetBudgetParams,
 };
-use crate::mcp::tools::bookkeeping_recurring::{
-    BookkeepingCreateRecurringExpenseParams, BookkeepingRecurringExpenseStatusParam,
-    BookkeepingRecurringExpenseStatusParams, BookkeepingRecurringOccurrenceStatusParam,
-    BookkeepingRecurringOccurrenceStatusParams, BookkeepingRecurringScopeParams,
-};
 use crate::mcp::tools::bookkeeping_transactions::{
-    BookkeepingExpenseKindParam, BookkeepingPaymentMethodParam, BookkeepingReviewDecisionParams,
-    BookkeepingReviewStatusParam, BookkeepingSetLineItemsParams, BookkeepingTransactionIdParams,
-    BookkeepingUpdateTransactionParams,
+    BookkeepingReviewDecisionParams, BookkeepingReviewStatusParam, BookkeepingSetLineItemsParams,
+    BookkeepingTransactionIdParams, BookkeepingUpdateTransactionParams,
 };
 use crate::mcp::tools::calendar::CalendarCreateEventParams;
 use crate::mcp::tools::github::{GithubCommentParams, GithubCreateIssueParams};
@@ -191,12 +185,8 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_set_budget",
         "wr_bookkeeping_list_budgets",
         "wr_bookkeeping_remove_budget",
-        "wr_bookkeeping_list_recurring_occurrences",
-        "wr_bookkeeping_ensure_recurring_occurrences",
-        "wr_bookkeeping_create_recurring_expense",
-        "wr_bookkeeping_set_recurring_expense_status",
-        "wr_bookkeeping_post_recurring_occurrence",
-        "wr_bookkeeping_set_recurring_occurrence_status",
+        // 고정비는 MoneyManager 미러 전용(2026-07-23 사용자 결정) — 반복 지출
+        // 생성/상태변경/occurrence 툴은 제거됐고 read(list_recurring_expenses)만 남는다.
         "wr_diet_daily_nutrition",
         "wr_diet_meals_for_date",
         "wr_diet_pantry_summary",
@@ -280,7 +270,7 @@ fn registered_tool_set_is_locked() {
 }
 
 #[tokio::test]
-async fn delegated_finance_tools_manage_ledger_budget_and_recurring_expenses() {
+async fn delegated_finance_tools_manage_ledger_and_budget() {
     use crate::mcp::tools::bookkeeping::BookkeepingSaveReceiptParams;
 
     let db = fresh_db().await;
@@ -405,74 +395,6 @@ async fn delegated_finance_tools_manage_ledger_budget_and_recurring_expenses() {
         .expect("remove budget")
         .0;
     assert!(removed.removed);
-
-    let recurring = server
-        .bookkeeping_create_recurring_expense_inner(BookkeepingCreateRecurringExpenseParams {
-            project_id: None,
-            name: "월세".into(),
-            merchant: Some("임대인".into()),
-            amount_minor: 800_000,
-            currency: Some("KRW".into()),
-            category: "주거".into(),
-            payment_method_kind: BookkeepingPaymentMethodParam::BankTransfer,
-            payment_method_label: None,
-            payment_method_last4: None,
-            expense_kind: BookkeepingExpenseKindParam::Fixed,
-            schedule_day: 25,
-            start_month: "2026-07".into(),
-            end_month: None,
-            note: None,
-        })
-        .await
-        .expect("create recurring expense")
-        .0;
-    assert_eq!(recurring.name, "월세");
-    let paused = server
-        .bookkeeping_set_recurring_expense_status_inner(BookkeepingRecurringExpenseStatusParams {
-            id: recurring.id,
-            status: BookkeepingRecurringExpenseStatusParam::Paused,
-        })
-        .await
-        .expect("pause recurring expense")
-        .0;
-    assert_eq!(paused.status, "paused");
-    server
-        .bookkeeping_set_recurring_expense_status_inner(BookkeepingRecurringExpenseStatusParams {
-            id: paused.id,
-            status: BookkeepingRecurringExpenseStatusParam::Active,
-        })
-        .await
-        .expect("reactivate recurring expense");
-    let occurrences = server
-        .bookkeeping_ensure_recurring_occurrences_inner(BookkeepingRecurringScopeParams {
-            month: "2026-07".into(),
-            project_id: None,
-        })
-        .await
-        .expect("ensure occurrences")
-        .0;
-    assert_eq!(occurrences.occurrences.len(), 1);
-    let occurrence_id = occurrences.occurrences[0].id.clone();
-    let posted = server
-        .bookkeeping_set_recurring_occurrence_status_inner(
-            BookkeepingRecurringOccurrenceStatusParams {
-                id: occurrence_id.clone(),
-                status: BookkeepingRecurringOccurrenceStatusParam::Posted,
-            },
-        )
-        .await
-        .expect("post recurring occurrence")
-        .0;
-    assert!(posted.transaction_id.is_some());
-    let revert = server
-        .bookkeeping_set_recurring_occurrence_status_inner(
-            BookkeepingRecurringOccurrenceStatusParams {
-                id: occurrence_id,
-                status: BookkeepingRecurringOccurrenceStatusParam::Planned,
-            },
-        )
-        .await;
-    assert!(revert.is_err());
 }
 
 #[tokio::test]
@@ -522,26 +444,6 @@ async fn finance_management_rejects_oversized_text_before_writing() {
         })
         .await;
     assert!(budget.is_err());
-
-    let recurring = server
-        .bookkeeping_create_recurring_expense_inner(BookkeepingCreateRecurringExpenseParams {
-            project_id: None,
-            name: oversized,
-            merchant: None,
-            amount_minor: 1,
-            currency: Some("KRW".into()),
-            category: "food".into(),
-            payment_method_kind: BookkeepingPaymentMethodParam::Card,
-            payment_method_label: None,
-            payment_method_last4: None,
-            expense_kind: BookkeepingExpenseKindParam::Fixed,
-            schedule_day: 1,
-            start_month: "2026-07".into(),
-            end_month: None,
-            note: None,
-        })
-        .await;
-    assert!(recurring.is_err());
 }
 
 /// §2 전역 가드: **등록된 모든 툴의 입력 스키마가 닫혀 있어야 한다**(`additionalProperties:false`).

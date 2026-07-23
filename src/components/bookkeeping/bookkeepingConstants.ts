@@ -26,28 +26,12 @@ export const EXPENSE_KIND_OPTIONS: { value: BookkeepingExpenseKind; label: strin
   { value: "installment", label: "할부" },
 ];
 
-export const RECURRING_EXPENSE_KIND_OPTIONS = EXPENSE_KIND_OPTIONS.filter(
-  (option) => option.value !== "variable",
-);
-
 export const FIELD_IDS = {
   projectScope: "bk-project-scope",
   gmailLabels: "bk-gmail-labels",
   gmailQuery: "bk-gmail-query",
   mmbakWatchDir: "bk-mmbak-watch-dir",
   mmbakAutoImport: "bk-mmbak-auto-import",
-  recurringName: "bk-recurring-name",
-  recurringMerchant: "bk-recurring-merchant",
-  recurringAmount: "bk-recurring-amount",
-  recurringDay: "bk-recurring-day",
-  recurringStart: "bk-recurring-start",
-  recurringCategory: "bk-recurring-category",
-  recurringPaymentKind: "bk-recurring-payment-kind",
-  recurringPaymentLabel: "bk-recurring-payment-label",
-  recurringPaymentLast4: "bk-recurring-payment-last4",
-  recurringExpenseKind: "bk-recurring-expense-kind",
-  recurringNote: "bk-recurring-note",
-  recurringPanel: "bk-recurring-panel",
   budgetCategory: "bk-budget-category",
   budgetAmount: "bk-budget-amount",
   budgetRollover: "bk-budget-rollover",

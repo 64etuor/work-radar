@@ -5,11 +5,9 @@ import {
   type BookkeepingCategoryTrendInput,
   type BookkeepingExportFormat,
   type BookkeepingReconcileAccountInput,
-  type BookkeepingRecurringOccurrenceStatus,
   type BookkeepingReviewStatus,
   type BookkeepingTransaction,
   commands,
-  type CreateBookkeepingRecurringExpenseInput,
   type CreateBookkeepingTransactionInput,
   type FindBookkeepingDuplicateCandidatesInput,
   type OverrideBookkeepingCategoryInput,
@@ -270,45 +268,12 @@ export function useBookkeepingRecurringExpenses(projectId: string | null = null)
   });
 }
 
-export function useCreateBookkeepingRecurringExpense() {
-  const invalidate = useInvalidateBookkeeping();
-  return useMutation({
-    mutationFn: (input: CreateBookkeepingRecurringExpenseInput) =>
-      unwrap(commands.createBookkeepingRecurringExpense(input)),
-    onSuccess: invalidate,
-  });
-}
-
-export function useBookkeepingRecurringOccurrences(month: string, projectId: string | null = null) {
+/** 월별 고정비 납부 현황(MoneyManager 미러 파생) — mmbak 임포트 mutation들이
+ *  `["bookkeeping"]` prefix invalidate를 쓰므로 임포트 후 자동 갱신된다. */
+export function useBookkeepingRecurringMonthStatus(month: string, projectId: string | null = null) {
   return useQuery({
-    queryKey: ["bookkeeping", "recurringOccurrences", month, projectId],
-    queryFn: () => unwrap(commands.listBookkeepingRecurringOccurrences(month, projectId)),
-  });
-}
-
-export function useEnsureBookkeepingRecurringOccurrences() {
-  const invalidate = useInvalidateBookkeeping();
-  return useMutation({
-    mutationFn: ({ month, projectId }: { month: string; projectId: string | null }) =>
-      unwrap(commands.ensureBookkeepingRecurringOccurrences(month, projectId)),
-    onSuccess: invalidate,
-  });
-}
-
-export function usePostBookkeepingRecurringOccurrence() {
-  const invalidate = useInvalidateBookkeeping();
-  return useMutation({
-    mutationFn: (id: string) => unwrap(commands.postBookkeepingRecurringOccurrence(id)),
-    onSuccess: invalidate,
-  });
-}
-
-export function useSetBookkeepingRecurringOccurrenceStatus() {
-  const invalidate = useInvalidateBookkeeping();
-  return useMutation({
-    mutationFn: ({ id, status }: { id: string; status: BookkeepingRecurringOccurrenceStatus }) =>
-      unwrap(commands.setBookkeepingRecurringOccurrenceStatus(id, status)),
-    onSuccess: invalidate,
+    queryKey: ["bookkeeping", "recurringMonthStatus", month, projectId],
+    queryFn: () => unwrap(commands.bookkeepingRecurringMonthStatus(month, projectId)),
   });
 }
 

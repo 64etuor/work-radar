@@ -6,14 +6,13 @@ import {
 } from "./bookkeepingPanels";
 
 describe("bookkeeping input panels", () => {
-  it("keeps manual input above recurring input", () => {
-    expect(BOOKKEEPING_INPUT_PANEL_ORDER).toEqual(["manual", "recurring"]);
+  it("manual 입력 패널만 남는다 — 고정비는 MoneyManager 미러 전용이라 입력 폼이 없다", () => {
+    expect(BOOKKEEPING_INPUT_PANEL_ORDER).toEqual(["manual"]);
   });
 
-  it("keeps both input panels visible by default", () => {
+  it("manual 패널은 기본으로 열려 있다", () => {
     expect(BOOKKEEPING_INPUT_PANEL_DEFAULT_OPEN).toEqual({
       manual: true,
-      recurring: true,
     });
   });
 });

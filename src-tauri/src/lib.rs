@@ -106,12 +106,9 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_bookkeeping_audit,
         commands::record_bookkeeping_sync_failure,
         commands::list_bookkeeping_sync_jobs,
-        commands::create_bookkeeping_recurring_expense,
+        // 고정비 = MoneyManager 미러 전용(읽기 + 월 납부 현황 파생) — 생성/수정 표면 없음.
         commands::list_bookkeeping_recurring_expenses,
-        commands::ensure_bookkeeping_recurring_occurrences,
-        commands::list_bookkeeping_recurring_occurrences,
-        commands::post_bookkeeping_recurring_occurrence,
-        commands::set_bookkeeping_recurring_occurrence_status,
+        commands::bookkeeping_recurring_month_status,
         commands::list_bookkeeping_gmail_labels,
         commands::sync_bookkeeping_gmail_receipts,
         // MoneyManager(.mmbak) 백업 임포트 — 사용자 발동, existing-wins upsert.

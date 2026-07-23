@@ -37,7 +37,6 @@ use crate::models::ProjectKind;
 // DTO 표면을 그대로 유지한다 — 모듈 분할은 순수 이동이며 공개 경로를 바꾸지 않는다.
 pub use tools::bookkeeping::*;
 pub use tools::bookkeeping_budgets::*;
-pub use tools::bookkeeping_recurring::*;
 pub use tools::bookkeeping_transactions::*;
 pub use tools::calendar::*;
 pub use tools::diet::*;
@@ -69,7 +68,6 @@ impl WrServer {
             + Self::tool_router_gmail()
             + Self::tool_router_bookkeeping()
             + Self::tool_router_bookkeeping_budgets()
-            + Self::tool_router_bookkeeping_recurring()
             + Self::tool_router_bookkeeping_transactions()
             + Self::tool_router_diet()
             + Self::tool_router_diet_manage()

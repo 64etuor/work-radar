@@ -6,11 +6,11 @@ import { type FormEvent, useReducer, useState } from "react";
 
 import type {
   BookkeepingExportFormat,
-  BookkeepingRecurringOccurrence,
   BookkeepingReviewStatus,
   BookkeepingTransaction,
 } from "@/bindings";
 import {
+  localToday,
   useBookkeepingAudit,
   useBookkeepingCashflow,
   useBookkeepingCategoryTrend,
@@ -20,7 +20,7 @@ import {
   useBookkeepingMonthlySummary,
   useBookkeepingReconcileAccount,
   useBookkeepingRecurringExpenses,
-  useBookkeepingRecurringOccurrences,
+  useBookkeepingRecurringMonthStatus,
   useBookkeepingSyncCursors,
   useBookkeepingSyncJobs,
   useBookkeepingTransactions,
@@ -28,18 +28,14 @@ import {
   useBulkDeleteBookkeepingTransactions,
   useBulkSetBookkeepingCategory,
   useBulkUpdateBookkeepingReviewStatus,
-  useCreateBookkeepingRecurringExpense,
   useCreateBookkeepingTransaction,
   useDeleteBookkeepingTransaction,
-  useEnsureBookkeepingRecurringOccurrences,
   useImportBookkeepingMmbakLatest,
   useOverrideBookkeepingCategory,
-  usePostBookkeepingRecurringOccurrence,
   useProjects,
   useRestoreBookkeepingTransaction,
   useSetBookkeepingDefaultCurrency,
   useSetBookkeepingMmbakOptions,
-  useSetBookkeepingRecurringOccurrenceStatus,
   useSyncBookkeepingGmailReceipts,
   useUpdateBookkeepingReviewStatus,
   useUpdateBookkeepingTransaction,
@@ -57,11 +53,9 @@ import {
   emptyGmailSyncDraft,
   emptyManualDraft,
   emptyReconciliationDraft,
-  emptyRecurringDraft,
   type GmailSyncDraft,
   type ManualDraft,
   type ReconciliationDraft,
-  type RecurringDraft,
   type TransactionEditDraft,
 } from "./bookkeepingDrafts";
 import { nullableText, pushMutationError, splitCsv } from "./bookkeepingFieldUtils";
@@ -93,8 +87,7 @@ import { ManualEntryCard } from "./cards/ManualEntryCard";
 import { MoneyManagerImportCard } from "./cards/MoneyManagerImportCard";
 import { OperationsLogCard } from "./cards/OperationsLogCard";
 import { ReconciliationCard } from "./cards/ReconciliationCard";
-import { RecurringExpenseFormCard } from "./cards/RecurringExpenseFormCard";
-import { RecurringMonthCard } from "./cards/RecurringMonthCard";
+import { RecurringMirrorCard } from "./cards/RecurringMirrorCard";
 import { ReportsSection } from "./cards/ReportsSection";
 import { ReviewQueueCard } from "./cards/ReviewQueueCard";
 import { TrashTransactionsCard } from "./cards/TrashTransactionsCard";
@@ -111,7 +104,8 @@ export function BookkeepingView() {
     setScope((cur) => bookkeepingScopeReducer(cur, action));
   const scrollRef = useScrollRestore("bookkeeping");
   const [manualDraft, setManualDraft] = useState<ManualDraft>(() => emptyManualDraft());
-  const [recurringDraft, setRecurringDraft] = useState<RecurringDraft>(() => emptyRecurringDraft());
+  // 고정비 미납/예정 판정 기준일 — 렌더 중 clock 호출 금지(React Compiler purity) → 마운트 시 1회.
+  const [today] = useState(() => localToday());
   const [reconciliationDraft, setReconciliationDraft] = useState<ReconciliationDraft>(() =>
     emptyReconciliationDraft(),
   );
@@ -172,12 +166,8 @@ export function BookkeepingView() {
   const syncJobs = useBookkeepingSyncJobs();
   const syncCursors = useBookkeepingSyncCursors();
   const recurringExpenses = useBookkeepingRecurringExpenses(activeProjectId);
-  const recurringOccurrences = useBookkeepingRecurringOccurrences(month, activeProjectId);
+  const recurringMonthStatus = useBookkeepingRecurringMonthStatus(month, activeProjectId);
   const createTx = useCreateBookkeepingTransaction();
-  const createRecurring = useCreateBookkeepingRecurringExpense();
-  const ensureRecurring = useEnsureBookkeepingRecurringOccurrences();
-  const postRecurring = usePostBookkeepingRecurringOccurrence();
-  const setRecurringStatus = useSetBookkeepingRecurringOccurrenceStatus();
   const syncGmail = useSyncBookkeepingGmailReceipts();
   const mmbakOptions = useBookkeepingMmbakOptions();
   const setMmbakOptions = useSetBookkeepingMmbakOptions();
@@ -200,9 +190,9 @@ export function BookkeepingView() {
   const pushError = useToastStore((s) => s.pushError);
   const exportPending = writeExport.isPending;
 
-  const plannedTotal = (recurringOccurrences.data ?? [])
-    .filter((row) => row.status !== "skipped")
-    .reduce((sum, row) => sum + row.amountMinor, 0);
+  // 월 수입/지출 반영: 아직 납부되지 않은 고정비 합 — 납부분은 이미 거래 합계에
+  // 들어 있으므로 남은 예정만 노출한다(이중집계 없음).
+  const fixedRemainingMinor = recurringMonthStatus.data?.remainingTotalMinor ?? 0;
   const needsReviewCount = summary.data?.needsReviewCount ?? 0;
 
   const selectTab = (tab: BookkeepingTabId) => {
@@ -257,47 +247,6 @@ export function BookkeepingView() {
           pushSuccess("거래가 추가됐습니다");
         },
         onError: (error) => pushMutationError("bookkeeping.create", error),
-      },
-    );
-  };
-
-  const submitRecurring = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const amount = Number(recurringDraft.amount);
-    const scheduleDay = Number(recurringDraft.scheduleDay);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      pushError("bookkeeping.recurring", "고정비 금액을 확인하세요");
-      return;
-    }
-    if (!Number.isInteger(scheduleDay) || scheduleDay < 1 || scheduleDay > 31) {
-      pushError("bookkeeping.recurring", "결제일은 1~31 범위여야 합니다");
-      return;
-    }
-    createRecurring.mutate(
-      {
-        projectId: activeProjectId,
-        name: recurringDraft.name,
-        merchant: nullableText(recurringDraft.merchant),
-        amountMinor: Math.round(amount),
-        // 빈 값 = 앱 기본 통화(백엔드 clean_currency가 bookkeeping.default_currency로 치환).
-        currency: "",
-        category: recurringDraft.category,
-        paymentMethodKind: recurringDraft.paymentMethodKind,
-        paymentMethodLabel: nullableText(recurringDraft.paymentMethodLabel),
-        paymentMethodLast4: nullableText(recurringDraft.paymentMethodLast4),
-        expenseKind: recurringDraft.expenseKind,
-        scheduleDay,
-        startMonth: recurringDraft.startMonth,
-        endMonth: null,
-        note: nullableText(recurringDraft.note),
-      },
-      {
-        onSuccess: () => {
-          setRecurringDraft(emptyRecurringDraft());
-          ensureRecurring.mutate({ month, projectId: activeProjectId });
-          pushSuccess("고정비가 등록됐습니다");
-        },
-        onError: (error) => pushMutationError("bookkeeping.recurring", error),
       },
     );
   };
@@ -609,23 +558,6 @@ export function BookkeepingView() {
     setReviewStatus(tx, "needs_review");
   };
 
-  const confirmOccurrence = (occurrence: BookkeepingRecurringOccurrence) => {
-    postRecurring.mutate(occurrence.id, {
-      onSuccess: () => pushSuccess("고정비를 거래로 확정했습니다"),
-      onError: (error) => pushMutationError("bookkeeping.recurring.post", error),
-    });
-  };
-
-  const skipOccurrence = (occurrence: BookkeepingRecurringOccurrence) => {
-    setRecurringStatus.mutate(
-      { id: occurrence.id, status: "skipped" },
-      {
-        onSuccess: () => pushSuccess("이번 달 고정비를 건너뛰었습니다"),
-        onError: (error) => pushMutationError("bookkeeping.recurring.skip", error),
-      },
-    );
-  };
-
   return (
     <main className="bk-view" ref={scrollRef}>
       <div className="bk-shell">
@@ -665,7 +597,7 @@ export function BookkeepingView() {
           totalExpenseMinor={summary.data?.totalExpenseMinor ?? 0}
           totalIncomeMinor={summary.data?.totalIncomeMinor ?? 0}
           netMinor={summary.data?.netMinor ?? 0}
-          plannedTotal={plannedTotal}
+          fixedRemainingMinor={fixedRemainingMinor}
           needsReviewCount={summary.data?.needsReviewCount ?? 0}
           approvedCount={summary.data?.approvedCount ?? 0}
         />
@@ -727,22 +659,7 @@ export function BookkeepingView() {
 
         <BookkeepingTabPanel tab="recurring" active={activeTab}>
           <div className="bk-pane-grid">
-            <RecurringMonthCard
-              rows={recurringOccurrences.data ?? []}
-              ensurePending={ensureRecurring.isPending}
-              actionPending={postRecurring.isPending || setRecurringStatus.isPending}
-              onEnsure={() => ensureRecurring.mutate({ month, projectId: activeProjectId })}
-              onConfirm={confirmOccurrence}
-              onSkip={skipOccurrence}
-            />
-            <RecurringExpenseFormCard
-              draft={recurringDraft}
-              open={inputPanelsOpen.recurring}
-              pending={createRecurring.isPending}
-              onDraftChange={setRecurringDraft}
-              onOpenChange={(open) => setInputPanelOpen({ panel: "recurring", open })}
-              onSubmit={submitRecurring}
-            />
+            <RecurringMirrorCard status={recurringMonthStatus.data ?? null} today={today} />
             <ReconciliationCard
               draft={reconciliationDraft}
               defaultCurrency={defaultCurrency}

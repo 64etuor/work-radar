@@ -4,7 +4,6 @@
 
 pub mod bookkeeping;
 pub mod bookkeeping_budgets;
-pub mod bookkeeping_recurring;
 pub mod bookkeeping_transactions;
 pub mod calendar;
 pub mod diet;

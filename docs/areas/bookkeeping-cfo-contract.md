@@ -114,11 +114,12 @@ WRITE(로컬, 전 caller — 호스트 승인 UI가 사람 게이트):
 - `wr_bookkeeping_trash_transaction` / `wr_bookkeeping_restore_transaction` — 복구 가능한 휴지통 이동·복원.
 - `wr_bookkeeping_set_line_items` — 항목 replace-all과 합계 불일치 리뷰 사유 재계산.
 - `wr_bookkeeping_set_budget` / `wr_bookkeeping_remove_budget` — 월별 카테고리 예산 설정·해제.
-- `wr_bookkeeping_create_recurring_expense` / `wr_bookkeeping_set_recurring_expense_status` /
-  `wr_bookkeeping_ensure_recurring_occurrences` / `wr_bookkeeping_post_recurring_occurrence` /
-  `wr_bookkeeping_set_recurring_occurrence_status` — 반복 지출 규칙 생성과 `active|paused|archived` 전환,
-  월 발생분 materialize, 승인 거래 전표 처리, `planned|posted|skipped` 상태 관리. `posted` 발생분은
-  연결된 승인 거래의 중복 생성을 막기 위해 이전 상태로 되돌릴 수 없다.
+- **반복 지출(고정비) write 툴 없음** — 고정비는 MoneyManager 백업 미러 전용
+  (2026-07-23 사용자 결정). 규칙 생성/상태변경/occurrence 툴
+  (`create_recurring_expense`·`set_recurring_expense_status`·`ensure_recurring_occurrences`·
+  `post_recurring_occurrence`·`set_recurring_occurrence_status`·`list_recurring_occurrences`)은
+  제거됐다. 납부 여부는 임포트 거래 매칭으로 파생된다(IPC
+  `bookkeeping_recurring_month_status` — 저장 상태 없음, 이중집계 없음).
 
 READ(모든 MCP caller 개방 — 2026-07-04, sanitized 메타데이터만):
 
@@ -126,9 +127,9 @@ READ(모든 MCP caller 개방 — 2026-07-04, sanitized 메타데이터만):
 - `wr_bookkeeping_monthly_summary` — 지출/수입/순액 + 리뷰 상태 카운트.
 - `wr_bookkeeping_get_category_rules` — taxonomy + alias.
 - `wr_bookkeeping_find_duplicate_candidates` — §5.
-- `wr_bookkeeping_budget_status` / `wr_bookkeeping_list_budgets` / `wr_bookkeeping_list_recurring_expenses` /
-  `wr_bookkeeping_list_recurring_occurrences` — 예산·반복 지출 상태 조회.
-  `wr_bookkeeping_list_budgets`는 후속 수정·삭제에 필요한 stable budget id를 포함한다.
+- `wr_bookkeeping_budget_status` / `wr_bookkeeping_list_budgets` / `wr_bookkeeping_list_recurring_expenses`
+  — 예산·반복 지출(미러) 조회. `wr_bookkeeping_list_budgets`는 후속 수정·삭제에 필요한
+  stable budget id를 포함한다.
 - `wr_bookkeeping_list_trash` / `wr_bookkeeping_list_line_items` — 복원 대상과 거래 항목 조회.
 
 표면 변경 = 명시적 코드 변경 + tool-set lock 테스트 갱신 + 이 문서 갱신(lockstep).

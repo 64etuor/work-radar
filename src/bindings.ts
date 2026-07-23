@@ -55,12 +55,8 @@ export const commands = {
 	listBookkeepingAudit: (entityId: string | null) => typedError<BookkeepingAuditEntry[], AppError>(__TAURI_INVOKE("list_bookkeeping_audit", { entityId })),
 	recordBookkeepingSyncFailure: (input: RecordBookkeepingSyncFailureInput) => typedError<BookkeepingSyncJob, AppError>(__TAURI_INVOKE("record_bookkeeping_sync_failure", { input })),
 	listBookkeepingSyncJobs: () => typedError<BookkeepingSyncJob[], AppError>(__TAURI_INVOKE("list_bookkeeping_sync_jobs")),
-	createBookkeepingRecurringExpense: (input: CreateBookkeepingRecurringExpenseInput) => typedError<BookkeepingRecurringExpense, AppError>(__TAURI_INVOKE("create_bookkeeping_recurring_expense", { input })),
 	listBookkeepingRecurringExpenses: (projectId: string | null) => typedError<BookkeepingRecurringExpense[], AppError>(__TAURI_INVOKE("list_bookkeeping_recurring_expenses", { projectId })),
-	ensureBookkeepingRecurringOccurrences: (month: string, projectId: string | null) => typedError<BookkeepingRecurringOccurrence[], AppError>(__TAURI_INVOKE("ensure_bookkeeping_recurring_occurrences", { month, projectId })),
-	listBookkeepingRecurringOccurrences: (month: string, projectId: string | null) => typedError<BookkeepingRecurringOccurrence[], AppError>(__TAURI_INVOKE("list_bookkeeping_recurring_occurrences", { month, projectId })),
-	postBookkeepingRecurringOccurrence: (id: string) => typedError<BookkeepingRecurringOccurrence, AppError>(__TAURI_INVOKE("post_bookkeeping_recurring_occurrence", { id })),
-	setBookkeepingRecurringOccurrenceStatus: (id: string, status: BookkeepingRecurringOccurrenceStatus) => typedError<BookkeepingRecurringOccurrence, AppError>(__TAURI_INVOKE("set_bookkeeping_recurring_occurrence_status", { id, status })),
+	bookkeepingRecurringMonthStatus: (month: string, projectId: string | null) => typedError<BookkeepingRecurringMonthStatus, AppError>(__TAURI_INVOKE("bookkeeping_recurring_month_status", { month, projectId })),
 	listBookkeepingGmailLabels: (projectId: string) => typedError<BookkeepingGmailLabel[], AppError>(__TAURI_INVOKE("list_bookkeeping_gmail_labels", { projectId })),
 	syncBookkeepingGmailReceipts: (input: SyncBookkeepingGmailReceiptsInput) => typedError<BookkeepingGmailSyncResult, AppError>(__TAURI_INVOKE("sync_bookkeeping_gmail_receipts", { input })),
 	importBookkeepingMmbak: (input: ImportBookkeepingMmbakInput) => typedError<ImportBookkeepingMmbakSummary, AppError>(__TAURI_INVOKE("import_bookkeeping_mmbak", { input })),
@@ -1502,28 +1498,36 @@ export type BookkeepingRecurringExpense = {
 
 export type BookkeepingRecurringExpenseStatus = "active" | "paused" | "archived";
 
-export type BookkeepingRecurringOccurrence = {
-	id: string,
-	recurringExpenseId: string,
-	recurringName: string,
+/**
+ *  월별 고정비 납부 현황 한 줄 — 미러된 규칙 + 이번 달 매칭된 MM 실거래.
+ *  `paid`는 임포트된 거래(merchant·금액 일치)로 파생 — 별도 상태 저장 없음.
+ */
+export type BookkeepingRecurringMonthRow = {
+	ruleId: string,
+	name: string,
 	merchant: string | null,
-	month: string,
-	dueDate: string,
 	amountMinor: number,
 	currency: string,
 	category: string,
-	paymentMethodKind: BookkeepingPaymentMethodKind,
-	paymentMethodLabel: string | null,
-	paymentMethodLast4: string | null,
-	expenseKind: BookkeepingExpenseKind,
-	status: BookkeepingRecurringOccurrenceStatus,
-	transactionId: string | null,
-	note: string | null,
-	createdAt: string,
-	updatedAt: string,
+	scheduleDay: number,
+	/**  해당 월의 예정 결제일(YYYY-MM-DD, 말일 클램프). */
+	dueDate: string,
+	paid: boolean,
+	matchedTransactionId: string | null,
+	matchedSpentAt: string | null,
 };
 
-export type BookkeepingRecurringOccurrenceStatus = "planned" | "posted" | "skipped";
+/**
+ *  월별 고정비 집계 — 월 수입/지출 요약에 반영되는 파생값(이중집계 없음:
+ *  납부분은 이미 거래 합계에 있고, `remaining_total_minor`만 전망으로 더한다).
+ */
+export type BookkeepingRecurringMonthStatus = {
+	month: string,
+	rows: BookkeepingRecurringMonthRow[],
+	plannedTotalMinor: number,
+	paidTotalMinor: number,
+	remainingTotalMinor: number,
+};
 
 /**  거래 리뷰 상태. 외부 자동 확정 없이 사람이 approved/ignored로 정리한다. */
 export type BookkeepingReviewStatus = "needs_review" | "approved" | "ignored";
@@ -2038,23 +2042,6 @@ export type CreateBookkeepingLineItemInput = {
 	/**  기본 1. */
 	quantity: number | null,
 	categoryCode: string | null,
-};
-
-export type CreateBookkeepingRecurringExpenseInput = {
-	projectId: string | null,
-	name: string,
-	merchant: string | null,
-	amountMinor: number,
-	currency: string,
-	category: string,
-	paymentMethodKind: BookkeepingPaymentMethodKind,
-	paymentMethodLabel: string | null,
-	paymentMethodLast4: string | null,
-	expenseKind: BookkeepingExpenseKind,
-	scheduleDay: number,
-	startMonth: string,
-	endMonth: string | null,
-	note: string | null,
 };
 
 export type CreateBookkeepingTransactionInput = {

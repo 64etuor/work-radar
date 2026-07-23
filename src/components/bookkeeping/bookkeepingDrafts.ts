@@ -6,7 +6,6 @@ import type {
 } from "@/bindings";
 import { localToday } from "@/lib/query";
 
-import { currentMonth } from "./bookkeepingMonth";
 import { GMAIL_DEFAULT_QUERY } from "./gmailSync";
 
 export type ManualDraft = {
@@ -41,20 +40,6 @@ export type TransactionEditDraft = {
   paymentNo: string;
 };
 
-export type RecurringDraft = {
-  name: string;
-  merchant: string;
-  amount: string;
-  scheduleDay: string;
-  startMonth: string;
-  category: string;
-  paymentMethodKind: BookkeepingPaymentMethodKind;
-  paymentMethodLabel: string;
-  paymentMethodLast4: string;
-  expenseKind: BookkeepingExpenseKind;
-  note: string;
-};
-
 export type ReconciliationDraft = {
   account: string;
   statementDate: string;
@@ -78,22 +63,6 @@ export function emptyManualDraft(): ManualDraft {
     paymentMethodLabel: "",
     paymentMethodLast4: "",
     expenseKind: "variable",
-    note: "",
-  };
-}
-
-export function emptyRecurringDraft(): RecurringDraft {
-  return {
-    name: "",
-    merchant: "",
-    amount: "",
-    scheduleDay: "1",
-    startMonth: currentMonth(),
-    category: "housing",
-    paymentMethodKind: "bank_transfer",
-    paymentMethodLabel: "",
-    paymentMethodLast4: "",
-    expenseKind: "fixed",
     note: "",
   };
 }

@@ -72,15 +72,6 @@ pub enum BookkeepingRecurringExpenseStatus {
     Archived,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, sqlx::Type)]
-#[serde(rename_all = "snake_case")]
-#[sqlx(rename_all = "snake_case")]
-pub enum BookkeepingRecurringOccurrenceStatus {
-    Planned,
-    Posted,
-    Skipped,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct BookkeepingTransaction {
@@ -219,6 +210,9 @@ pub struct BookkeepingRecurringExpense {
     pub updated_at: String,
 }
 
+/// 테스트 픽스처 전용 — 고정비는 MoneyManager 미러 전용이라(2026-07-23 사용자 결정)
+/// 프로덕션 생성 표면(IPC/MCP)이 없다. mmbak 미러의 manual-스코프 방어 테스트만 이걸 쓴다.
+#[cfg(test)]
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateBookkeepingRecurringExpenseInput {
@@ -238,27 +232,35 @@ pub struct CreateBookkeepingRecurringExpenseInput {
     pub note: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
+/// 월별 고정비 납부 현황 한 줄 — 미러된 규칙 + 이번 달 매칭된 MM 실거래.
+/// `paid`는 임포트된 거래(merchant·금액 일치)로 파생 — 별도 상태 저장 없음.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
-pub struct BookkeepingRecurringOccurrence {
-    pub id: String,
-    pub recurring_expense_id: String,
-    pub recurring_name: String,
+pub struct BookkeepingRecurringMonthRow {
+    pub rule_id: String,
+    pub name: String,
     pub merchant: Option<String>,
-    pub month: String,
-    pub due_date: String,
     pub amount_minor: i32,
     pub currency: String,
     pub category: String,
-    pub payment_method_kind: BookkeepingPaymentMethodKind,
-    pub payment_method_label: Option<String>,
-    pub payment_method_last4: Option<String>,
-    pub expense_kind: BookkeepingExpenseKind,
-    pub status: BookkeepingRecurringOccurrenceStatus,
-    pub transaction_id: Option<String>,
-    pub note: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+    pub schedule_day: i32,
+    /// 해당 월의 예정 결제일(YYYY-MM-DD, 말일 클램프).
+    pub due_date: String,
+    pub paid: bool,
+    pub matched_transaction_id: Option<String>,
+    pub matched_spent_at: Option<String>,
+}
+
+/// 월별 고정비 집계 — 월 수입/지출 요약에 반영되는 파생값(이중집계 없음:
+/// 납부분은 이미 거래 합계에 있고, `remaining_total_minor`만 전망으로 더한다).
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct BookkeepingRecurringMonthStatus {
+    pub month: String,
+    pub rows: Vec<BookkeepingRecurringMonthRow>,
+    pub planned_total_minor: i32,
+    pub paid_total_minor: i32,
+    pub remaining_total_minor: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
