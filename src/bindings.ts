@@ -138,6 +138,19 @@ export const commands = {
 	setOrderLineFood: (lineId: string, foodId: string | null) => typedError<GroceryOrderLine, AppError>(__TAURI_INVOKE("set_order_line_food", { lineId, foodId })),
 	receiveOrderLine: (input: ReceiveOrderLineInput) => typedError<PantryLot, AppError>(__TAURI_INVOKE("receive_order_line", { input })),
 	dietShoppingList: (planId: string) => typedError<ShoppingListEntry[], AppError>(__TAURI_INVOKE("diet_shopping_list", { planId })),
+	searchBookCatalog: (query: string, limit: number | null) => typedError<CatalogBook[], AppError>(__TAURI_INVOKE("search_book_catalog", { query, limit })),
+	addBook: (input: AddBookInput) => typedError<AddBookResult, AppError>(__TAURI_INVOKE("add_book", { input })),
+	listBooks: (status: "to_read" | "reading" | "finished" | "abandoned" | null, query: string | null) => typedError<Book[], AppError>(__TAURI_INVOKE("list_books", { status, query })),
+	getBookDetail: (id: string) => typedError<BookDetail, AppError>(__TAURI_INVOKE("get_book_detail", { id })),
+	updateBook: (input: UpdateBookInput) => typedError<Book, AppError>(__TAURI_INVOKE("update_book", { input })),
+	setBookStatus: (id: string, status: ReadingStatus, date: string) => typedError<Book, AppError>(__TAURI_INVOKE("set_book_status", { id, status, date })),
+	deleteBook: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_book", { id })),
+	logReadingSession: (input: LogReadingSessionInput) => typedError<ReadingSession, AppError>(__TAURI_INVOKE("log_reading_session", { input })),
+	deleteReadingSession: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_reading_session", { id })),
+	addBookQuote: (input: AddBookQuoteInput) => typedError<BookQuote, AppError>(__TAURI_INVOKE("add_book_quote", { input })),
+	deleteBookQuote: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_book_quote", { id })),
+	readingStats: (year: number, today: string) => typedError<ReadingStats, AppError>(__TAURI_INVOKE("reading_stats", { year, today })),
+	setReadingGoal: (year: number, targetBooks: number) => typedError<ReadingGoal, AppError>(__TAURI_INVOKE("set_reading_goal", { year, targetBooks })),
 	/**  gh CLI 가용성 + 로그인 상태 (graceful degrade 판정용). 토큰 본문 미포함. */
 	ghCliStatus: () => typedError<CliToolStatus, AppError>(__TAURI_INVOKE("gh_cli_status")),
 	/**
@@ -929,6 +942,40 @@ export type AccountDuplicate = {
 	crossKind: boolean,
 };
 
+export type AddBookInput = {
+	title: string,
+	subtitle: string | null,
+	authors: string[],
+	publisher: string | null,
+	publishedDate: string | null,
+	isbn13: string | null,
+	isbn10: string | null,
+	pageCount: number | null,
+	coverUrl: string | null,
+	description: string | null,
+	categories: string[],
+	language: string | null,
+	/**  생략 시 `manual`. */
+	source: string | null,
+	sourceRef: string | null,
+	/**  생략 시 `to_read`. */
+	status: ReadingStatus | null,
+};
+
+export type AddBookQuoteInput = {
+	bookId: string,
+	quote: string,
+	page: number | null,
+	thought: string | null,
+	favorite: boolean | null,
+};
+
+/**  isbn13 dedup 결과 — `created=false`면 기존 행 반환(중복 등록 아님을 UI/에이전트에 알림). */
+export type AddBookResult = {
+	book: Book,
+	created: boolean,
+};
+
 export type AddPantryLotInput = {
 	foodId: string,
 	location: PantryLocation,
@@ -1138,6 +1185,50 @@ export type BatchItemResult = {
  *  안전-critical 스킵(`Collision`/`NotOurs`)은 별도 값으로 가시 유지.
  */
 export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
+
+export type Book = {
+	id: string,
+	title: string,
+	subtitle: string | null,
+	authors: string[],
+	publisher: string | null,
+	publishedDate: string | null,
+	isbn13: string | null,
+	isbn10: string | null,
+	pageCount: number | null,
+	coverUrl: string | null,
+	description: string | null,
+	categories: string[],
+	language: string | null,
+	source: string,
+	sourceRef: string | null,
+	status: ReadingStatus,
+	/**  0..10 (옵시디언 my_rate 호환 — 별 5개 표시 시 /2). */
+	rating: number | null,
+	review: string | null,
+	startedOn: string | null,
+	finishedOn: string | null,
+	currentPage: number,
+	favorite: boolean,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type BookDetail = {
+	book: Book,
+	sessions: ReadingSession[],
+	quotes: BookQuote[],
+};
+
+export type BookQuote = {
+	id: string,
+	bookId: string,
+	quote: string,
+	page: number | null,
+	thought: string | null,
+	favorite: boolean,
+	createdAt: string,
+};
 
 /**  alias 매칭 대상. raw_label = 유입 분류 라벨, merchant = 상호, domain = 발신 도메인. */
 export type BookkeepingAliasMatchKind = "merchant" | "raw_label" | "domain";
@@ -1703,6 +1794,26 @@ export type CalendarListItem = {
 	summary: string,
 	primary: boolean,
 	selected: boolean,
+};
+
+/**  카탈로그 검색 결과(외부 API 정규화 스냅샷 — DB 미저장, 등록 시 `AddBookInput`으로 복사). */
+export type CatalogBook = {
+	title: string,
+	subtitle: string | null,
+	authors: string[],
+	publisher: string | null,
+	publishedDate: string | null,
+	isbn13: string | null,
+	isbn10: string | null,
+	pageCount: number | null,
+	coverUrl: string | null,
+	description: string | null,
+	categories: string[],
+	language: string | null,
+	/**  `google_books` | `open_library`. */
+	source: string,
+	/**  provider 내 볼륨/문서 식별자. */
+	sourceRef: string | null,
 };
 
 /**  `SkillDiff`의 변경된 파일 1건(중앙 텍스트 vs 프로젝트 텍스트 — FE lineDiff 입력). */
@@ -2598,6 +2709,15 @@ export type LinkSprintGoalInput = {
 	replaceExisting: boolean,
 };
 
+export type LogReadingSessionInput = {
+	bookId: string,
+	/**  로컬 날짜 YYYY-MM-DD (프런트/에이전트 주입 — data-layer 규율). */
+	date: string,
+	endPage: number | null,
+	minutes: number | null,
+	note: string | null,
+};
+
 export type MealLog = {
 	id: string,
 	date: string,
@@ -3163,6 +3283,52 @@ export type ReadinessView = {
 	warnings: string[],
 	gates: ReadinessGates,
 };
+
+export type ReadingGoal = {
+	year: number,
+	targetBooks: number,
+	createdAt: string,
+	updatedAt: string,
+};
+
+/**  히트맵 하루 셀 — 활동이 있던 날만 내려간다. */
+export type ReadingHeatmapDay = {
+	date: string,
+	sessions: number,
+	finished: number,
+};
+
+export type ReadingSession = {
+	id: string,
+	bookId: string,
+	date: string,
+	/**  세션 종료 시점 현재 위치(페이지 수가 아님). */
+	endPage: number | null,
+	minutes: number | null,
+	note: string | null,
+	createdAt: string,
+};
+
+export type ReadingStats = {
+	year: number,
+	totalBooks: number,
+	finishedTotal: number,
+	readingCount: number,
+	toReadCount: number,
+	abandonedCount: number,
+	avgRating: number | null,
+	/**  완독한 책 page_count 합(전체). */
+	totalPagesRead: number,
+	finishedInYear: number,
+	/**  1..12월 완독 수(길이 12). */
+	monthlyFinished: number[],
+	goal: ReadingGoal | null,
+	heatmap: ReadingHeatmapDay[],
+	/**  오늘(요청 date)까지 끊기지 않은 세션 연속 일수. */
+	streakDays: number,
+};
+
+export type ReadingStatus = "to_read" | "reading" | "finished" | "abandoned";
 
 /**  안전 dev rebase 결과 (Phase 12c). 성공/충돌(abort+복구) 둘 다 terminal로 노출한다. */
 export type RebaseResult = {
@@ -3978,6 +4144,34 @@ export type UpdateAgentPromptConfigInput = {
 	model: string | null,
 	reasoningEffort: AgentReasoningEffort | null,
 	fastMode: boolean,
+};
+
+/**
+ *  부분 갱신 — None = 유지. `Option<Option<_>>`는 specta 표면이 지저분해져 명시 클리어
+ *  플래그로 대신한다(rating/review는 0값 구분이 필요 없어 None=유지, 클리어는 플래그).
+ */
+export type UpdateBookInput = {
+	id: string,
+	title: string | null,
+	subtitle: string | null,
+	authors: string[] | null,
+	publisher: string | null,
+	publishedDate: string | null,
+	isbn13: string | null,
+	isbn10: string | null,
+	pageCount: number | null,
+	coverUrl: string | null,
+	description: string | null,
+	categories: string[] | null,
+	language: string | null,
+	rating: number | null,
+	clearRating: boolean | null,
+	review: string | null,
+	clearReview: boolean | null,
+	currentPage: number | null,
+	favorite: boolean | null,
+	startedOn: string | null,
+	finishedOn: string | null,
 };
 
 export type UpdateBookkeepingTransactionInput = {

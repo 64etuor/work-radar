@@ -46,6 +46,7 @@ pub mod moneymanager;
 mod news;
 mod notion;
 mod platform;
+mod reading; // 독서 순수 커널 — 카탈로그 파싱/ISBN/스트릭 결정론(docs/plans/2026-07-23-reading-domain.md).
 mod retry;
 mod routines;
 mod scheduler;
@@ -176,6 +177,20 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::set_order_line_food,
         commands::receive_order_line,
         commands::diet_shopping_list,
+        // Reading — 독서 기록(2026-07-23 plan). 카탈로그 검색만 read-only 아웃바운드(ADR-0013).
+        commands::search_book_catalog,
+        commands::add_book,
+        commands::list_books,
+        commands::get_book_detail,
+        commands::update_book,
+        commands::set_book_status,
+        commands::delete_book,
+        commands::log_reading_session,
+        commands::delete_reading_session,
+        commands::add_book_quote,
+        commands::delete_book_quote,
+        commands::reading_stats,
+        commands::set_reading_goal,
         // CLI 토큰 import (auth 통일, Phase 14) — 토큰은 keychain으로만, IPC 미반환.
         commands::gh_cli_status,
         commands::import_github_token,
