@@ -1,0 +1,59 @@
+docs/adr/0013-reading-domain-catalog-providers.md
+  s_3742135ee19f96::t_c230912e7fedc7 15-26
+src-tauri/src/commands/reading/catalog.rs
+  s_3742135ee19f96::t_4eba3d330a1906 3-14,21,35-36,42-46,74,81,88,91,109-160,165,167-176,191,215-218,227-258,260,262-267,270-271,273,277-294,304-315,318-319,328-333
+src-tauri/src/commands/reading/books.rs
+  s_3742135ee19f96::t_2c459c069790de 42-46
+  s_3742135ee19f96::t_f83322fc41beac 143-147,149-172,181-187,190-202,204-212,214-219,221-226,228-236,238-243,245,253-264
+  s_3742135ee19f96::t_ecc3ae0da55b3e 246-252
+  s_3742135ee19f96::t_e3a841a1df8051 141-142,148,173-180
+  s_3742135ee19f96::t_7913d20ee774f5 188-189
+  s_3742135ee19f96::t_1f896701898183 664-679,681-699,705-706,711
+  s_3742135ee19f96::t_c00b547ba3487e 65-73
+  s_3742135ee19f96::t_ef36eba2a6eb16 700-704
+  s_3742135ee19f96::t_1a9053e763b294 74-82
+  s_3742135ee19f96::t_13972f6529496e 203
+  s_3742135ee19f96::t_518977642786eb 615-663,680,707-710,712-714
+  s_cec16a98c89ab5::t_92deb7ac49eab2 213,220,227,237,244,614
+docs/plans/2026-07-23-reading-domain.md
+  s_3742135ee19f96::t_f0b971a033da60 25-35
+src/bindings.ts
+  s_3742135ee19f96::t_5c7271c0196b84 142-143
+src-tauri/src/reading.rs
+  s_3742135ee19f96::t_9e4f4cfd3234e7 14
+  s_3742135ee19f96::t_112d191c5564d2 626-628
+  s_3742135ee19f96::t_17ca33172629b3 528-625,629-630
+  s_3742135ee19f96::t_2eda7d2c01c66e 212-403
+src-tauri/src/keychain.rs
+  s_3742135ee19f96::t_c12f346aa4b67b 53-84
+src-tauri/src/mcp/tools/reading.rs
+  s_3742135ee19f96::t_c680f46a0476f6 359
+src-tauri/src/lib.rs
+  s_3742135ee19f96::t_07073f7e5a4ce9 182-183
+docs/decisions.md
+  s_3742135ee19f96::t_5994b82c020381 676-677
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a253e0bd27859a281bc8b3d7089642f4354596bd",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_cec16a98c89ab5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e625cdf-3621-4a7c-9399-60be19ba7e9c",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
