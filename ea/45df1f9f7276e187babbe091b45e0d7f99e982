@@ -1,0 +1,42 @@
+src/components/bookkeeping/BookkeepingView.css
+  s_2e82f490c82d37::t_6ec9add5e8c39f 1254-1260
+  s_2e82f490c82d37::t_ed7410b806dd70 1442-1447
+src/components/bookkeeping/cards/ReviewQueueCard.tsx
+  s_2e82f490c82d37::t_ed7410b806dd70 168,311
+src/components/bookkeeping/cards/ReviewReadRow.tsx
+  s_2e82f490c82d37::t_ed7410b806dd70 11,112-115
+  s_bcee5b18be9078::t_328d52962769ea 116
+src/components/bookkeeping/cards/TransactionReadRow.dom.test.tsx
+  s_2e82f490c82d37::t_442855090ff191 140-147
+src/components/bookkeeping/cards/ApprovedTransactionsCard.tsx
+  s_2e82f490c82d37::t_ed7410b806dd70 79
+src/components/bookkeeping/cards/ReviewQueueCard.dom.test.tsx
+  s_2e82f490c82d37::t_442855090ff191 157-169
+src/components/bookkeeping/cards/TransactionReadRow.tsx
+  s_2e82f490c82d37::t_ed7410b806dd70 4,10,92-95
+  s_bcee5b18be9078::t_025bc0f1687112 96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ea45df1f9f7276e187babbe091b45e0d7f99e982",
+  "prompts": {},
+  "sessions": {
+    "s_2e82f490c82d37": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f8223-aa94-7cc2-a0a3-fa424e162b47",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_bcee5b18be9078": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f88cc-2084-7793-9820-b51f7e1dde73",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
