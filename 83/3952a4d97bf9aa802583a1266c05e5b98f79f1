@@ -1,0 +1,36 @@
+src-tauri/src/mcp/tools/mod.rs
+  s_3742135ee19f96::t_7227fa6953ef47 17
+docs/adr/0013-reading-domain-catalog-providers.md
+  s_3742135ee19f96::t_70e26714ec7c33 1-23,26-50
+  s_3742135ee19f96::t_a360bcb2ecbe4a 24-25
+src-tauri/src/mcp/tools/reading.rs
+  s_3742135ee19f96::t_0d56ad0ef1f2b9 327,332-333
+  s_3742135ee19f96::t_76c16f81ea08df 195-200
+  s_3742135ee19f96::t_5ceb04efdaf5de 359
+  s_3742135ee19f96::t_b8c79c400227c1 1-19,21-194,201-326,328-331,334-353,355-358,360-408,412-489,494-621
+  s_3742135ee19f96::t_ae45769a87433e 354
+  s_3742135ee19f96::t_eef7f17cb28d2d 20,409-411,490-493
+src-tauri/src/mcp/surface_tests.rs
+  s_3742135ee19f96::t_e143e8c17709f0 233-243
+src-tauri/src/mcp/mod.rs
+  s_3742135ee19f96::t_6aabd4daa57cb6 76
+  s_3742135ee19f96::t_42719ec41fd3b6 50
+docs/areas/mcp-server-conventions.md
+  s_3742135ee19f96::t_7584821ecbff7f 114-119
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "833952a4d97bf9aa802583a1266c05e5b98f79f1",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
