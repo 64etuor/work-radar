@@ -32,16 +32,24 @@ describe("MissionView layout", () => {
     expect(missionCss).not.toContain(".mission-season-overview");
     expect(navigation).toContain("position: sticky");
     expect(navigation).toContain("z-index: var(--wr-z-raised)");
-    expect(tabs).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
+    // 상단 수평 룰은 분기 행 하나만: 헤더 보더 없음, 탭 full-width 레일 없음,
+    // 보더 위 hairline 그림자 중복 없음.
+    expect(navigation).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
+    expect(navigation).not.toContain("box-shadow");
+    expect(top).not.toContain("border-bottom");
+    expect(tabs).not.toContain("border-bottom");
   });
 
   it("presents objectives as numbered rule-separated document sections", () => {
     const objective = ruleBlock(".mission-objective");
+    const lastObjective = ruleBlock(".mission-objective:last-child");
     const head = ruleBlock(".mission-objective-head");
     const index = ruleBlock(".mission-objective-index");
 
+    // 섹션 사이 룰은 한 줄만: 각 섹션 border-top + 마지막에만 닫는 border-bottom.
     expect(objective).toContain("border-top: 1px solid var(--color-wr-border)");
-    expect(objective).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
+    expect(objective).not.toContain("border-bottom");
+    expect(lastObjective).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
     expect(objective).toContain("box-shadow: none");
     expect(head).toContain("display: grid");
     expect(head).toContain("grid-template-columns: auto minmax(0, 1fr) auto");
