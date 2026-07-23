@@ -1400,6 +1400,82 @@ mod tests {
         assert!(!message.contains("123456789012"));
     }
 
+    /// 복수 라벨은 OR(합집합) — Gmail API `labelIds`(AND)를 그대로 쓰지 않고 라벨별로
+    /// 나눠 조회한 뒤 합치며, 같은 메일이 여러 라벨에 걸리면 한 번만 처리한다.
+    #[tokio::test]
+    async fn gmail_sync_unions_multiple_labels_and_dedups_ids() {
+        let db = pool().await;
+        let project = crate::commands::projects::insert_project(
+            &db,
+            &CreateProjectInput {
+                name: "Personal".to_string(),
+                kind: ProjectKind::Personal,
+                notion_backlog_db_id: None,
+                notion_agenda_db_id: None,
+            },
+        )
+        .await
+        .expect("project");
+
+        let mut candidates = std::collections::HashMap::new();
+        candidates.insert(
+            "ok-1".to_string(),
+            GmailReceiptCandidate {
+                message_id: "ok-1".to_string(),
+                from: "receipts@coupang.test".to_string(),
+                subject: "[쿠팡] 결제 영수증".to_string(),
+                snippet: "쿠팡 결제금액 23,400원".to_string(),
+                body_text: "상호: 쿠팡\n결제일: 2026.06.16\n결제금액 23,400원".to_string(),
+                received_at: Some("2026-06-16T10:11:12Z".to_string()),
+            },
+        );
+        // fake provider는 모든 조회에 같은 ids를 돌려준다 → 라벨 2개면 원시 결과가
+        // 중복되고, dedup이 없다면 scanned가 2가 된다.
+        let provider = FakeGmailReadProvider {
+            labels: vec![
+                GmailLabelInfo {
+                    id: "Label_10".to_string(),
+                    name: "Finance/Receipts".to_string(),
+                },
+                GmailLabelInfo {
+                    id: "Label_67".to_string(),
+                    name: "가계부".to_string(),
+                },
+            ],
+            ids: vec!["ok-1".to_string()],
+            candidates,
+            searches: Mutex::new(Vec::new()),
+        };
+
+        let result = sync_bookkeeping_gmail_receipts_with_provider(
+            &db,
+            &provider,
+            "access-token",
+            SyncBookkeepingGmailReceiptsInput {
+                project_id: project.id.clone(),
+                label_ids: Vec::new(),
+                label_names: vec!["Finance/Receipts".to_string(), "가계부".to_string()],
+                query: Some("newer_than:30d".to_string()),
+                max_results: Some(10),
+            },
+        )
+        .await
+        .expect("sync");
+
+        assert_eq!(
+            result.scanned_count, 1,
+            "합집합 dedup — 같은 메일은 1회 처리"
+        );
+        assert_eq!(result.imported_count, 1);
+
+        let searches = provider.searches.lock().expect("searches");
+        assert_eq!(searches.len(), 2, "라벨마다 별도 조회(OR)");
+        for (search, expected) in searches.iter().zip(["Label_10", "Label_67"]) {
+            assert_eq!(search.label_ids, vec![expected.to_string()]);
+            assert_eq!(search.query.as_deref(), Some("newer_than:30d"));
+        }
+    }
+
     #[tokio::test]
     async fn gmail_sync_resolves_label_names_and_ingests_candidates() {
         let db = pool().await;

@@ -48,8 +48,12 @@ export function GmailSyncCard({
               id={FIELD_IDS.gmailLabels}
               value={draft.labels}
               onChange={(e) => onDraftChange((current) => ({ ...current, labels: e.target.value }))}
-              placeholder="가계부, 영수증"
+              placeholder="예: Finance/Receipts"
             />
+            <p className="text-muted-foreground typo-caption-sm">
+              중첩 라벨은 전체 경로로 입력합니다. 여러 개면 쉼표로 — 하나라도 붙은 메일을 모두
+              가져옵니다.
+            </p>
           </Field>
           <Field label="검색어" htmlFor={FIELD_IDS.gmailQuery}>
             <Input
@@ -61,7 +65,7 @@ export function GmailSyncCard({
           </Field>
           {labels.length > 0 && (
             <div className="bk-label-chips" aria-label="Gmail labels">
-              {labels.slice(0, 8).map((label) => (
+              {labels.slice(0, 12).map((label) => (
                 <button
                   key={label.id}
                   type="button"

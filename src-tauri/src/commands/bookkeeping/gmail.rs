@@ -35,13 +35,19 @@ pub async fn list_bookkeeping_gmail_labels(
         })?;
     let provider = crate::gmail::HttpGmailProvider::new()?;
     let labels = provider.list_labels(&access).await?;
-    Ok(labels
+    // Gmail API는 시스템 라벨(INBOX/SENT/…)을 목록 앞에 반환한다 — UI 칩/선택지는 사용자
+    // 라벨만 의미가 있으므로 제외한다(사용자 라벨 id는 "Label_" 접두사). 이름순 정렬로
+    // 중첩 경로("Finance/Receipts")가 부모 옆에 모이게 한다.
+    let mut labels: Vec<BookkeepingGmailLabel> = labels
         .into_iter()
+        .filter(|label| label.id.starts_with("Label_"))
         .map(|label| BookkeepingGmailLabel {
             id: label.id,
             name: label.name,
         })
-        .collect())
+        .collect();
+    labels.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(labels)
 }
 
 #[tauri::command]
@@ -222,28 +228,48 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
         (None, None) => None,
     };
 
-    let search = GmailMessageSearch {
-        label_ids,
-        query: effective_query,
-        max_results,
+    // 라벨 결합은 OR(합집합, 2026-07-23 사용자 라벨 규칙 정합) — Gmail API `labelIds`는
+    // AND 의미라서 라벨별로 나눠 조회해 합친다. 호출 수 = 라벨 수(수 개 규모)로 유한하고,
+    // 각 호출은 provider가 페이지/총량 상한을 건다. 라벨이 없으면 검색어 단독 1회.
+    let searches: Vec<GmailMessageSearch> = if label_ids.is_empty() {
+        vec![GmailMessageSearch {
+            label_ids: Vec::new(),
+            query: effective_query,
+            max_results,
+        }]
+    } else {
+        label_ids
+            .iter()
+            .map(|label_id| GmailMessageSearch {
+                label_ids: vec![label_id.clone()],
+                query: effective_query.clone(),
+                max_results,
+            })
+            .collect()
     };
-    let ids = match provider.list_message_ids(access_token, &search).await {
-        Ok(ids) => ids,
-        Err(e) => {
-            record_bookkeeping_sync_job_inner(
-                db,
-                BookkeepingSource::Gmail,
-                "failed",
-                Some("gmail.list_failed"),
-                Some(&e.to_string()),
-                SyncCounts::default(),
-                cursor_before.as_deref(),
-                None,
-            )
-            .await?;
-            return Err(AppError::from(e));
+    let mut ids: Vec<String> = Vec::new();
+    for search in &searches {
+        match provider.list_message_ids(access_token, search).await {
+            Ok(batch) => ids.extend(batch),
+            Err(e) => {
+                record_bookkeeping_sync_job_inner(
+                    db,
+                    BookkeepingSource::Gmail,
+                    "failed",
+                    Some("gmail.list_failed"),
+                    Some(&e.to_string()),
+                    SyncCounts::default(),
+                    cursor_before.as_deref(),
+                    None,
+                )
+                .await?;
+                return Err(AppError::from(e));
+            }
         }
-    };
+    }
+    // 같은 메일이 여러 라벨에 걸리면 한 번만 처리(순서 보존 dedup).
+    let mut seen_ids = std::collections::HashSet::new();
+    ids.retain(|id| seen_ids.insert(id.clone()));
 
     let mut counts = SyncCounts::default();
     let mut max_seen_date = cursor_before.clone();
