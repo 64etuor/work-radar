@@ -1,0 +1,37 @@
+src/components/reading/ReadingView.tsx
+  s_3742135ee19f96::t_c5ea2ef3a5dd88 117
+  s_3742135ee19f96::t_ee5a9272dbe4e6 65-67
+  s_3742135ee19f96::t_9f8cfa62a1abe8 169
+  s_3742135ee19f96::t_2dcaa0ad054eab 173
+  s_3742135ee19f96::t_0e3c5cc414754d 100
+  s_3742135ee19f96::t_cf0d261558e2f9 133
+src/components/reading/BookDetailSheet.tsx
+  s_3742135ee19f96::t_ea118a8365876f 108
+src/components/reading/BookQuoteSection.tsx
+  s_3742135ee19f96::t_90242c05b967b1 72
+src/components/reading/ReadingGoalCard.tsx
+  s_3742135ee19f96::t_187180f53b3a16 45
+src/components/reading/BookSearchDialog.tsx
+  s_3742135ee19f96::t_4f6499abdc6b52 72
+  s_3742135ee19f96::t_eedaf9ec8cec51 183,185-186
+  s_3742135ee19f96::t_17092fa052b725 194
+  s_3742135ee19f96::t_2ca7befb69abf0 191-192
+  s_3742135ee19f96::t_b6dbfd8161035e 280
+  s_3742135ee19f96::t_da99de53258d0e 120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f2f9d53eb8252e1938cc27b37bea551d42d5471b",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
