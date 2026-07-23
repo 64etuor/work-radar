@@ -1,0 +1,25 @@
+src/components/MissionView.css
+  s_3b52b39e0b3c52::t_2a8108f3af299a 476-477
+  s_3b52b39e0b3c52::t_14787c02406d71 171-172
+  s_3b52b39e0b3c52::t_1926967caed4c9 484-487
+  s_3b52b39e0b3c52::t_56704bf0698f3d 18-19,26
+src/components/MissionView.layout.test.ts
+  s_3b52b39e0b3c52::t_6a150c25a420a8 35-40
+  s_3b52b39e0b3c52::t_f1d02ab20d4e58 45,49,51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "796477b1bab01e8d4543dd7ae9270437692c49fa",
+  "prompts": {},
+  "sessions": {
+    "s_3b52b39e0b3c52": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ffdb252-87df-473b-8a51-84b24fe2e47c",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
