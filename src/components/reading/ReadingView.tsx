@@ -62,7 +62,9 @@ export function ReadingView() {
         <div className="rd-head-copy">
           <span className="typo-mono-label">READING</span>
           <h1 className="typo-title-md">독서</h1>
-          <p className="typo-body-md">읽을 책을 쌓고, 세션으로 진행을 남기고, 완독을 트래킹한다.</p>
+          <p className="typo-body-md">
+            읽을 책을 쌓고, 세션으로 진행을 남기고, 완독을 트래킹합니다.
+          </p>
         </div>
         <div className="rd-head-actions">
           {(stats?.streakDays ?? 0) > 0 && (
@@ -95,7 +97,7 @@ export function ReadingView() {
           </h2>
           {shelves.reading.length === 0 ? (
             <EmptyState className="rd-empty">
-              읽는 중인 책이 없다 — 읽을 책에서 한 권 시작하기.
+              읽는 중인 책이 없습니다 — 읽을 책에서 한 권 시작해 보세요.
             </EmptyState>
           ) : (
             <div className="rd-cards">
@@ -112,7 +114,7 @@ export function ReadingView() {
           </h2>
           {shelves.toRead.length === 0 ? (
             <EmptyState className="rd-empty">
-              계획된 책이 없다 — 우상단 &ldquo;책 추가&rdquo;로 등록.
+              계획된 책이 없습니다 — 우측 상단 &ldquo;책 추가&rdquo;로 등록하세요.
             </EmptyState>
           ) : (
             <div className="rd-cards">
@@ -128,7 +130,7 @@ export function ReadingView() {
             완독 <span className="rd-shelf-count">{shelves.finished.length}</span>
           </h2>
           {shelves.finished.length === 0 ? (
-            <EmptyState className="rd-empty">아직 완독한 책이 없다.</EmptyState>
+            <EmptyState className="rd-empty">아직 완독한 책이 없습니다.</EmptyState>
           ) : (
             <div className="rd-cards">
               {shelves.finished.map((b) => (
@@ -164,11 +166,11 @@ export function ReadingView() {
         )}
 
         {(books ?? []).length === 0 && (
-          <EmptyState className="rd-empty rd-empty-hero" title="서재가 비어 있다">
+          <EmptyState className="rd-empty rd-empty-hero" title="서재가 비어 있습니다">
             <span className="rd-empty-icon" aria-hidden>
               <BookOpen size={28} />
             </span>
-            &ldquo;책 추가&rdquo;로 제목이나 ISBN을 검색해 첫 책을 등록해 보자.
+            &ldquo;책 추가&rdquo;로 제목이나 ISBN을 검색해 첫 책을 등록해 보세요.
           </EmptyState>
         )}
       </div>
@@ -176,7 +178,6 @@ export function ReadingView() {
       <BookSearchDialog
         open={searchOpen}
         onOpenChange={setSearchOpen}
-        today={today}
         onOpenExisting={setDetailId}
       />
       <BookDetailSheet bookId={detailId} onClose={() => setDetailId(null)} today={today} />

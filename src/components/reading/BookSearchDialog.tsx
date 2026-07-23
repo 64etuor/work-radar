@@ -29,12 +29,10 @@ function useDebounced(value: string, delayMs: number): string {
 export function BookSearchDialog({
   open,
   onOpenChange,
-  today,
   onOpenExisting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  today: string;
   onOpenExisting: (bookId: string) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -71,7 +69,7 @@ export function BookSearchDialog({
           if (!result.created) {
             // 백엔드가 ISBN/정규화 제목으로 중복 판정 — 기존 책의 빈 서지는 백필됐다.
             setNotice({
-              msg: `이미 서재에 있는 책이다: ${result.book.title}`,
+              msg: `이미 서재에 있는 책입니다: ${result.book.title}`,
               bookId: result.book.id,
             });
             return;
@@ -119,7 +117,7 @@ export function BookSearchDialog({
         <div className="rd-search-box">
           <Search size={15} aria-hidden className="rd-search-icon" />
           <Input
-            placeholder="제목·저자 또는 ISBN 검색 (띄어쓰기 안 정확해도 됨)"
+            placeholder="제목·저자 또는 ISBN 검색 (띄어쓰기가 달라도 됩니다)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -182,17 +180,18 @@ export function BookSearchDialog({
           <div className="rd-search-results">
             {search.isError && (
               <EmptyState className="rd-empty">
-                카탈로그 조회에 실패했다(무료 검색 한도일 수 있음).
+                카탈로그 조회에 실패했습니다(무료 검색 한도일 수 있습니다).
                 {aladinOn !== true &&
-                  " 설정 → 통합에서 알라딘 TTB 키를 등록하면 국내 검색이 안정적이다."}{" "}
-                수기 등록은 아래에서.
+                  " 설정 → 통합에서 알라딘 TTB 키를 등록하면 국내 검색이 안정적입니다."}{" "}
+                수기 등록은 아래에서 할 수 있습니다.
               </EmptyState>
             )}
             {searched && catalogEmpty && libraryMatches.length === 0 && (
               <EmptyState className="rd-empty">
-                카탈로그에서 못 찾았다 — 띄어쓰기를 바꾸거나 핵심 단어만, 또는 ISBN으로.
+                카탈로그에서 찾지 못했습니다 — 띄어쓰기를 바꾸거나 핵심 단어만, 또는 ISBN으로 검색해
+                보세요.
                 {aladinOn !== true &&
-                  " 국내 도서는 알라딘 TTB 키 등록(설정 → 통합) 시 훨씬 잘 잡힌다."}
+                  " 국내 도서는 알라딘 TTB 키를 등록(설정 → 통합)하면 훨씬 잘 검색됩니다."}
               </EmptyState>
             )}
             {(search.data ?? []).map((c, i) => (
@@ -278,7 +277,7 @@ export function BookSearchDialog({
               setManualMode(true);
             }}
           >
-            검색에 없나? 수기로 등록 ({today} 기준 서가에 추가)
+            검색에 없는 책은 수기로 등록하기
           </button>
         )}
       </DialogContent>

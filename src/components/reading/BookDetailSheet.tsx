@@ -105,7 +105,7 @@ export function BookDetailSheet({
             <footer className="rd-detail-footer">
               {confirmDelete ? (
                 <div className="rd-delete-confirm">
-                  <span className="typo-label-md">세션·발췌까지 함께 지워진다.</span>
+                  <span className="typo-label-md">세션·발췌도 함께 삭제됩니다.</span>
                   <Button
                     size="sm"
                     variant="destructive"

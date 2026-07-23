@@ -69,7 +69,7 @@ export function BookQuoteSection({ bookId, quotes }: { bookId: string; quotes: B
         </div>
       </form>
       {quotes.length === 0 ? (
-        <EmptyState className="rd-empty">아직 채록한 문장이 없다.</EmptyState>
+        <EmptyState className="rd-empty">아직 채록한 문장이 없습니다.</EmptyState>
       ) : (
         <ul className="rd-quote-list">
           {quotes.map((q) => (

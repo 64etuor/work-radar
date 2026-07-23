@@ -42,7 +42,7 @@ export function ReadingGoalCard({
     return (
       <section className="rd-goal rd-goal-unset" aria-label="연간 목표">
         <div className="typo-body-md rd-card-dim">
-          {year}년 독서 목표가 아직 없다 — 목표를 정하면 페이스를 추적해 준다.
+          {year}년 독서 목표가 아직 없습니다 — 목표를 정하면 페이스를 추적해 드립니다.
         </div>
         <Button
           variant="outline"
