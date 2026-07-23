@@ -1,0 +1,69 @@
+docs/decisions.md
+  s_3742135ee19f96::t_744a40a0446046 675
+src-tauri/src/reading.rs
+  s_3742135ee19f96::t_75b824c968b83e 1-346,351-360
+  s_3742135ee19f96::t_eef7f17cb28d2d 347-350
+src-tauri/src/models/reading.rs
+  s_3742135ee19f96::t_340b53dc4011c9 1-223
+docs/areas/area-map.md
+  s_3742135ee19f96::t_c17f2d90f0e3ba 57
+  s_3742135ee19f96::t_744a40a0446046 36-56
+src-tauri/migrations/0074_reading_foundation.sql
+  s_3742135ee19f96::t_7deb44f2ee38ee 1-77
+src-tauri/src/commands/reading/stats.rs
+  s_3742135ee19f96::t_eef7f17cb28d2d 200-203,208-210,260-262,276-280,293-295
+  s_3742135ee19f96::t_b62a224b6ffd00 1-199,204-207,211-259,263-275,281-292,296-303
+src-tauri/src/lib.rs
+  s_3742135ee19f96::t_bfef8991871cfb 180-193
+  s_3742135ee19f96::t_d8fe5e7685b2ff 49
+docs/plans/2026-07-23-reading-domain.md
+  s_3742135ee19f96::t_744a40a0446046 16-23,57
+  s_3742135ee19f96::t_1e2ce9bceef868 78-82
+  s_3742135ee19f96::t_93a2234f8e0726 1-15,24-38,43-56,58-77,83-94
+  s_3742135ee19f96::t_12ddc0156bae56 39-42
+src-tauri/src/commands/reading/books.rs
+  s_3742135ee19f96::t_f4ca5c9c7d7101 9-10
+  s_3742135ee19f96::t_eef7f17cb28d2d 31-34,461-464,580-583
+  s_3742135ee19f96::t_168c77533b9ed3 1-8,11-30,35-52,59-65,70-73,75-92,94,118-391,393-460,465-579,584-587
+  s_3742135ee19f96::t_4e65988437f578 53-58,66-69,74,93,95-117
+  s_3742135ee19f96::t_b9d6b6dc398607 392
+src-tauri/src/models.rs
+  s_3742135ee19f96::t_504fd0b2dec162 18
+  s_3742135ee19f96::t_ef0ece5de21fe8 40
+src-tauri/src/commands/reading/catalog.rs
+  s_3742135ee19f96::t_e2e3088f23b260 111-115,117
+  s_3742135ee19f96::t_02d1ed9f701521 157-164,168,170,174
+  s_3742135ee19f96::t_1e0390bb5c1657 1-96,98,100-110,116,118-156,165-167,169,171-173,175-195,199-200
+  s_3742135ee19f96::t_eef7f17cb28d2d 196-198
+  s_3742135ee19f96::t_e9ef9d5ea60b4d 97,99
+src-tauri/src/commands/reading/sessions.rs
+  s_3742135ee19f96::t_eef7f17cb28d2d 138-142,179-181,184-186
+  s_3742135ee19f96::t_a0028ef7c4b2ff 1-137,143-178,182-183,187-188
+src-tauri/src/commands/reading/mod.rs
+  s_3742135ee19f96::t_eef7f17cb28d2d 68
+  s_3742135ee19f96::t_1cd716014aafd8 1-67,69-153
+src-tauri/src/commands/reading/quotes.rs
+  s_3742135ee19f96::t_4d26e0f35adaf8 1-86,88-133
+  s_3742135ee19f96::t_eef7f17cb28d2d 87
+src-tauri/src/commands/mod.rs
+  s_3742135ee19f96::t_0cab2075f77408 69
+  s_3742135ee19f96::t_1a9d5a5ce2579c 38
+src/bindings.ts
+  s_3742135ee19f96::t_4267888df2a25a 141-153,945-978,1189-1232,1799-1818,2712-2720,3287-3332,4149-4176
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ef191a3ecb450bb202674f8de938c1268616ac08",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
