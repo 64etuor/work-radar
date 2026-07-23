@@ -45,6 +45,9 @@ const MissionView = lazy(() =>
 const PrRadarView = lazy(() =>
   import("@/components/PrRadarView").then((m) => ({ default: m.PrRadarView })),
 );
+const ReadingView = lazy(() =>
+  import("@/components/reading/ReadingView").then((m) => ({ default: m.ReadingView })),
+);
 const RoutineTrackingView = lazy(() =>
   import("@/components/RoutineTrackingView").then((m) => ({ default: m.RoutineTrackingView })),
 );
@@ -81,6 +84,7 @@ function renderView(renderedView: View) {
   if (renderedView === "weekly") return <WeeklyView />;
   if (renderedView === "bookkeeping") return <BookkeepingView />;
   if (renderedView === "diet") return <DietView />;
+  if (renderedView === "reading") return <ReadingView />;
   if (renderedView === "routines") return <RoutineTrackingView />;
   if (renderedView === "radar") return <PrRadarView />;
   if (renderedView === "worktree") return <WorktreeView />;

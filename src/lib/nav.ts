@@ -1,5 +1,6 @@
 import {
   Blocks,
+  BookOpen,
   Bot,
   CalendarCheck,
   CalendarRange,
@@ -100,6 +101,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: "식단",
     search: "diet 식단 영양 칼로리 단백질 재고 팬트리 pantry 장보기 식품 레시피 유통기한 주문",
     icon: Utensils,
+    group: "review",
+  },
+  {
+    view: "reading",
+    label: "독서",
+    search: "reading books 독서 책 서재 서가 완독 독서기록 인용 발췌 리딩 book log isbn",
+    icon: BookOpen,
     group: "review",
   },
   {

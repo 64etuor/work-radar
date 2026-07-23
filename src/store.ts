@@ -8,6 +8,7 @@ export type View =
   | "weekly"
   | "bookkeeping"
   | "diet"
+  | "reading"
   | "routines"
   | "settings"
   | "radar"

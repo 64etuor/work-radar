@@ -30,6 +30,7 @@ const VIEW_ROOTS: Array<{ file: string; selector: string }> = [
   { file: "RoutineTrackingView.css", selector: ".rt" },
   { file: "SkillsView.css", selector: ".skl" },
   { file: "bookkeeping/BookkeepingView.css", selector: ".bk-view" },
+  { file: "reading/ReadingView.css", selector: ".rd" },
   { file: "control-room/ControlRoomView.css", selector: ".cr-view" },
 ];
 

@@ -17,6 +17,7 @@ export * from "./notion";
 export * from "./okr";
 export * from "./projects";
 export * from "./prRadar";
+export * from "./reading";
 export * from "./retro";
 export * from "./routines";
 export * from "./scheduler";
