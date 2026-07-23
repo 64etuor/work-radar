@@ -36,6 +36,9 @@ use crate::models::ProjectKind;
 // 통합 테스트(`tests/mcp_roundtrip.rs`)와 기존 호출부가 `work_radar_lib::mcp::{...}`로 접근하던
 // DTO 표면을 그대로 유지한다 — 모듈 분할은 순수 이동이며 공개 경로를 바꾸지 않는다.
 pub use tools::bookkeeping::*;
+pub use tools::bookkeeping_budgets::*;
+pub use tools::bookkeeping_recurring::*;
+pub use tools::bookkeeping_transactions::*;
 pub use tools::calendar::*;
 pub use tools::diet::*;
 pub use tools::diet_manage::*;
@@ -64,6 +67,9 @@ impl WrServer {
             + Self::tool_router_calendar()
             + Self::tool_router_gmail()
             + Self::tool_router_bookkeeping()
+            + Self::tool_router_bookkeeping_budgets()
+            + Self::tool_router_bookkeeping_recurring()
+            + Self::tool_router_bookkeeping_transactions()
             + Self::tool_router_diet()
             + Self::tool_router_diet_manage()
             + Self::tool_router_signals()

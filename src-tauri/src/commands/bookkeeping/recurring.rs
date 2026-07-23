@@ -298,21 +298,30 @@ pub(crate) async fn set_bookkeeping_recurring_occurrence_status_inner(
         return post_bookkeeping_recurring_occurrence_inner(db, id).await;
     }
     let id = clean_required(id, "bookkeeping.recurring.occurrence_id")?;
-    sqlx::query(
+    let result = sqlx::query(
         "UPDATE bookkeeping_recurring_occurrences SET \
            status=?2, transaction_id=CASE WHEN ?2='planned' THEN NULL ELSE transaction_id END, \
            updated_at=datetime('now') \
-         WHERE id=?1",
+         WHERE id=?1 AND status != 'posted'",
     )
     .bind(&id)
     .bind(status)
     .execute(db)
     .await?;
     let sql = recurring_occurrence_select_sql("WHERE o.id = ?1");
-    Ok(sqlx::query_as::<_, BookkeepingRecurringOccurrence>(&sql)
+    let occurrence = sqlx::query_as::<_, BookkeepingRecurringOccurrence>(&sql)
         .bind(&id)
         .fetch_one(db)
-        .await?)
+        .await?;
+    if result.rows_affected() == 0
+        && occurrence.status == BookkeepingRecurringOccurrenceStatus::Posted
+    {
+        return Err(AppError::validation(
+            "bookkeeping.recurring.posted",
+            "이미 전표 처리된 고정비는 예정 또는 건너뜀으로 되돌릴 수 없습니다",
+        ));
+    }
+    Ok(occurrence)
 }
 
 fn recurring_occurrence_select_sql(where_clause: &str) -> String {

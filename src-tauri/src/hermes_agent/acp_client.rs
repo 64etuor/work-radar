@@ -50,6 +50,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value as Json};
 use specta::Type;
 use std::collections::HashMap;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter};
@@ -207,10 +208,8 @@ impl AcpSession {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "/tmp".to_string());
 
-        // Boule (spec §5.0): the caller injects the governance MCP server list into the
-        // ACP `session/new` payload — resolved from the session's PROJECT binding (DB-resolved
-        // repo path → .boule/mcp.json), never renderer-supplied. Unbound session → `[]` (no-op).
-        // Internal ACP payload → bindings.ts/specta unaffected (#4).
+        // The caller injects Work Radar's built-in MCP plus any project-bound Boule servers.
+        // The renderer cannot supply or alter this internal ACP payload.
         let new_resp = session
             .request(
                 "session/new",
@@ -358,6 +357,30 @@ pub(crate) async fn governance_mcp_servers_for_tab(db: &crate::db::Db, tab_id: &
 }
 
 const HERMES_MCP_CALLER_ENV: &str = "WORK_RADAR_MCP_CALLER";
+const WORK_RADAR_DB_ENV: &str = "WORK_RADAR_DEV_DB";
+
+pub(crate) async fn hermes_mcp_servers_for_tab(
+    db: &crate::db::Db,
+    tab_id: &str,
+    executable: &Path,
+    db_path: &Path,
+) -> Vec<Json> {
+    let mut servers = vec![work_radar_mcp_server(executable, db_path)];
+    servers.extend(governance_mcp_servers_for_tab(db, tab_id).await);
+    servers
+}
+
+fn work_radar_mcp_server(executable: &Path, db_path: &Path) -> Json {
+    json!({
+        "name": "work-radar",
+        "command": executable.to_string_lossy(),
+        "args": ["--mcp-stdio"],
+        "env": [
+            { "name": HERMES_MCP_CALLER_ENV, "value": "hermes" },
+            { "name": WORK_RADAR_DB_ENV, "value": db_path.to_string_lossy() }
+        ],
+    })
+}
 
 /// Pure: a repo's generated `.boule/mcp.json` ({"mcpServers": {<name>: {command, args, env{}}}})
 /// → ACP `session/new` `mcpServers` array. ACP `env` is a **list** `[{name,value}]` (differs
@@ -667,6 +690,42 @@ async fn dispatch_incoming(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::commands::shared::test_support::fresh_db;
+
+    #[test]
+    fn built_in_work_radar_mcp_pins_executable_database_and_caller() {
+        let server = work_radar_mcp_server(
+            std::path::Path::new("/Applications/Work Radar.app/Contents/MacOS/work-radar"),
+            std::path::Path::new("/app-data/work-radar.db"),
+        );
+        assert_eq!(server["name"], "work-radar");
+        assert_eq!(
+            server["command"],
+            "/Applications/Work Radar.app/Contents/MacOS/work-radar"
+        );
+        assert_eq!(server["args"], json!(["--mcp-stdio"]));
+        assert_eq!(
+            server["env"],
+            json!([
+                { "name": HERMES_MCP_CALLER_ENV, "value": "hermes" },
+                { "name": "WORK_RADAR_DEV_DB", "value": "/app-data/work-radar.db" }
+            ])
+        );
+    }
+
+    #[tokio::test]
+    async fn unbound_tab_still_receives_the_built_in_work_radar_mcp() {
+        let db = fresh_db().await;
+        let servers = hermes_mcp_servers_for_tab(
+            &db,
+            "unbound-tab",
+            Path::new("/opt/work-radar"),
+            Path::new("/data/work-radar.db"),
+        )
+        .await;
+        assert_eq!(servers.len(), 1);
+        assert_eq!(servers[0]["name"], "work-radar");
+    }
 
     #[test]
     fn acp_servers_empty_on_malformed_or_missing_mcp_servers() {

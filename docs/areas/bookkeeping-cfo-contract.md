@@ -1,20 +1,20 @@
 ---
 status: live
 owner: repo-maintainers
-last_reviewed: 2026-06-18
+last_reviewed: 2026-07-22
 source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프라인 계약 — 입력 소스·저장 스키마·리뷰 기준·taxonomy·중복 precheck·민감정보 금지·MCP 툴 표면·시간당 폴링 루프
 ---
 
 # Bookkeeping CFO-Bot Contract — Hermes ↔ Work Radar
 
-이 문서는 **CFO Bot(Hermes)** 이 가계부 데이터를 *판단*해 Work Radar에 안전하게 *저장*하는
+이 문서는 **CFO Bot(Hermes)** 이 가계부 데이터를 판단하고 Work Radar에서 안전하게 관리하는
 계약이다. 역할 분리가 핵심:
 
 - **CFO Bot(Hermes):** OCR/이메일 추출, merchant/category/항목 추론, 저신뢰 판정, 중복 precheck,
-  시간당 폴링 오케스트레이션.
+  시간당 폴링 오케스트레이션, 사용자가 승인한 거래·예산·반복 지출 관리.
 - **Work Radar:** 저장·감사·dedup·리뷰큐·스키마 검증. 외부 서비스 호출이 아닌 **로컬 SQLite 쓰기**.
 
-경계 정본은 `docs/areas/mcp-server-conventions.md`(특히 "좁은 예외 — Work Radar Hermes MCP").
+경계 정본은 `docs/areas/mcp-server-conventions.md`(특히 finance/bookkeeping 도메인 위임 예외).
 데이터 레이어는 `docs/areas/data-layer-conventions.md`. 이 문서는 그 위에서 **가계부 도메인 계약**만 다룬다.
 
 ## 1. 역할 경계 (불변)
@@ -22,15 +22,18 @@ source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프
 - raw email body / 영수증 이미지 / 파일 경로 / 토큰 / credential은 **Work Radar로 전달 금지.**
   MCP save/read 툴 스키마에 해당 필드가 **존재하지 않는다**(거부됨). Hermes는 추출·정제 후
   **사람이 검토 가능한 짧은 sanitized 필드만** 보낸다.
-- **쓰기 툴(save_receipt / mark_duplicate)은 Work Radar Hermes caller 전용**
-  (`WORK_RADAR_MCP_CALLER=hermes`). 다른 caller는 거부된다.
-- **읽기 툴은 모든 MCP caller에 개방**(2026-07-04 사용자 결정 — 다른 로컬 에이전트가
+- **로컬 읽기·쓰기 툴은 모든 MCP caller에 개방**(ADR-0012). 각 호스트의 tool-call 승인 UI가
+  사람 게이트이며, Work Radar 안의 Hermes 세션에는 `WORK_RADAR_MCP_CALLER=hermes`와 동일 app-data
+  DB 경로를 고정한 내장 MCP descriptor가 자동 주입된다. caller env는 외부 서비스 direct-write
+  라우팅 표식이지 로컬 SQLite 권한 경계가 아니다.
+- **읽기 결과는 sanitized 메타데이터만 제공**(2026-07-04 사용자 결정 — 다른 로컬 에이전트가
   `--mcp-stdio`를 직접 spawn해 원장을 읽는다). sanitized 메타데이터만: note(사용자 내용/메모)·
   자산·결제 메타는 싣되 소스 원문 `description`·raw body·token은 DTO 타입에 존재하지 않는다.
   §7 최소권한 대비 트레이드오프: 로컬 프로세스에 cross-project 금융 메타 읽기가 열린다 —
   MCP 서버 자체엔 전송 능력이 없고(stdio) 쓰기/승인 경로는 불변이라는 전제의 의도적 완화.
-- 자동 확정 없음: 유입 행은 항상 `review_status='needs_review'`로 큐에 들어가고, 사람이
-  approved/ignored로 정리한다. low-confidence는 반드시 리뷰 대기.
+- 자동 유입 행은 항상 `review_status='needs_review'`로 큐에 들어간다. 2026-07-22 위임 이후에는
+  사람이 직접 또는 호스트 승인 뒤 Hermes가 approved/ignored로 정리할 수 있다. low-confidence도
+  최초 저장 단계에서는 반드시 리뷰 대기다.
 
 ## 2. 저장 스키마 — 필드 의미
 
@@ -94,17 +97,28 @@ detail은 PII/raw 금지 — 짧은 사유만.
 - 점수: source_ref 일치=1.0 · 주문/결제번호 일치=0.95 · 금액+같은날(+상호)=0.8/0.95 ·
   금액+±3일=0.6/0.7. 0점 후보는 제외, 상위 10건.
 - 후보가 높으면 Hermes는 (a) 저장을 보류하고 사람에게 묻거나, (b) 저장 후
-  `wr_bookkeeping_mark_duplicate(id, duplicate_of)`로 `ignored`+원본 링크 표시.
+  `wr_bookkeeping_flag_duplicate(id, duplicate_of)`로 링크와 `possible_duplicate` 사유를 표시한 뒤
+  검토 상태를 결정한다.
 - `source_ref`(Gmail message id 등)가 있으면 동일 키 재유입은 Work Radar가 upsert로 자동 dedup.
   `source_ref`가 없을 때만 fuzzy precheck가 1차 방어선.
 
 ## 6. MCP 툴 표면 (시작 시 고정 — `registered_tool_set_is_locked` 테스트로 잠금)
 
-WRITE(로컬, Hermes 전용):
+WRITE(로컬, 전 caller — 호스트 승인 UI가 사람 게이트):
 
 - `wr_bookkeeping_save_receipt` — 정규화·판단된 거래 저장(필드는 §2; raw image/body/token 미수용;
   신규 판단 필드는 모두 **optional**이라 구버전 Hermes 호환). line_items 포함 가능(합계 불일치=리뷰 사유).
-- `wr_bookkeeping_mark_duplicate` — 중복 표시(로컬 리뷰큐 쓰기, 비-Hermes 거부).
+- `wr_bookkeeping_flag_duplicate` — 중복 후보 링크와 리뷰 사유 추가.
+- `wr_bookkeeping_update_transaction` / `wr_bookkeeping_set_review_status` — 거래 필드 수정과
+  `needs_review|approved|ignored` 결정.
+- `wr_bookkeeping_trash_transaction` / `wr_bookkeeping_restore_transaction` — 복구 가능한 휴지통 이동·복원.
+- `wr_bookkeeping_set_line_items` — 항목 replace-all과 합계 불일치 리뷰 사유 재계산.
+- `wr_bookkeeping_set_budget` / `wr_bookkeeping_remove_budget` — 월별 카테고리 예산 설정·해제.
+- `wr_bookkeeping_create_recurring_expense` / `wr_bookkeeping_set_recurring_expense_status` /
+  `wr_bookkeeping_ensure_recurring_occurrences` / `wr_bookkeeping_post_recurring_occurrence` /
+  `wr_bookkeeping_set_recurring_occurrence_status` — 반복 지출 규칙 생성과 `active|paused|archived` 전환,
+  월 발생분 materialize, 승인 거래 전표 처리, `planned|posted|skipped` 상태 관리. `posted` 발생분은
+  연결된 승인 거래의 중복 생성을 막기 위해 이전 상태로 되돌릴 수 없다.
 
 READ(모든 MCP caller 개방 — 2026-07-04, sanitized 메타데이터만):
 
@@ -112,6 +126,10 @@ READ(모든 MCP caller 개방 — 2026-07-04, sanitized 메타데이터만):
 - `wr_bookkeeping_monthly_summary` — 지출/수입/순액 + 리뷰 상태 카운트.
 - `wr_bookkeeping_get_category_rules` — taxonomy + alias.
 - `wr_bookkeeping_find_duplicate_candidates` — §5.
+- `wr_bookkeeping_budget_status` / `wr_bookkeeping_list_budgets` / `wr_bookkeeping_list_recurring_expenses` /
+  `wr_bookkeeping_list_recurring_occurrences` — 예산·반복 지출 상태 조회.
+  `wr_bookkeeping_list_budgets`는 후속 수정·삭제에 필요한 stable budget id를 포함한다.
+- `wr_bookkeeping_list_trash` / `wr_bookkeeping_list_line_items` — 복원 대상과 거래 항목 조회.
 
 표면 변경 = 명시적 코드 변경 + tool-set lock 테스트 갱신 + 이 문서 갱신(lockstep).
 

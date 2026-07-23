@@ -3,6 +3,9 @@
 //! 합성은 `crate::mcp::WrServer::tool_router()` — 툴 추가 시 그 함수도 함께 갱신한다.
 
 pub mod bookkeeping;
+pub mod bookkeeping_budgets;
+pub mod bookkeeping_recurring;
+pub mod bookkeeping_transactions;
 pub mod calendar;
 pub mod diet;
 pub mod diet_manage;

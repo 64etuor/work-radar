@@ -9,6 +9,19 @@ use crate::commands::projects::insert_project;
 use crate::commands::shared::test_support::{fresh_db, project_input};
 use crate::error::AppError;
 use crate::external_actions::{store, ExecOutcome, ExternalAction};
+use crate::mcp::tools::bookkeeping_budgets::{
+    BookkeepingBudgetIdParams, BookkeepingBudgetScopeParams, BookkeepingSetBudgetParams,
+};
+use crate::mcp::tools::bookkeeping_recurring::{
+    BookkeepingCreateRecurringExpenseParams, BookkeepingRecurringExpenseStatusParam,
+    BookkeepingRecurringExpenseStatusParams, BookkeepingRecurringOccurrenceStatusParam,
+    BookkeepingRecurringOccurrenceStatusParams, BookkeepingRecurringScopeParams,
+};
+use crate::mcp::tools::bookkeeping_transactions::{
+    BookkeepingExpenseKindParam, BookkeepingPaymentMethodParam, BookkeepingReviewDecisionParams,
+    BookkeepingReviewStatusParam, BookkeepingSetLineItemsParams, BookkeepingTransactionIdParams,
+    BookkeepingUpdateTransactionParams,
+};
 use crate::mcp::tools::calendar::CalendarCreateEventParams;
 use crate::mcp::tools::github::{GithubCommentParams, GithubCreateIssueParams};
 use crate::mcp::tools::gmail::GmailSendParams;
@@ -168,6 +181,22 @@ fn registered_tool_set_is_locked() {
         "wr_bookkeeping_flag_duplicate",
         "wr_bookkeeping_budget_status",
         "wr_bookkeeping_list_recurring_expenses",
+        "wr_bookkeeping_update_transaction",
+        "wr_bookkeeping_set_review_status",
+        "wr_bookkeeping_list_trash",
+        "wr_bookkeeping_trash_transaction",
+        "wr_bookkeeping_restore_transaction",
+        "wr_bookkeeping_list_line_items",
+        "wr_bookkeeping_set_line_items",
+        "wr_bookkeeping_set_budget",
+        "wr_bookkeeping_list_budgets",
+        "wr_bookkeeping_remove_budget",
+        "wr_bookkeeping_list_recurring_occurrences",
+        "wr_bookkeeping_ensure_recurring_occurrences",
+        "wr_bookkeeping_create_recurring_expense",
+        "wr_bookkeeping_set_recurring_expense_status",
+        "wr_bookkeeping_post_recurring_occurrence",
+        "wr_bookkeeping_set_recurring_occurrence_status",
         "wr_diet_daily_nutrition",
         "wr_diet_meals_for_date",
         "wr_diet_pantry_summary",
@@ -237,6 +266,271 @@ fn registered_tool_set_is_locked() {
             "forbidden capability on MCP surface: {forbidden}"
         );
     }
+}
+
+#[tokio::test]
+async fn delegated_finance_tools_manage_ledger_budget_and_recurring_expenses() {
+    use crate::mcp::tools::bookkeeping::BookkeepingSaveReceiptParams;
+
+    let db = fresh_db().await;
+    let server = WrServer { db };
+    let saved = server
+        .bookkeeping_save_receipt_inner(BookkeepingSaveReceiptParams {
+            project_id: None,
+            source_ref: Some("finance-delegation-1".into()),
+            merchant: "급여".into(),
+            amount_minor: 3_000_000,
+            currency: Some("KRW".into()),
+            spent_at: "2026-07-22".into(),
+            category: Some("수입".into()),
+            description: None,
+            note: None,
+            direction: Some("income".into()),
+            account: None,
+            subcategory: None,
+            category_code: Some("income".into()),
+            subcategory_code: None,
+            raw_category: None,
+            spent_at_time: None,
+            confidence: None,
+            field_confidence: None,
+            review_reasons: None,
+            order_no: None,
+            payment_no: None,
+            line_items: None,
+        })
+        .await
+        .expect("save transaction")
+        .0;
+
+    let updated = server
+        .bookkeeping_update_transaction_inner(BookkeepingUpdateTransactionParams {
+            id: saved.transaction_id.clone(),
+            note: Some("7월 급여".into()),
+            ..Default::default()
+        })
+        .await
+        .expect("update transaction")
+        .0;
+    assert_eq!(updated.note.as_deref(), Some("7월 급여"));
+
+    let approved = server
+        .bookkeeping_set_review_status_inner(BookkeepingReviewDecisionParams {
+            id: saved.transaction_id.clone(),
+            status: BookkeepingReviewStatusParam::Approved,
+        })
+        .await
+        .expect("approve transaction")
+        .0;
+    assert_eq!(approved.review_status, "approved");
+
+    let trashed = server
+        .bookkeeping_trash_transaction_inner(BookkeepingTransactionIdParams {
+            id: saved.transaction_id.clone(),
+        })
+        .await
+        .expect("trash transaction")
+        .0;
+    assert!(trashed.trashed);
+    let restored = server
+        .bookkeeping_restore_transaction_inner(BookkeepingTransactionIdParams {
+            id: saved.transaction_id.clone(),
+        })
+        .await
+        .expect("restore transaction")
+        .0;
+    assert!(!restored.trashed);
+
+    let line_items = server
+        .bookkeeping_set_line_items_inner(BookkeepingSetLineItemsParams {
+            transaction_id: saved.transaction_id.clone(),
+            items: vec![crate::mcp::BookkeepingLineItemParam {
+                name: "기본급".into(),
+                amount_minor: 3_000_000,
+                quantity: Some(1),
+                category_code: Some("income_salary".into()),
+            }],
+        })
+        .await
+        .expect("set line items")
+        .0;
+    assert_eq!(line_items.item_count, 1);
+    let listed = server
+        .bookkeeping_list_line_items_inner(BookkeepingTransactionIdParams {
+            id: saved.transaction_id,
+        })
+        .await
+        .expect("list line items")
+        .0;
+    assert_eq!(listed.items.len(), 1);
+
+    let budget = server
+        .bookkeeping_set_budget_inner(BookkeepingSetBudgetParams {
+            project_id: None,
+            month: "2026-07".into(),
+            category_code: "food".into(),
+            limit_minor: 500_000,
+            currency: Some("KRW".into()),
+            rollover: false,
+            note: None,
+        })
+        .await
+        .expect("set budget")
+        .0;
+    assert_eq!(budget.limit_minor, 500_000);
+    let listed_budgets = server
+        .bookkeeping_list_budgets_inner(BookkeepingBudgetScopeParams {
+            project_id: None,
+            month: "2026-07".into(),
+        })
+        .await
+        .expect("list budgets")
+        .0;
+    assert_eq!(listed_budgets.budgets.len(), 1);
+    assert_eq!(listed_budgets.budgets[0].id, budget.id);
+    let removed = server
+        .bookkeeping_remove_budget_inner(BookkeepingBudgetIdParams { id: budget.id })
+        .await
+        .expect("remove budget")
+        .0;
+    assert!(removed.removed);
+
+    let recurring = server
+        .bookkeeping_create_recurring_expense_inner(BookkeepingCreateRecurringExpenseParams {
+            project_id: None,
+            name: "월세".into(),
+            merchant: Some("임대인".into()),
+            amount_minor: 800_000,
+            currency: Some("KRW".into()),
+            category: "주거".into(),
+            payment_method_kind: BookkeepingPaymentMethodParam::BankTransfer,
+            payment_method_label: None,
+            payment_method_last4: None,
+            expense_kind: BookkeepingExpenseKindParam::Fixed,
+            schedule_day: 25,
+            start_month: "2026-07".into(),
+            end_month: None,
+            note: None,
+        })
+        .await
+        .expect("create recurring expense")
+        .0;
+    assert_eq!(recurring.name, "월세");
+    let paused = server
+        .bookkeeping_set_recurring_expense_status_inner(BookkeepingRecurringExpenseStatusParams {
+            id: recurring.id,
+            status: BookkeepingRecurringExpenseStatusParam::Paused,
+        })
+        .await
+        .expect("pause recurring expense")
+        .0;
+    assert_eq!(paused.status, "paused");
+    server
+        .bookkeeping_set_recurring_expense_status_inner(BookkeepingRecurringExpenseStatusParams {
+            id: paused.id,
+            status: BookkeepingRecurringExpenseStatusParam::Active,
+        })
+        .await
+        .expect("reactivate recurring expense");
+    let occurrences = server
+        .bookkeeping_ensure_recurring_occurrences_inner(BookkeepingRecurringScopeParams {
+            month: "2026-07".into(),
+            project_id: None,
+        })
+        .await
+        .expect("ensure occurrences")
+        .0;
+    assert_eq!(occurrences.occurrences.len(), 1);
+    let occurrence_id = occurrences.occurrences[0].id.clone();
+    let posted = server
+        .bookkeeping_set_recurring_occurrence_status_inner(
+            BookkeepingRecurringOccurrenceStatusParams {
+                id: occurrence_id.clone(),
+                status: BookkeepingRecurringOccurrenceStatusParam::Posted,
+            },
+        )
+        .await
+        .expect("post recurring occurrence")
+        .0;
+    assert!(posted.transaction_id.is_some());
+    let revert = server
+        .bookkeeping_set_recurring_occurrence_status_inner(
+            BookkeepingRecurringOccurrenceStatusParams {
+                id: occurrence_id,
+                status: BookkeepingRecurringOccurrenceStatusParam::Planned,
+            },
+        )
+        .await;
+    assert!(revert.is_err());
+}
+
+#[tokio::test]
+async fn finance_management_rejects_oversized_text_before_writing() {
+    let server = WrServer {
+        db: fresh_db().await,
+    };
+    let oversized = "x".repeat(501);
+
+    let line_items = server
+        .bookkeeping_set_line_items_inner(BookkeepingSetLineItemsParams {
+            transaction_id: "missing".into(),
+            items: vec![crate::mcp::BookkeepingLineItemParam {
+                name: oversized.clone(),
+                amount_minor: 1,
+                quantity: Some(1),
+                category_code: None,
+            }],
+        })
+        .await;
+    assert!(line_items.is_err());
+
+    let too_many_items = server
+        .bookkeeping_set_line_items_inner(BookkeepingSetLineItemsParams {
+            transaction_id: "missing".into(),
+            items: (0..201)
+                .map(|index| crate::mcp::BookkeepingLineItemParam {
+                    name: format!("item-{index}"),
+                    amount_minor: 1,
+                    quantity: Some(1),
+                    category_code: None,
+                })
+                .collect(),
+        })
+        .await;
+    assert!(too_many_items.is_err());
+
+    let budget = server
+        .bookkeeping_set_budget_inner(BookkeepingSetBudgetParams {
+            project_id: None,
+            month: "2026-07".into(),
+            category_code: oversized.clone(),
+            limit_minor: 1,
+            currency: Some("KRW".into()),
+            rollover: false,
+            note: None,
+        })
+        .await;
+    assert!(budget.is_err());
+
+    let recurring = server
+        .bookkeeping_create_recurring_expense_inner(BookkeepingCreateRecurringExpenseParams {
+            project_id: None,
+            name: oversized,
+            merchant: None,
+            amount_minor: 1,
+            currency: Some("KRW".into()),
+            category: "food".into(),
+            payment_method_kind: BookkeepingPaymentMethodParam::Card,
+            payment_method_label: None,
+            payment_method_last4: None,
+            expense_kind: BookkeepingExpenseKindParam::Fixed,
+            schedule_day: 1,
+            start_month: "2026-07".into(),
+            end_month: None,
+            note: None,
+        })
+        .await;
+    assert!(recurring.is_err());
 }
 
 /// §2 전역 가드: **등록된 모든 툴의 입력 스키마가 닫혀 있어야 한다**(`additionalProperties:false`).
@@ -330,11 +624,9 @@ fn decision_rail_writes_never_reach_the_mcp_surface() {
         "wr_update_key_result",
         "wr_delete_key_result",
         "wr_set_key_result_routine",
-        // 리뷰 큐를 *확정*하는 경로. 에이전트는 `wr_bookkeeping_flag_duplicate`로 제안만 한다
-        // (사용자 결정 2026-07-10) — `ignored`로 치우는 건 사람이다.
-        "wr_bookkeeping_mark_duplicate",
-        "wr_bookkeeping_update_review_status",
         "wr_bookkeeping_delete_transaction",
+        // Bookkeeping: 2026-07-22 사용자 결정으로 재정 도메인 전권을 에이전트에 위임했다.
+        // 사람 게이트는 호스트 승인 UI이며 삭제는 소프트 삭제 후 복원 가능하다.
         // Diet: 2026-07-17 사용자 결정으로 도메인 전권을 에이전트에 위임 — 이 목록에서 diet
         // 항목을 의도적으로 제거했다(사람 게이트 = 호스트 승인 UI, ADR-0012). 레일 논증은
         // `tools/diet_manage.rs` 모듈 doc이 정본이다.

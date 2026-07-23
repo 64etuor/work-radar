@@ -7,7 +7,7 @@ use base64::Engine as _;
 use serde_json::json;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::RwLock;
 
 pub type TabId = String;
@@ -40,9 +40,20 @@ async fn ensure_session(
             return Ok(());
         }
     }
-    // Project-bound boule-governance MCP (DB-resolved repo → .boule/mcp.json; unbound → []).
-    let mcp_servers =
-        crate::hermes_agent::acp_client::governance_mcp_servers_for_tab(db, tab_id).await;
+    let executable = std::env::current_exe()
+        .map_err(|e| AppError::unexpected("hermes.mcp.executable", e.to_string()))?;
+    let app_data = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| AppError::unexpected("hermes.mcp.app_data", e.to_string()))?;
+    let db_path = crate::resolve_db_path(&app_data);
+    let mcp_servers = crate::hermes_agent::acp_client::hermes_mcp_servers_for_tab(
+        db,
+        tab_id,
+        &executable,
+        &db_path,
+    )
+    .await;
     // Spawn WITHOUT holding the lock so concurrent tabs don't serialise here.
     let session = AcpSession::spawn(app.clone(), tab_id.to_string(), mcp_servers).await?;
     let mut map = holder.write().await;

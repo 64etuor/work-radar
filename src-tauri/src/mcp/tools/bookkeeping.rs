@@ -369,7 +369,9 @@ fn review_reason_codes(review_reasons_json: &str) -> Vec<String> {
         .collect()
 }
 
-fn to_transaction_dto(t: crate::models::BookkeepingTransaction) -> BookkeepingTransactionDto {
+pub(crate) fn to_transaction_dto(
+    t: crate::models::BookkeepingTransaction,
+) -> BookkeepingTransactionDto {
     let review_reason_codes = review_reason_codes(&t.review_reasons_json);
     BookkeepingTransactionDto {
         id: t.id,

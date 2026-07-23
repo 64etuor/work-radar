@@ -1,7 +1,7 @@
 ---
 status: live
 owner: repo-maintainers
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-22
 source_of_truth_scope: work-radar MCP 서버(`--mcp-stdio`) durable 규율 — proposal-only 경계, 툴 표면 제약, 입력/출력 안전, stdio 실행 경계
 ---
 
@@ -74,10 +74,11 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 - 툴 표면 변경 = 명시적 코드 변경, 그리고 툴 이름 스냅샷
   (`surface_tests::registered_tool_set_is_locked`)과 스키마 스냅샷 테스트 갱신(아래 §8).
 
-## 1.1 로컬 write 표면 = 캡처 레인 + 관측 기록 (INVARIANT #1 기계화)
+## 1.1 로컬 write 표면 = 캡처 레인 + 명시적으로 위임된 도메인 (INVARIANT #1 기계화)
 
-로컬 write를 전 caller에 열었으므로, **무엇을 여는지**가 유일한 경계다. 에이전트는 _적어둘_ 수
-있지만 _정할_ 수는 없다.
+로컬 write를 전 caller에 열었으므로, **무엇을 여는지**가 유일한 경계다. 기본값은 에이전트가
+_적어둘_ 수 있지만 _정할_ 수는 없다는 캡처 레인이다. 아래에 기록된 사용자 명시 위임 도메인만
+그 기본값을 벗어난다.
 
 | 노출 (write)                    | 왜 안전한가                                                                                              |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -91,8 +92,7 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 **표면에 존재 금지(denylist — 라우터 이름 단언 테스트로 강제):** `classify_signal` ·
 `promote_today` · `unpromote_today` · `toggle_today_done` · `set_signal_status` · `snooze_signal` ·
 `delete_signal` · `set_signal_kind` · `set_signal_area_tag_key` · objective/key-result CRUD ·
-`update_key_result` · `set_key_result_routine` · **`mark_bookkeeping_duplicate`**(리뷰를 `ignored`로
-확정 — 사람 결정; 에이전트는 `flag_duplicate`로 제안만) · `update_review_status` · `delete_transaction`.
+`update_key_result` · `set_key_result_routine` · raw `delete_transaction`.
 
 가르는 기준: **에이전트는 _사실_ 을 기록할 수 있고, _파생된 판단값을 직접 설정_ 할 수는 없다.**
 
@@ -110,6 +110,13 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 레일 논증 정본은 `src-tauri/src/mcp/tools/diet_manage.rs` 모듈 doc — 요지: 전 write가 로컬
 SQLite(외부 mutate 0), 영양은 커널 스냅샷(과거 재작성 불가), 재고 append-only 감사, 사람 게이트는
 호스트 승인 UI(ADR-0012). 다른 도메인이 이 예외를 선례로 쓰려면 동일한 사용자 결정이 필요하다.
+
+**도메인 단위 위임 예외 — finance/bookkeeping(2026-07-22).** 사용자가 Hermes의 삭제 전 확인
+흐름을 전제로 가계부 도메인 전권을 명시적으로 위임했다. 에이전트는 거래 생성·수정, 리뷰 상태
+결정, 세부항목 교체, 휴지통 이동·복원, 예산 설정·해제, 반복 지출 규칙 생성과 발생분 상태·전표
+처리를 수행할 수 있다. 모두 로컬 SQLite 쓰기이고 실제 결제·송금·외부 전송 능력은 없다.
+거래 삭제는 `deleted_at` 소프트 삭제라 복구 가능하며 사람 게이트는 각 MCP 호스트 승인 UI다.
+정확한 고정 툴 표면과 sanitized 데이터 계약은 `bookkeeping-cfo-contract.md` §6이 정본이다.
 
 ## 2. 입력 스키마 — strict, 좁은 타입
 
