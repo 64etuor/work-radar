@@ -133,7 +133,9 @@
   align-items: center;
   gap: 16px;
   margin-bottom: 32px;
-  padding: 12px 0;
+  /* 아래 패딩은 행이 아니라 좌우 셀이 갖는다 — 탭이 행 바닥(보더)까지 내려와야
+     활성 언더라인이 보더에 얹힌다. */
+  padding: 12px 0 0;
   border-bottom: 1px solid var(--color-wr-border-light);
   background: var(--color-wr-bg);
 }
@@ -142,6 +144,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  padding-bottom: 12px;
   color: var(--color-wr-muted);
 }
 
@@ -156,6 +159,7 @@
   align-items: baseline;
   gap: 20px;
   justify-self: end;
+  padding-bottom: 12px;
 }
 
 .mission-quarter-stat {
@@ -169,12 +173,15 @@
 }
 
 /* 탭 자체 레일(full-width 보더)은 두지 않는다 — 분기 행의 룰이 이미 아래에 있다.
-   활성 표시는 라벨 바로 밑 2px 언더라인만. */
+   탭을 행 바닥에 붙여(align-self: end + -1px) 활성 2px 언더라인이 행 보더 **위에
+   얹히게** 한다 — 언더라인과 행 보더가 두 줄로 떠 보이지 않는다. */
 .mission-tabs {
   display: inline-flex;
-  align-items: center;
+  align-items: end;
+  align-self: end;
   justify-content: center;
   gap: 4px;
+  margin-bottom: -1px;
 }
 
 .mission-tab {
@@ -974,10 +981,14 @@
 
   .mission-quarter-select {
     grid-area: quarter;
+    padding-bottom: 0;
   }
 
+  /* 스택 레이아웃에서는 탭이 보더와 인접하지 않는다 — 도킹 정렬 리셋. */
   .mission-tabs {
     grid-area: tabs;
+    align-self: center;
+    margin-bottom: 0;
   }
 
   .mission-quarter-stats {
