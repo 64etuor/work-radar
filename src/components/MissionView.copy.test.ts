@@ -52,7 +52,10 @@ describe("MissionView copy", () => {
   it("uses a Korean editorial workflow with complete loading and empty states", () => {
     expect(missionViewSource).toContain('{ key: "objectives", label: "분기 목표" }');
     expect(missionViewSource).toContain('{ key: "foundation", label: "장기 목표" }');
-    expect(missionViewSource).toContain('className="mission-season-overview"');
+    // 진척 스탯은 헤더가 아니라 분기 내비게이션 행에 산다(분기 파생값 + sticky 가시성).
+    expect(missionViewSource).toContain('className="mission-quarter-stats"');
+    // 받아쓰기(OKR AI 임포트) 어포던스는 제거됐다 — 진입 버튼 없음.
+    expect(missionViewSource).not.toContain("OkrImportButton");
     expect(missionViewSource).toContain('role="status"');
     expect(missionViewSource).toContain("첫 분기 설계");
     expect(objectiveCardSource).toContain('className="mission-objective-index typo-mono-label"');

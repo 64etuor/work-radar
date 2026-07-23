@@ -48,30 +48,6 @@
   min-width: 0;
 }
 
-.mission-top-side {
-  display: grid;
-  gap: 16px;
-  min-width: 304px;
-}
-
-.mission-season-overview {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  border-top: 1px solid var(--color-wr-border);
-  border-bottom: 1px solid var(--color-wr-border-light);
-}
-
-.mission-season-metric {
-  display: grid;
-  gap: 6px;
-  padding: 12px 0 14px;
-}
-
-.mission-season-metric + .mission-season-metric {
-  border-left: 1px solid var(--color-wr-border-light);
-  padding-left: 20px;
-}
-
 .mission-statement {
   display: flex;
   align-items: flex-end;
@@ -173,10 +149,23 @@
   width: 150px;
 }
 
-.mission-quarter-summary {
-  margin: 0;
-  color: var(--color-wr-muted);
-  text-align: right;
+/* 분기 진척 스탯 — sticky 분기 행의 우측 셀. 라벨은 mono-label, 숫자는 tabular로
+   분기 전환 시 폭이 안 튀게 한다. */
+.mission-quarter-stats {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 20px;
+  justify-self: end;
+}
+
+.mission-quarter-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.mission-quarter-stat strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .mission-tabs {
@@ -907,16 +896,8 @@
     padding-block: 16px;
   }
 
-  .mission-top-side {
-    grid-template-columns: minmax(180px, 1fr) auto;
-    align-items: end;
-    gap: 16px;
-    min-width: 0;
-  }
-
-  .mission-season-metric {
-    gap: 4px;
-    padding-block: 8px 10px;
+  .mission-top-actions {
+    justify-content: flex-start;
   }
 
   .mission-panel-head,
@@ -982,7 +963,7 @@
     grid-template-columns: minmax(150px, 1fr) auto;
     grid-template-areas:
       "quarter tabs"
-      "summary summary";
+      "stats stats";
     gap: 8px;
     margin-bottom: 20px;
   }
@@ -995,9 +976,9 @@
     grid-area: tabs;
   }
 
-  .mission-quarter-summary {
-    grid-area: summary;
-    text-align: left;
+  .mission-quarter-stats {
+    grid-area: stats;
+    justify-self: start;
   }
 
   .mission-quarter-trigger {

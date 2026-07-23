@@ -9,7 +9,6 @@ import { HorizonShelf } from "@/components/okr/HorizonShelf";
 import { MissionStatement } from "@/components/okr/MissionStatement";
 import { ObjectiveCard } from "@/components/okr/ObjectiveCard";
 import { ObjectiveDialog } from "@/components/okr/ObjectiveDialog";
-import { OkrImportButton } from "@/components/okr/OkrImportButton";
 import { RolloverFromPrevQuarter } from "@/components/okr/RolloverButton";
 import { WeeklyCheckInPanel } from "@/components/okr/WeeklyCheckInPanel";
 import { Button } from "@/components/ui/button";
@@ -127,31 +126,16 @@ export function MissionView() {
             mission={mission.data ?? null}
           />
         </div>
-        <div className="mission-top-side">
-          <div className="mission-season-overview" aria-label="현재 분기 상태">
-            <div className="mission-season-metric">
-              <span className="mission-muted typo-mono-label">전체 진척</span>
-              <strong className="typo-title-md">{percentLabel(overallProgress)}</strong>
-            </div>
-            <div className="mission-season-metric">
-              <span className="mission-muted typo-mono-label">분기 경과</span>
-              <strong className="typo-title-md">
-                {percentLabel(quarterElapsedRatio(quarter))}
-              </strong>
-            </div>
-          </div>
-          <div className="mission-top-actions">
-            <OkrImportButton quarter={quarter} />
-            <Button
-              onClick={(event) => {
-                setObjectiveDialogFocusTarget(event.currentTarget);
-                setObjectiveDialog(null);
-              }}
-            >
-              <Plus className="size-4" />
-              Objective 추가
-            </Button>
-          </div>
+        <div className="mission-top-actions">
+          <Button
+            onClick={(event) => {
+              setObjectiveDialogFocusTarget(event.currentTarget);
+              setObjectiveDialog(null);
+            }}
+          >
+            <Plus className="size-4" />
+            Objective 추가
+          </Button>
         </div>
       </header>
 
@@ -173,11 +157,20 @@ export function MissionView() {
             </Select>
           </div>
           <MissionTabs tab={tab} onSelect={setTabOverride} pendingCheckIns={pendingCheckIns} />
-          <p className="mission-quarter-summary typo-label-sm">
-            {pendingCheckIns > 0
-              ? `이번 주 체크인 ${pendingCheckIns}개 남음`
-              : "이번 주 체크인 완료"}
-          </p>
+          {/* 진척 스탯은 선택된 분기의 파생값 — 헤더가 아니라 분기 내비게이션 행이 자리다
+              (sticky라 스크롤 중에도 보인다). 체크인 잔여 수는 탭 배지가 담당한다. */}
+          <div className="mission-quarter-stats" aria-label="분기 진척">
+            <span className="mission-quarter-stat">
+              <span className="mission-muted typo-mono-label">전체 진척</span>
+              <strong className="typo-title-sm">{percentLabel(overallProgress)}</strong>
+            </span>
+            <span className="mission-quarter-stat">
+              <span className="mission-muted typo-mono-label">분기 경과</span>
+              <strong className="typo-title-sm">
+                {percentLabel(quarterElapsedRatio(quarter))}
+              </strong>
+            </span>
+          </div>
         </section>
 
         {loadError && (

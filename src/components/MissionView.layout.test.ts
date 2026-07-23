@@ -19,13 +19,17 @@ function ruleBlock(selector: string): string {
 describe("MissionView layout", () => {
   it("stages the mission as an editorial header with sticky season navigation", () => {
     const top = ruleBlock(".mission-top");
-    const overview = ruleBlock(".mission-season-overview");
+    const stats = ruleBlock(".mission-quarter-stats");
+    const statNumber = ruleBlock(".mission-quarter-stat strong");
     const navigation = ruleBlock(".mission-quarter-row");
     const tabs = ruleBlock(".mission-tabs");
 
     expect(top).toContain("display: grid");
     expect(top).toContain("grid-template-columns: minmax(0, 1fr) auto");
-    expect(overview).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
+    // 진척 스탯은 sticky 분기 행 우측에 인라인으로 산다 — 헤더 사이드 블록은 제거됐다.
+    expect(stats).toContain("justify-self: end");
+    expect(statNumber).toContain("font-variant-numeric: tabular-nums");
+    expect(missionCss).not.toContain(".mission-season-overview");
     expect(navigation).toContain("position: sticky");
     expect(navigation).toContain("z-index: var(--wr-z-raised)");
     expect(tabs).toContain("border-bottom: 1px solid var(--color-wr-border-light)");
@@ -48,7 +52,8 @@ describe("MissionView layout", () => {
     expect(missionCss).toContain("@media (max-width: 720px)");
     expect(missionCss).toContain("overflow-x: auto");
     expect(missionCss).toContain("grid-template-areas:");
-    expect(missionCss).toContain("grid-template-columns: minmax(180px, 1fr) auto");
+    // 좁은 창에서 진척 스탯은 분기 행 아래 줄로 내려간다.
+    expect(missionCss).toContain('"stats stats"');
     expect(missionCss).not.toContain('grid-template-areas:\n      "quarter"\n      "tabs"');
   });
 
