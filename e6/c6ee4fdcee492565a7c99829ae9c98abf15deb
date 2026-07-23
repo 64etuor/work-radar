@@ -1,0 +1,64 @@
+src/components/reading/BookQuoteSection.tsx
+  s_3742135ee19f96::t_ffad1eb961b188 1-96
+src/components/reading/readingFormat.test.ts
+  s_3742135ee19f96::t_9a42eeba256810 63-84
+  s_3742135ee19f96::t_fd7899a028580c 3-11
+  s_6b79806160e900::t_678ce68611f2bb 85-87
+src/components/SettingsView.tsx
+  s_3742135ee19f96::t_0ff6cbbcdd47b9 394-398
+  s_6b79806160e900::t_e80da02ef50b26 31
+src/lib/query/reading.ts
+  s_3742135ee19f96::t_58f88985056a3a 82-101
+  s_3742135ee19f96::t_be8e679ea0184f 22
+  s_6b79806160e900::t_30b750ba4a0568 102
+src/components/reading/BookRatingSection.tsx
+  s_3742135ee19f96::t_7bcaa51a0f5f3c 1-58
+src/components/reading/readingFormat.ts
+  s_3742135ee19f96::t_ba9548725e2b3a 119-138,140-141
+  s_3742135ee19f96::t_f41df5fd023c34 1,4-29
+  s_3742135ee19f96::t_84bd12438d088b 139
+  s_3742135ee19f96::t_d55f9cef0f77b2 30
+src/components/settings/AladinTtbBlock.tsx
+  s_3742135ee19f96::t_84bd12438d088b 62-68
+  s_3742135ee19f96::t_3611d8c14154e9 1-61,69-75
+src/components/reading/ReadingView.css
+  s_3742135ee19f96::t_ae3f63ca789473 633-642
+  s_3742135ee19f96::t_5bb67a94d68872 591-594
+  s_6b79806160e900::t_2670c3df38a8e8 643
+src/components/reading/BookDetailSheet.tsx
+  s_3742135ee19f96::t_fe03fb90a996bc 1-2,8,10-12,18-22,38,44,47,101-103
+src/components/reading/BookSearchDialog.tsx
+  s_3742135ee19f96::t_da102f280aa267 130-144
+  s_3742135ee19f96::t_fe1621d69013c6 1,5,10,12,23-28,33,38,47-48,51-55,112-114,122,146-179,185-188,191,193-195,221,276-279
+  s_3742135ee19f96::t_34fe00076bca97 72-76
+  s_3742135ee19f96::t_6fa912a0da4612 45
+  s_6b79806160e900::t_cbffa9d606b1d3 145
+src/components/reading/ReadingView.tsx
+  s_3742135ee19f96::t_6a7b1ac106cbe0 176-181
+src/components/reading/BookSessionSection.tsx
+  s_3742135ee19f96::t_9105598566e53a 1-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e6c6ee4fdcee492565a7c99829ae9c98abf15deb",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_6b79806160e900": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dfed8e12-9135-477f-8c8d-bdc777581e3e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
