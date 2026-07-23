@@ -1,0 +1,79 @@
+docs/decisions.md
+  s_3b52b39e0b3c52::t_495dcb61638c88 679
+  s_3b52b39e0b3c52::t_ca8fbe614d3cc8 678
+src-tauri/src/commands/bookkeeping/recurring.rs
+  s_3b52b39e0b3c52::t_820fb72d585564 114-124,190-207
+  s_3b52b39e0b3c52::t_16a5dc6c01180b 1-9,16,32,36-37,57-59,61,63-64,66,70-93,95,97-105,111-113,125-144,146-153,156-161,164-167,169-176,178-179,183-187
+  s_3b52b39e0b3c52::t_18c8d76dbcf173 94,96
+  s_3b52b39e0b3c52::t_5685a9c7525a51 60,62,65
+  s_6b79806160e900::t_0a5b6db22a0289 188
+src/components/bookkeeping/bookkeepingPanels.ts
+  s_3b52b39e0b3c52::t_5e27175ef1e2aa 1
+src/components/bookkeeping/BookkeepingView.css
+  s_3b52b39e0b3c52::t_2717cb9bc76ffa 730
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_3b52b39e0b3c52::t_ad70e37ec86fa6 1630-1648
+  s_3b52b39e0b3c52::t_cca8afdb54560b 805-806,808-810
+  s_3b52b39e0b3c52::t_f8cf533524d9b0 1534-1535,1537,1544-1557,1559,1562-1564,1566,1569,1571,1573-1578,1580-1581,1583-1584,1586-1587,1589-1591,1593,1597-1598,1600-1606,1608-1629,1649-1694
+  s_3b52b39e0b3c52::t_820fb72d585564 54-59,1539-1542
+  s_6b79806160e900::t_ea42934ff4f923 1543
+src/components/bookkeeping/BookkeepingView.tsx
+  s_3b52b39e0b3c52::t_c33006c3d339df 193-195
+  s_3b52b39e0b3c52::t_d8cfa72db66d5a 662
+  s_3b52b39e0b3c52::t_c7bec0a423604c 90
+  s_3b52b39e0b3c52::t_f4d87062104693 600
+  s_3b52b39e0b3c52::t_72a526ff4f81e7 107-108
+  s_3b52b39e0b3c52::t_54137894965c7b 13,23
+  s_3b52b39e0b3c52::t_06f092f27a9726 169
+src/components/bookkeeping/bookkeepingPanels.test.ts
+  s_3b52b39e0b3c52::t_90b84219ebd835 9-10,13
+src-tauri/src/models/bookkeeping.rs
+  s_3b52b39e0b3c52::t_be798bb4823e41 213-215
+  s_3b52b39e0b3c52::t_d06efd557866a8 235-237,239-241,246-263
+src-tauri/src/lib.rs
+  s_3b52b39e0b3c52::t_ebedc8a0a99db5 109,111
+src/components/bookkeeping/recurringMirror.test.ts
+  s_3b52b39e0b3c52::t_2ad6bbb783090c 1-57
+src/components/bookkeeping/cards/RecurringMirrorCard.tsx
+  s_3b52b39e0b3c52::t_1b6ef9dc9bb3c4 1-80
+src/lib/query/bookkeeping.ts
+  s_3b52b39e0b3c52::t_7d045690f7d61f 271-273,275-276
+src/components/bookkeeping/recurringMirror.ts
+  s_3b52b39e0b3c52::t_a2bc68d388670e 1-33,35-37
+  s_3b52b39e0b3c52::t_efa4da6fa3b49d 34
+docs/areas/bookkeeping-cfo-contract.md
+  s_3b52b39e0b3c52::t_0c3283023655d3 130-132
+  s_3b52b39e0b3c52::t_d26fb3ffde80f4 117-122
+src/components/bookkeeping/cards/BookkeepingMetrics.tsx
+  s_3b52b39e0b3c52::t_0d0e53c84e2917 8,15-16,25
+src-tauri/src/mcp/surface_tests.rs
+  s_3b52b39e0b3c52::t_9b33198160e921 16-17
+  s_3b52b39e0b3c52::t_80da07305c7bc2 188-189
+  s_3b52b39e0b3c52::t_e80797150186bf 273
+src/bindings.ts
+  s_3b52b39e0b3c52::t_872f632a5cf9e2 59,1501-1507,1512-1517,1520-1530
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9462e464e96843265cdaf2c79db504df4fa15d4f",
+  "prompts": {},
+  "sessions": {
+    "s_3b52b39e0b3c52": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ffdb252-87df-473b-8a51-84b24fe2e47c",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_6b79806160e900": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dfed8e12-9135-477f-8c8d-bdc777581e3e",
+        "model": "claude-opus-4-8"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
