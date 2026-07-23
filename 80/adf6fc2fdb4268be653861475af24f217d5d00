@@ -1,0 +1,28 @@
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_3b52b39e0b3c52::t_9b75f4dac5895d 1323,1361,1385,1429
+  s_3b52b39e0b3c52::t_9ace5ed075bb41 1257-1303
+  s_3b52b39e0b3c52::t_f8893eaee10180 1234,1238
+src-tauri/src/commands/bookkeeping/gmail.rs
+  s_3b52b39e0b3c52::t_0e90e42be12ee3 15-16
+  s_3b52b39e0b3c52::t_5d3086939f28b7 325
+  s_3b52b39e0b3c52::t_65c7bc64514361 356-360,372
+  s_3b52b39e0b3c52::t_4405e3fbc7c390 76-83,87
+  s_3b52b39e0b3c52::t_f8a4482025e1e1 187-190,203-211
+  s_3b52b39e0b3c52::t_34f12e8de58b9e 114-138,140,212-213
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "80adf6fc2fdb4268be653861475af24f217d5d00",
+  "prompts": {},
+  "sessions": {
+    "s_3b52b39e0b3c52": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ffdb252-87df-473b-8a51-84b24fe2e47c",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
