@@ -1,0 +1,19 @@
+src/components/bookkeeping/cards/DefaultCurrencyCard.tsx
+  s_3b52b39e0b3c52::t_59bed1f0c24eae 1,4-10,15-27,30,41-44,58-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "7b89aa929b70a4494dd1babc3b0aa1b6ffddccdb",
+  "prompts": {},
+  "sessions": {
+    "s_3b52b39e0b3c52": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ffdb252-87df-473b-8a51-84b24fe2e47c",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
