@@ -137,6 +137,14 @@ async function commitInput(input: HTMLInputElement, next: string) {
 }
 
 describe("TransactionReadRow (원장 테이블 행 인라인 편집)", () => {
+  it("수입/지출 구분을 색상에만 의존하지 않고 텍스트로 표시한다", () => {
+    setup({ direction: "income" });
+    expect(query(".bk-td-direction").textContent).toBe("수입");
+
+    setup({ id: "tx-2", direction: "expense" });
+    expect(query(".bk-td-direction").textContent).toBe("지출");
+  });
+
   it("가맹점 셀 클릭 → 인라인 입력 → Enter 커밋이 onPatch({merchant})로 간다", async () => {
     const { onPatch } = setup();
     click(buttonByLabel("가맹점 변경"));

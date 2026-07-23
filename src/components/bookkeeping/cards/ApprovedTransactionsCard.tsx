@@ -76,6 +76,7 @@ export function ApprovedTransactionsCard({
                 <TableHead className="typo-caption-sm">내용</TableHead>
                 <TableHead className="bk-th-category typo-caption-sm">분류</TableHead>
                 <TableHead className="bk-th-payment typo-caption-sm">결제·자산</TableHead>
+                <TableHead className="bk-th-direction typo-caption-sm">구분</TableHead>
                 <TableHead className="bk-th-amount typo-caption-sm">금액</TableHead>
                 <TableHead className="bk-th-actions" aria-label="행 동작" />
               </TableRow>

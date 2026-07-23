@@ -1,11 +1,13 @@
 import { PanelRight, Trash2 } from "lucide-react";
 
 import type { BookkeepingTransaction } from "@/bindings";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 
 import { effectiveCategoryCode, type TransactionEditDraft } from "../bookkeepingDrafts";
 import { currency } from "../bookkeepingFormat";
+import { directionLabel } from "../bookkeepingLabels";
 import { CategorySelect } from "./CategorySelect";
 import { DateTimeCell, EditableTextCell, PaymentCellEditor } from "./EditableCell";
 
@@ -86,6 +88,11 @@ export function TransactionReadRow({
           ariaLabel={`${tx.merchant} 결제·자산 변경`}
           onCommit={(payment) => onPatch(payment)}
         />
+      </TableCell>
+      <TableCell className="bk-td-direction">
+        <Badge variant={tx.direction === "income" ? "secondary" : "outline"}>
+          {directionLabel(tx.direction)}
+        </Badge>
       </TableCell>
       <TableCell className="bk-td-amount">
         <EditableTextCell

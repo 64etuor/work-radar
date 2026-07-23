@@ -154,6 +154,19 @@ const NORMAL = makeTx({ id: "tx-2", merchant: "스타벅스", amountMinor: 6300 
 const ROWS = [SUSPICIOUS, NORMAL];
 
 describe("ReviewQueueCard 테이블 + Sheet", () => {
+  it("구분 열에서 수입/지출을 명시적으로 표시한다", () => {
+    setup([
+      makeTx({ id: "tx-income", merchant: "급여", direction: "income" }),
+      makeTx({ id: "tx-expense", merchant: "김밥", direction: "expense" }),
+    ]);
+    const headers = [...(container?.querySelectorAll("thead th") ?? [])].map(
+      (head) => head.textContent,
+    );
+    expect(headers).toContain("구분");
+    expect(rowOf("급여").querySelector(".bk-td-direction")?.textContent).toBe("수입");
+    expect(rowOf("김밥").querySelector(".bk-td-direction")?.textContent).toBe("지출");
+  });
+
   it("기본은 인라인 셀 행만 — 전체 편집 폼은 DOM에 없다", () => {
     setup(ROWS);
     expect(container?.querySelectorAll(".bk-review-tr")).toHaveLength(2);

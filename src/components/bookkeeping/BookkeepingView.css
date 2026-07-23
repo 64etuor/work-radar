@@ -1251,6 +1251,13 @@
   background: var(--bk-stone);
 }
 
+@media (max-width: 760px) {
+  .bk-review-tools,
+  .bk-review-date-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* 검토 큐 read-row 공유 칼럼 템플릿 — 리스트 전체가 같은 고정/fr 트랙을 쓰므로
    96행이 칼럼-대-칼럼으로 정렬된다(체크박스 칼럼은 래퍼의 고정 20px). */
 .bk-select-check {
@@ -1430,6 +1437,12 @@
 
 .bk-th-reasons {
   width: 10rem;
+}
+
+.bk-th-direction,
+.bk-td-direction {
+  width: 4.5rem;
+  text-align: center;
 }
 
 .bk-th-amount,

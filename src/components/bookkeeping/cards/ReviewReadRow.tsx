@@ -8,7 +8,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 
 import { effectiveCategoryCode, type TransactionEditDraft } from "../bookkeepingDrafts";
 import { currency } from "../bookkeepingFormat";
-import { reviewReasonCodes } from "../bookkeepingLabels";
+import { directionLabel, reviewReasonCodes } from "../bookkeepingLabels";
 import { truncateReviewChips } from "../reviewRow";
 import { CategorySelect } from "./CategorySelect";
 import { DateTimeCell, EditableTextCell } from "./EditableCell";
@@ -108,6 +108,11 @@ export function ReviewReadRow({
           </Badge>
         ))}
         {hiddenCount > 0 && <Badge variant="secondary">+{hiddenCount}</Badge>}
+      </TableCell>
+      <TableCell className="bk-td-direction">
+        <Badge variant={tx.direction === "income" ? "secondary" : "outline"}>
+          {directionLabel(tx.direction)}
+        </Badge>
       </TableCell>
       <TableCell className="bk-td-amount">
         <EditableTextCell
