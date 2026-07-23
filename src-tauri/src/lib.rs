@@ -179,6 +179,8 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::diet_shopping_list,
         // Reading — 독서 기록(2026-07-23 plan). 카탈로그 검색만 read-only 아웃바운드(ADR-0013).
         commands::search_book_catalog,
+        commands::set_aladin_ttb_key,
+        commands::aladin_ttb_status,
         commands::add_book,
         commands::list_books,
         commands::get_book_detail,

@@ -50,3 +50,35 @@ pub fn delete_token(credential_ref: &str, kind: TokenKind) -> Result<(), keyring
         Err(e) => Err(e),
     }
 }
+
+// ── 앱 전역 시크릿 (프로젝트 무관 — 예: 알라딘 TTB 키) ───────────────────
+// account = `app:{name}` — 프로젝트 토큰(`{credential_ref}:{kind}`)과 네임스페이스가 겹치지 않는다.
+// TokenKind는 프로젝트 스코프 표면(TS 노출·ping 분기)이라 여기서 variant를 늘리지 않는다.
+
+fn app_entry(name: &str) -> Result<Entry, keyring::Error> {
+    Entry::new(SERVICE, &format!("app:{name}"))
+}
+
+pub fn set_app_secret(name: &str, value: &str) -> Result<(), keyring::Error> {
+    app_entry(name)?.set_password(value)
+}
+
+pub fn get_app_secret(name: &str) -> Result<Option<String>, keyring::Error> {
+    match app_entry(name)?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn has_app_secret(name: &str) -> Result<bool, keyring::Error> {
+    Ok(get_app_secret(name)?.is_some())
+}
+
+pub fn delete_app_secret(name: &str) -> Result<(), keyring::Error> {
+    match app_entry(name)?.delete_credential() {
+        Ok(()) => Ok(()),
+        Err(keyring::Error::NoEntry) => Ok(()),
+        Err(e) => Err(e),
+    }
+}

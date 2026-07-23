@@ -12,6 +12,18 @@
 
 ## Decision
 
+> **개정 (2026-07-23, 같은 날):** 라이브 사용에서 두 결함이 확인돼 provider 구성을 개정했다.
+> ① 키리스 Google Books는 익명 공유 쿼터가 즉시 고갈된다(관측: 429 "Queries per day") —
+> 기본 provider로 부적합. ② 한글 쿼리에 영문판이 앞선다(사용자: "코스모스 검색하니까 영문이").
+> 개정 결정: **알라딘 TTB를 1순위**(무료 키 — keychain 앱 전역 시크릿 `app:aladin_ttb`,
+> 설정→통합에서 등록, `ItemSearch`/`ItemLookUp` 고정 엔드포인트)로 추가하고, Google은
+> 폴백으로 강등(한글 쿼리 시 `langRestrict=ko` + `country=KR`), 429는 **terminal**로 분류해
+> ms 백오프 재시도 없이 즉시 다음 폴백으로 넘어간다(일일 쿼터에 재시도는 무의미+소진 가속).
+> 추가로 쿼리 사다리(원문→공백 제거→앞쪽 절반 토큰)와 커널 유사도 랭킹(정규화 매칭·한국어판
+> 우선)을 적용하고, 등록 시 중복 방지를 ISBN 외에 **정규화 제목+저자 겹침**으로 확장했다
+> (중복 판정 시 기존 행 반환 + NULL 서지 필드만 백필). TTB 키는 로그/에러 메시지에 절대
+> 싣지 않는다(reqwest 에러 미포맷 — URL 쿼리스트링 포함 위험).
+
 ### 1. 카탈로그 provider = Google Books(기본) + Open Library(폴백), 둘 다 키 불요
 
 - `GET https://www.googleapis.com/books/v1/volumes` / `GET https://openlibrary.org/search.json`

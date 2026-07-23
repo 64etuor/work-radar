@@ -356,7 +356,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_reading_add_book",
-        description = "Register a book in the local reading log (local SQLite write). Pass bibliographic fields from wr_reading_search_catalog or manual input. Same ISBN-13 twice returns the existing book (created=false) instead of duplicating."
+        description = "Register a book in the local reading log (local SQLite write). Pass bibliographic fields from wr_reading_search_catalog or manual input. Duplicates are rejected softly: same ISBN-13, or same normalized title with overlapping authors, returns the existing book (created=false) and backfills its missing bibliographic fields."
     )]
     pub async fn reading_add_book(
         &self,

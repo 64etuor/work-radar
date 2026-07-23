@@ -22,14 +22,17 @@
 | 독서 히트맵(start~finish 구간 보간)                                           | **개선**: `reading_sessions` 실측 기록 기반     |
 | frontmatter(title/author/total_page/cover_url/my_rate/start·finish_read_date) | `books` 컬럼 1:1 대응                           |
 
-## 서지 API 선택
+## 서지 API 선택 (2026-07-23 당일 개정 — ADR-0013 개정 노트가 정본)
 
-- **Google Books Volumes API** (기본): 키 불요, ISBN·제목 검색, 한국어 서적 커버리지 실용적.
-  `GET https://www.googleapis.com/books/v1/volumes?q=…` (고정 엔드포인트, HTTPS).
-- **Open Library Search API** (폴백): 키 불요. Google 결과 0건/실패 시.
-  `GET https://openlibrary.org/search.json?q=…` + `covers.openlibrary.org` 표지.
-- 알라딘 TTB / 네이버 책(국내 최적이나 **API 키 필요**)은 deferred — keychain 인프라는
-  있으나 설정 UI 스코프가 커서 후속(ADR-0013 참조).
+- **알라딘 TTB (1순위, 키 등록 시)**: 국내 서지 최적. 설정→통합에서 무료 TTB 키 등록
+  (keychain 앱 전역 시크릿). `ItemSearch`(키워드)/`ItemLookUp`(ISBN) 고정 엔드포인트.
+- **Google Books (폴백)**: 키 불요. 한글 쿼리는 `langRestrict=ko` + `country=KR`.
+  키리스 익명 쿼터 고갈(429)이 관측돼 기본에서 강등 — 429는 terminal(재시도 무의미).
+- **Open Library (최종 폴백)**: 키 불요, 영문 위주.
+- 각 provider에 쿼리 사다리(원문→공백 제거→앞쪽 절반 토큰) + 커널 유사도 랭킹(정규화
+  매칭, 한국어판 우선). 검색 다이얼로그는 **서재 우선 매칭**(정규화 — 이미 있는 책 최상단).
+- 중복 등록 방지: ISBN-13 원자 dedup + **정규화 제목+저자 겹침 dedup**(기존 행 반환,
+  NULL 서지 필드만 백필 — 임포트 책에 ISBN/표지/쪽수가 채워진다).
 - 규율: 호출은 Rust만(ipc-conventions), caller가 URL/host를 못 정함(쿼리 텍스트만),
   bounded retry(5xx/네트워크=transient, 4xx=terminal), timeout 10s, 응답 크기 상한 2MB,
   로그는 상태코드+크기만.
