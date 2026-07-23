@@ -28,6 +28,7 @@ import { useUIStore } from "@/store";
 
 import { AddProjectForm } from "./settings/AddProjectForm";
 import { AgentsPane } from "./settings/AgentsPane";
+import { AladinTtbBlock } from "./settings/AladinTtbBlock";
 import { AppearanceSettings } from "./settings/AppearanceSettings";
 import { ConnectionAuditPanel } from "./settings/ConnectionAuditPanel";
 import { HermesConnectionBlock } from "./settings/HermesConnectionBlock";
@@ -389,6 +390,11 @@ function IntegrationsPane({ pushSuccess }: { pushSuccess: (msg: string) => void 
         <SectionLabel>Hermes</SectionLabel>
         <HermesConnectionBlock />
         <HermesPanelSettings />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <SectionLabel>독서 카탈로그</SectionLabel>
+        <AladinTtbBlock onToast={pushSuccess} />
       </div>
     </>
   );

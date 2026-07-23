@@ -1,5 +1,32 @@
-import type { ReadingStatus } from "@/bindings";
+import type { Book, ReadingStatus, UpdateBookInput } from "@/bindings";
 import { APP_LOCALE } from "@/lib/localeFormat";
+
+/** 전-null 패치 골격 — 소비처는 스프레드 후 바꿀 필드만 지정한다(20필드 널 리터럴 중복 제거). */
+export function emptyBookPatch(id: string): UpdateBookInput {
+  return {
+    id,
+    title: null,
+    subtitle: null,
+    authors: null,
+    publisher: null,
+    publishedDate: null,
+    isbn13: null,
+    isbn10: null,
+    pageCount: null,
+    coverUrl: null,
+    description: null,
+    categories: null,
+    language: null,
+    rating: null,
+    clearRating: null,
+    review: null,
+    clearReview: null,
+    currentPage: null,
+    favorite: null,
+    startedOn: null,
+    finishedOn: null,
+  };
+}
 
 /** 상태 → 표시 라벨. */
 export const READING_STATUS_LABEL: Record<ReadingStatus, string> = {
@@ -88,4 +115,27 @@ export function authorsLabel(authors: string[]): string {
 export function yearOf(today: string): number {
   const y = Number(today.slice(0, 4));
   return Number.isFinite(y) && y > 0 ? y : new Date().getFullYear();
+}
+
+/**
+ * 매칭용 정규화 — 소문자 + 문자/숫자만(공백·문장부호·'：' 제거). Rust 커널
+ * `normalize_for_match`와 동일 규칙: 띄어쓰기가 달라도 같은 책을 찾는다.
+ */
+export function normalizeForMatch(s: string): string {
+  return [...s]
+    .filter((c) => /[\p{L}\p{N}]/u.test(c))
+    .join("")
+    .toLowerCase();
+}
+
+/** 서재 책이 검색어와 맞는가 — 제목/부제/저자를 정규화 포함 매칭(양방향). */
+export function bookMatchesQuery(
+  book: Pick<Book, "title" | "subtitle" | "authors">,
+  query: string,
+): boolean {
+  const q = normalizeForMatch(query);
+  if (q.length < 2) return false;
+  const normTitle = normalizeForMatch(book.title);
+  const haystack = normalizeForMatch([book.title, book.subtitle ?? "", ...book.authors].join(" "));
+  return haystack.includes(q) || (normTitle.length >= 2 && q.includes(normTitle));
 }

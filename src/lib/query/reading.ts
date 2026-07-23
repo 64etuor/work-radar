@@ -19,6 +19,7 @@ import { pushMutationError, unwrap } from "./client";
 
 export const readingKeys = {
   all: ["reading"] as const,
+  aladinStatus: ["reading", "aladin-status"] as const,
   books: (status: ReadingStatus | null, query: string) =>
     ["reading", "books", status ?? "all", query] as const,
   detail: (id: string) => ["reading", "detail", id] as const,
@@ -75,6 +76,27 @@ export function useCatalogSearch(query: string, limit = 10) {
     placeholderData: keepPreviousData,
     staleTime: 5 * 60 * 1000,
     retry: false, // Rust 쪽 bounded retry가 이미 처리 — 프런트 재시도 중첩 금지.
+  });
+}
+
+export function useAladinTtbStatus() {
+  return useQuery({
+    queryKey: readingKeys.aladinStatus,
+    queryFn: () => unwrap(commands.aladinTtbStatus()),
+  });
+}
+
+/** 키는 입력으로만 전달(빈 문자열 = 해제) — 렌더러로 재반환되지 않는다(keychain INVARIANT). */
+export function useSetAladinTtbKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (key: string) => unwrap(commands.setAladinTtbKey(key)),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: readingKeys.aladinStatus });
+      // provider 우선순위가 바뀌므로 캐시된 카탈로그 결과도 무효화.
+      void qc.invalidateQueries({ queryKey: readingKeys.all });
+    },
+    onError: (e) => pushMutationError("reading", e, "독서"),
   });
 }
 

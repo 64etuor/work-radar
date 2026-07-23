@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { paceInfo, progressPct, starFills, tierOf, yearOf } from "./readingFormat";
+import {
+  bookMatchesQuery,
+  normalizeForMatch,
+  paceInfo,
+  progressPct,
+  starFills,
+  tierOf,
+  yearOf,
+} from "./readingFormat";
 
 describe("tierOf", () => {
   it("buckets ratings into Obsidian hall-of-fame tiers", () => {
@@ -49,6 +57,31 @@ describe("paceInfo", () => {
     expect(start.pct).toBe(100);
     expect(start.remaining).toBe(0);
     expect(start.monthlyGoal).toBe(5);
+  });
+});
+
+describe("normalizeForMatch / bookMatchesQuery", () => {
+  it("matches regardless of spacing and punctuation", () => {
+    expect(normalizeForMatch("바보들은 항상 남의 탓만 한다!")).toBe(
+      normalizeForMatch("바보들은항상남의탓만한다"),
+    );
+    const book = {
+      title: "바보들은 항상 남의 탓만 한다",
+      subtitle: null,
+      authors: ["존 밀러"],
+    };
+    expect(bookMatchesQuery(book, "바보들은항상")).toBe(true);
+    expect(bookMatchesQuery(book, "남의 탓만")).toBe(true);
+    expect(bookMatchesQuery(book, "존밀러")).toBe(true);
+    // 검색어가 제목보다 길어도(부제까지 입력) 제목이 포함되면 매치.
+    expect(
+      bookMatchesQuery(
+        { title: "코스모스", subtitle: null, authors: [] },
+        "코스모스 가능한 세계들",
+      ),
+    ).toBe(true);
+    expect(bookMatchesQuery(book, "완전 다른 책")).toBe(false);
+    expect(bookMatchesQuery(book, "바")).toBe(false);
   });
 });
 

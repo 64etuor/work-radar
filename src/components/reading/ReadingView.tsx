@@ -173,7 +173,12 @@ export function ReadingView() {
         )}
       </div>
 
-      <BookSearchDialog open={searchOpen} onOpenChange={setSearchOpen} today={today} />
+      <BookSearchDialog
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        today={today}
+        onOpenExisting={setDetailId}
+      />
       <BookDetailSheet bookId={detailId} onClose={() => setDetailId(null)} today={today} />
     </div>
   );

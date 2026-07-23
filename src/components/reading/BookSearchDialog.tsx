@@ -1,14 +1,15 @@
-import { BookOpen, Loader2, Search } from "lucide-react";
+import { BookOpen, Library, Loader2, Search } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 
 import type { CatalogBook, ReadingStatus } from "@/bindings";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
-import { useAddBook, useCatalogSearch } from "@/lib/query";
+import { useAddBook, useAladinTtbStatus, useBooks, useCatalogSearch } from "@/lib/query";
 
-import { authorsLabel } from "./readingFormat";
+import { authorsLabel, bookMatchesQuery, READING_STATUS_LABEL } from "./readingFormat";
 
 function useDebounced(value: string, delayMs: number): string {
   const [debounced, setDebounced] = useState(value);
@@ -19,26 +20,39 @@ function useDebounced(value: string, delayMs: number): string {
   return debounced;
 }
 
-/** 카탈로그 검색 + 등록 다이얼로그. 검색 실패/미수록 도서는 수기 등록 폴백. */
+/**
+ * 카탈로그 검색 + 등록 다이얼로그.
+ * 1) 서재 우선: 이미 등록된 책은 정규화 매칭(띄어쓰기·문장부호 무시)으로 최상단에.
+ * 2) 카탈로그: 알라딘(키 등록 시) → Google(한글은 한국어판 우선) → Open Library — Rust 사다리.
+ * 3) 폴백: 못 찾으면 수기 등록(검색어를 제목으로 미리 채움).
+ */
 export function BookSearchDialog({
   open,
   onOpenChange,
   today,
+  onOpenExisting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   today: string;
+  onOpenExisting: (bookId: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [manualMode, setManualMode] = useState(false);
   const [manualTitle, setManualTitle] = useState("");
   const [manualAuthor, setManualAuthor] = useState("");
   const [manualPages, setManualPages] = useState("");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ msg: string; bookId: string } | null>(null);
 
-  const debounced = useDebounced(query, 350);
+  // IME 타이핑 중 과도한 외부 호출 방지(키리스 provider 일일 쿼터 보호).
+  const debounced = useDebounced(query, 500);
   const search = useCatalogSearch(debounced);
   const addBook = useAddBook();
+  const { data: aladinOn } = useAladinTtbStatus();
+
+  // 서재 우선 매칭 — 로컬 전체 목록에서 정규화 매칭(개인 스케일이라 저비용).
+  const { data: library } = useBooks(null, "");
+  const libraryMatches = (library ?? []).filter((b) => bookMatchesQuery(b, debounced)).slice(0, 5);
 
   // 닫힘 시 일회성 상태 리셋 — effect 대신 이벤트 지점에서(react-hooks/set-state-in-effect).
   const handleOpenChange = (next: boolean) => {
@@ -55,7 +69,11 @@ export function BookSearchDialog({
       {
         onSuccess: (result) => {
           if (!result.created) {
-            setNotice(`이미 등록된 책이다: ${result.book.title}`);
+            // 백엔드가 ISBN/정규화 제목으로 중복 판정 — 기존 책의 빈 서지는 백필됐다.
+            setNotice({
+              msg: `이미 서재에 있는 책이다: ${result.book.title}`,
+              bookId: result.book.id,
+            });
             return;
           }
           handleOpenChange(false);
@@ -91,6 +109,9 @@ export function BookSearchDialog({
     );
   };
 
+  const searched = debounced.trim().length >= 2;
+  const catalogEmpty = search.data != null && search.data.length === 0;
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="rd-search">
@@ -98,7 +119,7 @@ export function BookSearchDialog({
         <div className="rd-search-box">
           <Search size={15} aria-hidden className="rd-search-icon" />
           <Input
-            placeholder="제목·저자 또는 ISBN 검색 (Google Books)"
+            placeholder="제목·저자 또는 ISBN 검색 (띄어쓰기 안 정확해도 됨)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -106,18 +127,72 @@ export function BookSearchDialog({
           {search.isFetching && <Loader2 size={15} aria-hidden className="rd-search-spinner" />}
         </div>
 
-        {notice && <div className="rd-search-notice typo-label-md">{notice}</div>}
+        {notice && (
+          <div className="rd-search-notice typo-label-md">
+            <span>{notice.msg}</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                handleOpenChange(false);
+                onOpenExisting(notice.bookId);
+              }}
+            >
+              열기
+            </Button>
+          </div>
+        )}
+
+        {!manualMode && libraryMatches.length > 0 && (
+          <div className="rd-search-results" aria-label="서재에 이미 있는 책">
+            {libraryMatches.map((b) => (
+              <div key={b.id} className="rd-search-item rd-search-item-owned">
+                {b.coverUrl ? (
+                  <img className="rd-search-cover" src={b.coverUrl} alt="" loading="lazy" />
+                ) : (
+                  <span className="rd-search-cover rd-card-cover-fallback" aria-hidden>
+                    <BookOpen size={16} />
+                  </span>
+                )}
+                <div className="rd-search-info">
+                  <div className="typo-body-strong">{b.title}</div>
+                  <div className="rd-search-owned-meta typo-label-sm rd-card-dim">
+                    <Library size={11} aria-hidden /> 서재에 있음 · {READING_STATUS_LABEL[b.status]}
+                    {b.authors.length > 0 && ` · ${authorsLabel(b.authors)}`}
+                  </div>
+                </div>
+                <div className="rd-search-actions">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      handleOpenChange(false);
+                      onOpenExisting(b.id);
+                    }}
+                  >
+                    열기
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {!manualMode && (
           <div className="rd-search-results">
             {search.isError && (
               <EmptyState className="rd-empty">
-                카탈로그 조회에 실패했다 — 잠시 후 다시 시도하거나 수기로 등록.
+                카탈로그 조회에 실패했다(무료 검색 한도일 수 있음).
+                {aladinOn !== true &&
+                  " 설정 → 통합에서 알라딘 TTB 키를 등록하면 국내 검색이 안정적이다."}{" "}
+                수기 등록은 아래에서.
               </EmptyState>
             )}
-            {search.data != null && search.data.length === 0 && (
+            {searched && catalogEmpty && libraryMatches.length === 0 && (
               <EmptyState className="rd-empty">
-                검색 결과가 없다 — 철자를 바꾸거나 ISBN으로, 또는 수기로 등록.
+                카탈로그에서 못 찾았다 — 띄어쓰기를 바꾸거나 핵심 단어만, 또는 ISBN으로.
+                {aladinOn !== true &&
+                  " 국내 도서는 알라딘 TTB 키 등록(설정 → 통합) 시 훨씬 잘 잡힌다."}
               </EmptyState>
             )}
             {(search.data ?? []).map((c, i) => (
@@ -143,6 +218,7 @@ export function BookSearchDialog({
                   </div>
                 </div>
                 <div className="rd-search-actions">
+                  {c.source === "aladin" && <Badge variant="outline">알라딘</Badge>}
                   <Button
                     size="sm"
                     variant="outline"
@@ -197,7 +273,10 @@ export function BookSearchDialog({
           <button
             type="button"
             className="rd-manual-toggle typo-label-md"
-            onClick={() => setManualMode(true)}
+            onClick={() => {
+              setManualTitle(query.trim());
+              setManualMode(true);
+            }}
           >
             검색에 없나? 수기로 등록 ({today} 기준 서가에 추가)
           </button>

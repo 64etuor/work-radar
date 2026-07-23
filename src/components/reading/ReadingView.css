@@ -588,6 +588,10 @@
 }
 
 .rd-search-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   padding: 8px 12px;
   border: 1px solid var(--color-wr-border-light);
   border-radius: var(--radius-md);
@@ -624,6 +628,17 @@
   flex: 1 1 auto;
   gap: 3px;
   min-width: 0;
+}
+
+.rd-search-item-owned {
+  border-style: dashed;
+  background: color-mix(in srgb, var(--color-wr-elevated) 60%, transparent);
+}
+
+.rd-search-owned-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .rd-search-actions {
