@@ -14,6 +14,7 @@ pub mod gmail;
 pub mod notion;
 pub mod okr;
 pub mod queue;
+pub mod reading;
 pub mod signals;
 pub mod today;
 

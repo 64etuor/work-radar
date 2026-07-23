@@ -230,6 +230,17 @@ fn registered_tool_set_is_locked() {
         "wr_diet_set_order_status",
         "wr_diet_link_order_line",
         "wr_diet_receive_order_line",
+        // reading 도메인 위임(2026-07-23 사용자 결정 — tools/reading.rs 모듈 doc의 레일 논증 참조).
+        // delete류는 표면에 없다(앱 UI confirm 전용). search_catalog만 고정 provider 아웃바운드(ADR-0013).
+        "wr_reading_search_catalog",
+        "wr_reading_add_book",
+        "wr_reading_list_books",
+        "wr_reading_get_book",
+        "wr_reading_set_status",
+        "wr_reading_log_session",
+        "wr_reading_add_quote",
+        "wr_reading_stats",
+        "wr_reading_set_goal",
         "wr_list_signals",
         "wr_create_signal",
         "wr_okr_get_mission",

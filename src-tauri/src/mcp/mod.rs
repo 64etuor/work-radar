@@ -47,6 +47,7 @@ pub use tools::gmail::*;
 pub use tools::notion::*;
 pub use tools::okr::*;
 pub use tools::queue::*;
+pub use tools::reading::*;
 pub use tools::signals::*;
 pub use tools::today::*;
 
@@ -72,6 +73,7 @@ impl WrServer {
             + Self::tool_router_bookkeeping_transactions()
             + Self::tool_router_diet()
             + Self::tool_router_diet_manage()
+            + Self::tool_router_reading()
             + Self::tool_router_signals()
             + Self::tool_router_okr()
             + Self::tool_router_today()
