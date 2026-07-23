@@ -12,7 +12,8 @@ use crate::gmail::{GmailMessageSearch, GmailReadProvider};
 use crate::models::{
     BookkeepingDirection, BookkeepingExpenseKind, BookkeepingGmailLabel,
     BookkeepingGmailSyncResult, BookkeepingPaymentMethodKind, BookkeepingSource,
-    BookkeepingTransaction, CreateBookkeepingTransactionInput, RecordBookkeepingSyncFailureInput,
+    BookkeepingTransaction, CreateBookkeepingTransactionInput,
+    FindBookkeepingDuplicateCandidatesInput, RecordBookkeepingSyncFailureInput,
     SyncBookkeepingGmailReceiptsInput,
 };
 
@@ -72,9 +73,18 @@ pub async fn sync_bookkeeping_gmail_receipts(
 // Foundation for the future Gmail read-side sync worker. We keep this off the renderer IPC surface
 // so raw email bodies do not become a frontend contract before the Rust Gmail adapter exists.
 #[allow(dead_code)]
+/// fuzzy 중복 힌트 임계값·프리체크 상한 — mmbak 임포트(`MMBAK_CROSS_SOURCE_DUP_MIN_SCORE` /
+/// `MAX_DUP_PROBES_PER_IMPORT`)와 대칭. Gmail은 같은 구매에 메일이 2통(주문확인 + PG 영수증)
+/// 오는 일이 흔해 **같은 소스 후보도 포함**한다. 힌트일 뿐 — 자동 ignore 금지(결정은 사람).
+const GMAIL_DUP_HINT_MIN_SCORE: f64 = 0.8;
+const MAX_DUP_PROBES_PER_SYNC: u32 = 500;
+
+/// `dup_probe_allowed`: 신규 행(source_ref 미존재)일 때만 true — 호출자(sync 루프)가
+/// 존재 여부와 프로브 예산을 판단한다. 기존 행 upsert는 판단 필드 existing-wins라 무의미.
 pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
     db: &Db,
     input: BookkeepingEmailReceiptInput,
+    dup_probe_allowed: bool,
 ) -> Result<Option<BookkeepingTransaction>, AppError> {
     let parsed = match parse_bookkeeping_email_receipt(&input) {
         Ok(parsed) => parsed,
@@ -101,8 +111,33 @@ pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
         ParsedBookkeepingDirection::Income => BookkeepingDirection::Income,
         ParsedBookkeepingDirection::Expense => BookkeepingDirection::Expense,
     };
+    // fuzzy 중복 힌트: 같은 금액·날짜(·상호) 후보가 이미 있으면 possible_duplicate 사유를
+    // 싣는다. MM 원장 행(cross-source)과 같은 구매의 다른 메일(같은 소스) 모두 대상 —
+    // 이 행은 신규라서(호출자 게이트) 자기 자신과 매칭될 일이 없다.
+    let mut possible_duplicate = false;
+    if dup_probe_allowed {
+        let candidates = find_bookkeeping_duplicate_candidates_inner(
+            db,
+            FindBookkeepingDuplicateCandidatesInput {
+                project_id: input.project_id.clone(),
+                spent_at: parsed.spent_at.clone(),
+                amount_minor: parsed.amount_minor,
+                merchant: Some(parsed.merchant.clone()),
+                order_no: None,
+                payment_no: None,
+                source: None,
+                source_ref: None,
+                exclude_transaction_id: None,
+            },
+        )
+        .await?;
+        possible_duplicate = candidates.iter().any(|cand| {
+            cand.score >= GMAIL_DUP_HINT_MIN_SCORE && cand.transaction.deleted_at.is_none()
+        });
+    }
+
     let field_confidence_json = parsed.field_confidence_json();
-    let review_reasons_json = merged_review_reasons_json(&parsed);
+    let review_reasons_json = merged_review_reasons_json(&parsed, possible_duplicate);
 
     let row = upsert_bookkeeping_transaction_from_ingest_inner(
         db,
@@ -149,7 +184,10 @@ pub(crate) async fn ingest_bookkeeping_gmail_receipt_inner(
 /// Belt-and-suspenders: a cancellation row must always carry
 /// `cancellation_notice` so the review queue explains itself even when a
 /// parser variant flags `is_cancellation` without emitting the reason.
-fn merged_review_reasons_json(parsed: &ParsedBookkeepingReceipt) -> Option<String> {
+fn merged_review_reasons_json(
+    parsed: &ParsedBookkeepingReceipt,
+    possible_duplicate: bool,
+) -> Option<String> {
     let mut merged = parsed.clone();
     if merged.is_cancellation
         && !merged
@@ -160,6 +198,17 @@ fn merged_review_reasons_json(parsed: &ParsedBookkeepingReceipt) -> Option<Strin
         merged.review_reasons.push(ParsedBookkeepingReviewReason {
             code: "cancellation_notice",
             detail: "취소 알림 — 원거래와 대조해 확인 필요".to_string(),
+        });
+    }
+    if possible_duplicate
+        && !merged
+            .review_reasons
+            .iter()
+            .any(|reason| reason.code == "possible_duplicate")
+    {
+        merged.review_reasons.push(ParsedBookkeepingReviewReason {
+            code: "possible_duplicate",
+            detail: "같은 금액·날짜의 거래가 이미 있습니다 — 중복 여부 확인".to_string(),
         });
     }
     let mut seen = std::collections::HashSet::new();
@@ -273,6 +322,7 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
 
     let mut counts = SyncCounts::default();
     let mut max_seen_date = cursor_before.clone();
+    let mut dup_probes_used = 0u32;
 
     for message_id in ids {
         counts.scanned += 1;
@@ -303,6 +353,11 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
             bookkeeping_source_ref_exists(db, BookkeepingSource::Gmail, &candidate.message_id)
                 .await?;
 
+        // 신규 행만 fuzzy 중복 프리체크(예산 상한 — 집계 비용 bound, mmbak과 동일 패턴).
+        let dup_probe_allowed = !existed && dup_probes_used < MAX_DUP_PROBES_PER_SYNC;
+        if dup_probe_allowed {
+            dup_probes_used += 1;
+        }
         let created = ingest_bookkeeping_gmail_receipt_inner(
             db,
             BookkeepingEmailReceiptInput {
@@ -314,6 +369,7 @@ pub(crate) async fn sync_bookkeeping_gmail_receipts_with_provider<P: GmailReadPr
                 body_text: candidate.body_text,
                 received_at: candidate.received_at,
             },
+            dup_probe_allowed,
         )
         .await?;
         match created {

@@ -1231,11 +1231,11 @@ mod tests {
             received_at: Some("2026-06-16T10:11:12+09:00".to_string()),
         };
 
-        let first = ingest_bookkeeping_gmail_receipt_inner(&db, input.clone())
+        let first = ingest_bookkeeping_gmail_receipt_inner(&db, input.clone(), false)
             .await
             .expect("first ingest")
             .expect("receipt parsed");
-        let second = ingest_bookkeeping_gmail_receipt_inner(&db, input)
+        let second = ingest_bookkeeping_gmail_receipt_inner(&db, input, false)
             .await
             .expect("retry ingest")
             .expect("receipt parsed on retry");
@@ -1252,6 +1252,53 @@ mod tests {
             .await
             .expect("transactions");
         assert_eq!(rows.len(), 1, "source_ref dedup should keep one row");
+    }
+
+    /// Gmail 인제스트도 mmbak과 대칭으로 fuzzy 중복 힌트를 단다 — 같은 금액·날짜(·상호)의
+    /// 기존 행(MM 원장 or 같은 구매의 다른 메일)이 있으면 신규 행에 possible_duplicate
+    /// 사유가 붙는다. 힌트일 뿐 자동 ignore는 없다(리뷰 큐에서 사람이 결정).
+    #[tokio::test]
+    async fn gmail_ingest_flags_possible_duplicate_against_existing_rows() {
+        let db = pool().await;
+        // MM 원장 행 선주입(같은 날짜·금액·상호) — Gmail이 나중에 동기화되는 방향.
+        let mut mm = manual_input("쿠팡", 23_400, "2026-06-16", "food");
+        mm.source = BookkeepingSource::MoneyManager;
+        mm.source_ref = Some("mm-uid-dup-1".to_string());
+        create_bookkeeping_transaction_inner(&db, mm)
+            .await
+            .expect("mm row");
+
+        let receipt = |message_id: &str| BookkeepingEmailReceiptInput {
+            project_id: None,
+            message_id: message_id.to_string(),
+            from: "receipts@coupang.test".to_string(),
+            subject: "[쿠팡] 결제 영수증".to_string(),
+            snippet: "쿠팡 결제금액 23,400원".to_string(),
+            body_text: "상호: 쿠팡\n결제일: 2026.06.16\n결제금액 23,400원".to_string(),
+            received_at: Some("2026-06-16T10:11:12+09:00".to_string()),
+        };
+
+        let flagged = ingest_bookkeeping_gmail_receipt_inner(&db, receipt("gmail-dup-1"), true)
+            .await
+            .expect("ingest")
+            .expect("row");
+        assert!(
+            flagged.review_reasons_json.contains("possible_duplicate"),
+            "기존 행과 겹치면 힌트가 붙어야 한다: {}",
+            flagged.review_reasons_json
+        );
+        assert_eq!(
+            flagged.review_status,
+            BookkeepingReviewStatus::NeedsReview,
+            "힌트는 자동 ignore가 아니다"
+        );
+
+        // 프로브 비허용(기존 행 재동기화·예산 초과)이면 힌트를 붙이지 않는다.
+        let unflagged = ingest_bookkeeping_gmail_receipt_inner(&db, receipt("gmail-dup-2"), false)
+            .await
+            .expect("ingest without probe")
+            .expect("row");
+        assert!(!unflagged.review_reasons_json.contains("possible_duplicate"));
     }
 
     #[tokio::test]
@@ -1273,6 +1320,7 @@ mod tests {
                         .to_string(),
                 received_at: Some("2026-06-20T01:02:03+09:00".to_string()),
             },
+            false,
         )
         .await
         .expect("card ingest")
@@ -1310,6 +1358,7 @@ mod tests {
                 body_text: "토스 입금 50,000원 홍길동".to_string(),
                 received_at: Some("2026-06-18T13:00:00+09:00".to_string()),
             },
+            false,
         )
         .await
         .expect("deposit ingest")
@@ -1333,6 +1382,7 @@ mod tests {
                     .to_string(),
                 received_at: Some("2026-06-18T16:00:00+09:00".to_string()),
             },
+            false,
         )
         .await
         .expect("cancellation ingest")
@@ -1376,6 +1426,7 @@ mod tests {
                 body_text: "no amount or merchant here 123456789012".to_string(),
                 received_at: Some("2026-06-16T10:11:12+09:00".to_string()),
             },
+            false,
         )
         .await
         .expect("unparseable is non-fatal");
