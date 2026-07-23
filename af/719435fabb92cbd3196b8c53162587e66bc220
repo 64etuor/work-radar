@@ -1,0 +1,70 @@
+src/components/reading/readingFormat.test.ts
+  s_3742135ee19f96::t_d29bc5fde191dc 1-60
+src/lib/nav.ts
+  s_3742135ee19f96::t_717217ffdb1385 3
+  s_3742135ee19f96::t_9b83aace9a396c 107-110
+  s_3742135ee19f96::t_36a6368b1dc181 105-106
+  s_3742135ee19f96::t_897a3916ce30df 111
+src/components/reading/ReadingHeatmap.tsx
+  s_3742135ee19f96::t_eee08327c1f034 57-60,62
+  s_3742135ee19f96::t_628b6d6fc43acd 15-26
+  s_3742135ee19f96::t_cdcb7169e179cf 2-8,14,27-52,55-56,63-65,67-79,81-120
+  s_3742135ee19f96::t_c4ba3d6eb96597 1
+  s_3742135ee19f96::t_e395d654f78222 54
+  s_3742135ee19f96::t_976d6caa547cfa 9-13,66,80
+  s_3742135ee19f96::t_e857b67564a5a5 61
+  s_3742135ee19f96::t_cb57693555ee95 53
+src/components/reading/BookSearchDialog.tsx
+  s_3742135ee19f96::t_7101f06f6e8685 95
+  s_3742135ee19f96::t_744a40a0446046 106
+  s_3742135ee19f96::t_a1bf11a5b39acc 1-42,46-48,51-60,62-89,91-94,96-105,107-208
+  s_3742135ee19f96::t_11c7821ac20034 61,90
+  s_3742135ee19f96::t_62dd0573ee0003 43-45,49-50
+src/components/reading/readingFormat.ts
+  s_3742135ee19f96::t_744a40a0446046 34
+  s_3742135ee19f96::t_e33eab1803058d 1-33,35-91
+src/App.tsx
+  s_3742135ee19f96::t_5ec5b2d9281fc8 87
+  s_3742135ee19f96::t_9fe252be8b28d1 48-50
+src/store.ts
+  s_3742135ee19f96::t_48a7fcfff0945d 11
+src/components/reading/ReadingView.css
+  s_3742135ee19f96::t_f1aacdbcf88ee2 148,152,224,232,289,351,409,445,460,593,756,773,810
+  s_3742135ee19f96::t_f566275ef12738 1-147,149-151,153-223,225-231,233-288,290-350,352-408,410-444,446-459,461-489,491-592,594-755,757-772,774-809,811-832
+  s_3742135ee19f96::t_24ac586056f978 490
+src/lib/query/reading.ts
+  s_3742135ee19f96::t_ea35c72fd7c863 1-164
+src/components/reading/BookShelf.tsx
+  s_3742135ee19f96::t_27af74eef15daf 1-84,86-114,116-143
+  s_3742135ee19f96::t_744a40a0446046 85,115
+src/lib/query/index.ts
+  s_3742135ee19f96::t_29a6613fa2cf5f 20
+src/components/reading/ReadingGoalCard.tsx
+  s_3742135ee19f96::t_1f8abe3f27265c 1-129,136-213
+  s_3742135ee19f96::t_744a40a0446046 130-135
+src/components/reading/ReadingView.tsx
+  s_3742135ee19f96::t_e633e5b93ee9c7 15
+  s_3742135ee19f96::t_97d7ac7061aee5 1-14,16-64,66-74,76-148,150-176,178-180
+  s_3742135ee19f96::t_744a40a0446046 65,75,149,177
+src/components/viewRootHeight.test.ts
+  s_3742135ee19f96::t_0478eb66a7dd50 33
+src/components/reading/BookDetailSheet.tsx
+  s_3742135ee19f96::t_744a40a0446046 169,279-284
+  s_3742135ee19f96::t_b38e73552dcfaf 1-168,170-278,285-385
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "af719435fabb92cbd3196b8c53162587e66bc220",
+  "prompts": {},
+  "sessions": {
+    "s_3742135ee19f96": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71490334-f104-4b52-b9ee-47d403205f41",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
