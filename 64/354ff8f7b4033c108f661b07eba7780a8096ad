@@ -1,0 +1,28 @@
+src-tauri/src/commands/bookkeeping/gmail.rs
+  s_3b52b39e0b3c52::t_96423c67d23099 231-248,250-267,269-272
+  s_3b52b39e0b3c52::t_318418cc1f3331 38-41,43,48-50
+src-tauri/src/commands/bookkeeping/mod.rs
+  s_3b52b39e0b3c52::t_5ba3302febeffe 1403-1478
+src/components/bookkeeping/cards/GmailSyncCard.tsx
+  s_3b52b39e0b3c52::t_1d4a384954c715 68
+  s_3b52b39e0b3c52::t_6586f9352f8c22 51,53-56
+docs/decisions.md
+  s_3b52b39e0b3c52::t_86a2b123992dd4 680-681
+  s_3b52b39e0b3c52::t_f01a2928c5b37d 679
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "64354ff8f7b4033c108f661b07eba7780a8096ad",
+  "prompts": {},
+  "sessions": {
+    "s_3b52b39e0b3c52": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2ffdb252-87df-473b-8a51-84b24fe2e47c",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
