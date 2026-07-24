@@ -533,6 +533,9 @@ impl AgentRunner for CodexRunner {
             .shutdown()
             .await
             .map_err(|e| AgentError::Failed(format!("codex stdin 종료 실패: {e}")))?;
+        // Windows 파이프는 shutdown()으로 write-end가 닫히지 않는다(드롭이 닫음). codex `-`는
+        // stdin EOF까지 읽으므로 명시적으로 닫지 않으면 자식이 영원히 대기한다(실 Windows 행 버그).
+        drop(stdin);
 
         let stdout = child
             .stdout
