@@ -1,0 +1,20 @@
+.github/workflows/windows-compat.yml
+  s_219d625bb32753::t_e9da20ffe4b072 12
+  s_219d625bb32753::t_c20d052a129bf8 57-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "712007034925a81a83fb343a4e60f5455e095a6e",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
