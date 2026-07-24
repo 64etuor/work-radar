@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<!--
+  Windows MSVC 테스트 바이너리용 앱 매니페스트 (build.rs가 test 타깃에만 임베드).
+  cargo test 실행 파일에는 tauri-build의 매니페스트가 붙지 않아 Common Controls v6
+  의존 선언이 없으면 STATUS_ENTRYPOINT_NOT_FOUND(0xc0000139)로 기동 실패한다.
+  참조: https://github.com/orgs/tauri-apps/discussions/11179
+-->
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+        type="win32"
+        name="Microsoft.Windows.Common-Controls"
+        version="6.0.0.0"
+        processorArchitecture="*"
+        publicKeyToken="6595b64144ccf1df"
+        language="*"
+      />
+    </dependentAssembly>
+  </dependency>
+</assembly>
