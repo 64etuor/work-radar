@@ -1,0 +1,21 @@
+src-tauri/build.rs
+  s_219d625bb32753::t_8147c6f78b7f9d 2-18
+src-tauri/windows-app-manifest.xml
+  s_219d625bb32753::t_0121f8db768405 1-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9ae1fbb427ccee636e8ccaa64523f60534be8e30",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
