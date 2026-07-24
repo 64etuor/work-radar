@@ -1,0 +1,26 @@
+src-tauri/src/skills/apply.rs
+  s_219d625bb32753::t_77271129336aba 130,137
+  s_219d625bb32753::t_2d44ae88654c2c 628-668
+  s_219d625bb32753::t_4e6a55f347b8f7 102-116
+  s_219d625bb32753::t_053018846948bc 82-88
+src-tauri/Cargo.toml
+  s_219d625bb32753::t_47795e2a478c40 106-107
+src-tauri/Cargo.lock
+  s_219d625bb32753::t_783fee7f3db199 2218-2227,6803
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0f5fac72f208d9c95940e018d646e85ce82c030c",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
