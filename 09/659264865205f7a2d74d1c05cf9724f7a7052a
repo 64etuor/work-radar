@@ -1,0 +1,21 @@
+docs/SETUP.md
+  s_219d625bb32753::t_fcd502a410dd63 120-132
+docs/decisions.md
+  s_219d625bb32753::t_3f8f6f80164521 682-683
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "09659264865205f7a2d74d1c05cf9724f7a7052a",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
