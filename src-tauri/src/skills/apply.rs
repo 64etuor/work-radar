@@ -82,6 +82,17 @@ fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
     std::os::windows::fs::symlink_dir(target, link)
 }
 
+/// 링크 제거(크로스플랫폼). unix 심링크는 파일로, Windows 디렉터리 심링크/junction은
+/// 디렉터리 reparse point라 `remove_dir`로 지운다(타깃 내용은 건드리지 않음).
+#[cfg(unix)]
+fn remove_link(link: &Path) -> std::io::Result<()> {
+    std::fs::remove_file(link)
+}
+#[cfg(windows)]
+fn remove_link(link: &Path) -> std::io::Result<()> {
+    std::fs::remove_dir(link)
+}
+
 /// `link`이 **우리가 만든 심링크**인지(= 심링크이고 타깃이 `expected_central_dir`) 판정.
 /// 끊긴 심링크도 raw read_link 비교로 인식하고, 양쪽이 실존하면 canonicalize로도 확인한다.
 /// 실제 dir·외부(foreign) 심링크·부재는 모두 false → 호출자가 거부/스킵한다(데이터 손실 가드).
@@ -173,7 +184,7 @@ pub(crate) async fn unapply_core(
             "대상이 우리가 만든 심링크가 아닙니다(제거하지 않음).".to_string(),
         ));
     }
-    std::fs::remove_file(&link)
+    remove_link(&link)
         .map_err(|e| AppError::terminal("skills.apply.unlink", format!("심링크 제거 실패: {e}")))?;
     audit(
         pool,
