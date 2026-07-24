@@ -116,7 +116,13 @@ pub(crate) fn executable_candidates(
                 .map(PathBuf::from)
                 .collect()
         } else {
-            std::env::split_paths(path_env).collect()
+            // 명시적 ':' split — std::env::split_paths는 **런타임 OS** 의미론이라
+            // Windows에서 유닉스 host 케이스를 테스트하면 ':'를 못 쪼갠다(순수성 누수).
+            path_env
+                .split(':')
+                .filter(|entry| !entry.is_empty())
+                .map(PathBuf::from)
+                .collect()
         };
         for directory in path_entries {
             for file_name in &file_names {

@@ -115,16 +115,21 @@ async fn user_roots_get_empty_then_roundtrips() {
         "미설정이면 빈 vec"
     );
 
-    // set(중복 포함) → dedup된 round-trip.
-    set_user_roots_core(
-        &db,
-        vec![root("/abs/one"), root("/abs/two"), root("/abs/one")],
-    )
-    .await
-    .unwrap();
+    // set(중복 포함) → dedup된 round-trip. 절대 경로는 temp_dir 기반으로 파생
+    // (Windows에선 "/abs/…"가 절대 경로가 아니라 validation에 걸린다).
+    let base = std::env::temp_dir();
+    let one = base.join("wr-roots-one").to_string_lossy().into_owned();
+    let two = base.join("wr-roots-two").to_string_lossy().into_owned();
+    set_user_roots_core(&db, vec![root(&one), root(&two), root(&one)])
+        .await
+        .unwrap();
     let got = read_user_skill_roots(&db).await.unwrap();
     let paths: Vec<_> = got.iter().map(|r| r.path.as_str()).collect();
-    assert_eq!(paths, vec!["/abs/one", "/abs/two"], "dedup된 round-trip");
+    assert_eq!(
+        paths,
+        vec![one.as_str(), two.as_str()],
+        "dedup된 round-trip"
+    );
 }
 
 /// set은 상대 경로를 거부한다(path-guard가 의미 있으려면 절대 필요).
