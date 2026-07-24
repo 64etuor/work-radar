@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use tauri::State;
@@ -288,18 +288,41 @@ pub async fn ntn_cli_status() -> Result<CliToolStatus, AppError> {
     })
 }
 
-/// ntn file-auth 위치에서 Notion 토큰을 읽는다(`~/.config/notion/api_key`). ntn은 비대화식
-/// 토큰 emit 서브커맨드가 없어 file-auth 경로를 import 메커니즘으로 쓴다(Phase 14 §14 결정).
-/// 토큰 본문은 여기서만 잠시 다뤄지고 호출부에서 즉시 keychain으로 간다.
-fn ntn_token_from_file() -> Option<String> {
-    let path = platform::home_dir()?.join(".config/notion/api_key");
-    let raw = std::fs::read_to_string(path).ok()?;
-    let token = raw.trim().to_string();
-    if token.is_empty() {
-        None
-    } else {
-        Some(token)
+/// ntn file-auth 후보 경로(우선순위 순). 1) XDG 스타일 `~/.config/notion/api_key`
+/// (전 플랫폼 — ntn 기본), 2) Windows에선 `%APPDATA%\notion\api_key`도 시도.
+/// 순수 함수로 분리해 전 호스트에서 테스트한다(env는 wrapper가 읽음).
+fn ntn_token_file_candidates(
+    home: Option<PathBuf>,
+    appdata: Option<std::ffi::OsString>,
+) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(home) = home {
+        out.push(home.join(".config").join("notion").join("api_key"));
     }
+    if let Some(appdata) = appdata {
+        out.push(PathBuf::from(appdata).join("notion").join("api_key"));
+    }
+    out
+}
+
+/// ntn file-auth 위치에서 Notion 토큰을 읽는다. ntn은 비대화식 토큰 emit 서브커맨드가
+/// 없어 file-auth 경로를 import 메커니즘으로 쓴다(Phase 14 §14 결정). 첫 번째로 읽히는
+/// 후보가 이긴다. 토큰 본문은 여기서만 잠시 다뤄지고 호출부에서 즉시 keychain으로 간다.
+fn ntn_token_from_file() -> Option<String> {
+    let appdata = if cfg!(windows) {
+        std::env::var_os("APPDATA")
+    } else {
+        None
+    };
+    for path in ntn_token_file_candidates(platform::home_dir(), appdata) {
+        if let Ok(raw) = std::fs::read_to_string(&path) {
+            let token = raw.trim().to_string();
+            if !token.is_empty() {
+                return Some(token);
+            }
+        }
+    }
+    None
 }
 
 /// ntn file-auth 토큰 → 라이브 검증(ping) → keychain(TokenKind::Notion). 토큰 본문은 절대
@@ -372,5 +395,29 @@ mod tests {
             resolve_cli_bin(name, &["/nonexistent/path/work-radar-missing-cli-for-test"]),
             name.to_string(),
         );
+    }
+
+    #[test]
+    fn ntn_candidates_xdg_first_then_appdata() {
+        let home = Some(PathBuf::from("/home/u"));
+        let appdata = Some(std::ffi::OsString::from("/appdata/Roaming"));
+        let got = ntn_token_file_candidates(home, appdata);
+        assert_eq!(
+            got[0],
+            PathBuf::from("/home/u")
+                .join(".config")
+                .join("notion")
+                .join("api_key")
+        );
+        assert!(got.contains(
+            &PathBuf::from("/appdata/Roaming")
+                .join("notion")
+                .join("api_key")
+        ));
+    }
+
+    #[test]
+    fn ntn_candidates_no_home_no_appdata_is_empty() {
+        assert!(ntn_token_file_candidates(None, None).is_empty());
     }
 }
