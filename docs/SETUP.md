@@ -117,3 +117,16 @@ Windows PowerShell에서도 같은 명령을 사용한다. Tauri 실행기는 No
 - Windows 검증은 `.github/workflows/windows-compat.yml`의 수동 `workflow_dispatch`로 수행한다.
 - `governance/`는 원저자의 별도 하네스(앱 실행에 불필요) — 분리 후보.
 - 전면 i18n·커스텀 RSS UI — `docs/plans/2026-07-10-generalization-plan.md` Non-goals 참조.
+
+## 8. Windows 실기기 스모크 체크리스트
+
+실물 Windows 11 머신에서 첫 부팅 시 아래를 순서대로 확인한다:
+
+1. `pnpm tauri dev` 부팅 — 창 표시, 트레이 아이콘, Ctrl+Space 전역 단축키.
+2. 키체인 왕복 — 설정에서 토큰 저장 후 재시작해도 유지(Windows Credential Manager,
+   `자격 증명 관리자`에서 `co.kr.mirrorless.workradar` 확인).
+3. 스킬 적용 — 개발자 모드 **꺼진** 상태에서 스킬 적용/해제(junction 폴백 검증,
+   `dir` 출력에 `<JUNCTION>` 표시).
+4. Codex 감지 — npm 전역 설치(`codex.cmd`)가 에이전트 설정에서 감지되는지.
+5. mmbak 임포트 — 파일 대화상자에서 `.mmbak` 선택 → 미리보기까지.
+6. cmux/Hermes/Boule 패널 — "지원되지 않음" 안내가 뜨고 앱이 정상 동작하는지.
