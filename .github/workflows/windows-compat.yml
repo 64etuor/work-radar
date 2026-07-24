@@ -42,7 +42,18 @@ jobs:
       - name: Verify Rust
         run: |
           cargo fmt --check --manifest-path src-tauri/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo clippy --all-targets --manifest-path src-tauri/Cargo.toml -- -D warnings
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo test --manifest-path src-tauri/Cargo.toml --no-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # 테스트 exe에는 tauri-build 매니페스트(rustc-link-arg-bins)가 안 붙어 comctl32 v6
+          # 미선언 → STATUS_ENTRYPOINT_NOT_FOUND. 외부 manifest(<exe>.manifest)로 보완한다
+          # (임베디드 매니페스트가 없을 때만 로더가 읽으므로 bin과 충돌 없음).
+          # 참조: https://github.com/orgs/tauri-apps/discussions/11179
+          Get-ChildItem src-tauri/target/debug/deps -Filter *.exe | ForEach-Object {
+            Copy-Item src-tauri/windows-app-manifest.xml "$($_.FullName).manifest"
+          }
           cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1
 
       - name: Build Windows app
