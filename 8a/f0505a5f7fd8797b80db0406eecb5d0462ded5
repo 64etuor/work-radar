@@ -1,0 +1,22 @@
+src-tauri/src/platform.rs
+  s_219d625bb32753::t_e2df3f56f6b4ea 119-125
+src-tauri/src/skills/tests/roots.rs
+  s_219d625bb32753::t_91a7f83fe4dd7c 118-125
+  s_219d625bb32753::t_82bb855f7db6fa 128-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8af0505a5f7fd8797b80db0406eecb5d0462ded5",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
