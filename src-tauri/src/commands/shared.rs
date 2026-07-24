@@ -16,6 +16,20 @@ pub(crate) mod test_support {
             .as_nanos();
         let seq = SEQ.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!("wr-cmd-test-{nanos}-{seq}.db"));
+        // 느린 CI 러너(예: windows-latest)에서 병렬 테스트가 몰리면 초기 풀 획득이
+        // acquire_timeout(5s, 프로덕션 fail-fast 계약)을 넘겨 PoolTimedOut 플레이크가 난다.
+        // 그 스파이크만 bounded retry(3회, 백오프)로 흡수 — 다른 에러는 즉시 실패.
+        let mut delay_ms = 500u64;
+        for _ in 0..2 {
+            match init_db(&path).await {
+                Ok(db) => return db,
+                Err(sqlx::Error::PoolTimedOut) => {
+                    tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+                    delay_ms *= 2;
+                }
+                Err(e) => panic!("init_db: {e:?}"),
+            }
+        }
         init_db(&path).await.expect("init_db")
     }
 
