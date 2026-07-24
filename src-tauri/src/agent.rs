@@ -674,7 +674,7 @@ mod tests {
             run_id: "windows-stdin".into(),
             prompt: "first line\nsecond line".into(),
             sandbox: Sandbox::ReadOnly,
-            rail: AgentRail::Proposal,
+            rail: AgentRail::Suggestion,
             repo_path: None,
             worktree_root: tmp.path().join("worktrees"),
             scratch_dir: tmp.path().join("scratch"),

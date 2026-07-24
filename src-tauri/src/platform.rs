@@ -33,8 +33,10 @@ pub(crate) const fn current_host() -> HostOs {
     }
 }
 
-pub(crate) const fn supports_integration(host: HostOs, _integration: OptionalIntegration) -> bool {
-    matches!(host, HostOs::Macos)
+pub(crate) fn supports_integration(host: HostOs, _integration: OptionalIntegration) -> bool {
+    // `==`(변형 생성)로 비교 — `matches!` 패턴은 생성으로 안 쳐서 Windows 빌드에서
+    // `Macos`가 dead_code로 걸린다(비교식은 파일 내 기존 스타일이기도 함).
+    host == HostOs::Macos
 }
 
 pub(crate) fn home_dir() -> Option<PathBuf> {
