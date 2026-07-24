@@ -1,0 +1,20 @@
+src-tauri/src/skills/apply.rs
+  s_219d625bb32753::t_e1cc97c2329ee0 85-95
+  s_219d625bb32753::t_9f5a09ae281425 187
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d226e6c7cb322dca0c26fab59dd1336bf489f9be",
+  "prompts": {},
+  "sessions": {
+    "s_219d625bb32753": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "83f02853-b889-4069-8f96-2551a19e1b54",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
