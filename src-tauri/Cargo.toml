@@ -103,6 +103,8 @@ keyring = { version = "3", features = ["apple-native"] }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 keyring = { version = "3", features = ["windows-native"] }
+# 스킬 적용 심링크의 무권한 폴백(NTFS junction) — skills/apply.rs 전용.
+junction = "1"
 
 [target.'cfg(not(any(target_os = "macos", target_os = "windows")))'.dependencies]
 keyring = "3"

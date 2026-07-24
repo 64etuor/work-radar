@@ -79,7 +79,13 @@ fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
 }
 #[cfg(windows)]
 fn make_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    std::os::windows::fs::symlink_dir(target, link)
+    // 1차: 진짜 디렉터리 심링크(개발자 모드/관리자면 성공). 권한 없음(1314)일 때만
+    // NTFS junction으로 폴백 — junction은 무권한 생성 가능한 디렉터리 reparse point로,
+    // read_link/symlink_metadata/canonicalize가 심링크와 동일하게 취급한다.
+    match std::os::windows::fs::symlink_dir(target, link) {
+        Err(e) if e.raw_os_error() == Some(1314) => junction::create(target, link),
+        other => other,
+    }
 }
 
 /// 링크 제거(크로스플랫폼). unix 심링크는 파일로, Windows 디렉터리 심링크/junction은
@@ -91,6 +97,21 @@ fn remove_link(link: &Path) -> std::io::Result<()> {
 #[cfg(windows)]
 fn remove_link(link: &Path) -> std::io::Result<()> {
     std::fs::remove_dir(link)
+}
+
+/// 비교용 경로 정규화 — Windows verbatim prefix(`\\?\`)만 벗긴다(그 외 항등).
+/// junction의 read_link/canonicalize 출력이 verbatim 경로라 raw 비교가 prefix만으로
+/// 어긋나는 것을 막는다(끊긴 링크 인식의 unix 패리티).
+#[cfg(windows)]
+fn normalize_for_compare(p: &Path) -> PathBuf {
+    match p.to_str() {
+        Some(s) => PathBuf::from(s.trim_start_matches(r"\\?\")),
+        None => p.to_path_buf(),
+    }
+}
+#[cfg(not(windows))]
+fn normalize_for_compare(p: &Path) -> PathBuf {
+    p.to_path_buf()
 }
 
 /// `link`이 **우리가 만든 심링크**인지(= 심링크이고 타깃이 `expected_central_dir`) 판정.
@@ -106,14 +127,14 @@ fn is_our_symlink(link: &Path, expected_central_dir: &Path) -> bool {
     let Ok(target) = std::fs::read_link(link) else {
         return false;
     };
-    if target == expected_central_dir {
+    if normalize_for_compare(&target) == normalize_for_compare(expected_central_dir) {
         return true; // raw 타깃 일치(끊긴 심링크 포함).
     }
     match (
         std::fs::canonicalize(link),
         std::fs::canonicalize(expected_central_dir),
     ) {
-        (Ok(a), Ok(b)) => a == b,
+        (Ok(a), Ok(b)) => normalize_for_compare(&a) == normalize_for_compare(&b),
         _ => false,
     }
 }
@@ -602,6 +623,47 @@ mod tests {
         assert_eq!(applied.len(), 1);
         assert_eq!(applied[0].name, "a/b skill"); // 표시 이름(frontmatter), not "a_b skill".
         assert_eq!(applied[0].external_path, ext.join(&seg).to_string_lossy()); // 링크는 sanitized.
+    }
+
+    /// Windows 전용: junction으로 만든 링크가 심링크와 동일하게 인식·제거되는지
+    /// (권한 없는 stock Windows에서 make_symlink가 폴백하는 형태를 직접 재현).
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn junction_link_is_recognized_and_unapplied() {
+        let pool = crate::commands::shared::test_support::fresh_db().await;
+        let (_t, central, ext, src) = scaffold("foo");
+        let link = ext.join("foo");
+        junction::create(&src, &link).expect("junction create needs no privilege");
+
+        // 인식: 우리 링크로 판정되고 멱등 재적용이 성공한다.
+        assert!(is_our_symlink(&link, &src));
+        let again = apply_core(&pool, &central, &ext, SkillProvider::Claude, "foo")
+            .await
+            .expect("idempotent over junction");
+        assert_eq!(again, link);
+
+        // 목록 유도에도 잡힌다.
+        let roots = vec![(SkillProvider::Claude, ext.clone())];
+        assert_eq!(list_applied_core(&central, &roots).len(), 1);
+
+        // 제거: unapply가 junction을 지우되 중앙 타깃 내용은 무손상.
+        unapply_core(&pool, &central, &ext, SkillProvider::Claude, "foo")
+            .await
+            .expect("unapply junction");
+        assert!(std::fs::symlink_metadata(&link).is_err());
+        assert!(src.join("SKILL.md").is_file(), "중앙 라이브러리 무손상");
+    }
+
+    /// Windows 전용: 끊긴 junction(타깃 삭제 후)도 raw 비교로 우리 것으로 인식된다
+    /// (unix 끊긴 심링크 패리티 — 아니면 uninstall이 영구 거부돼 잔해가 남는다).
+    #[cfg(windows)]
+    #[test]
+    fn broken_junction_still_recognized_as_ours() {
+        let (_t, _central, ext, src) = scaffold("foo");
+        let link = ext.join("foo");
+        junction::create(&src, &link).unwrap();
+        std::fs::remove_dir_all(&src).unwrap(); // 타깃 삭제 → 끊긴 링크.
+        assert!(is_our_symlink(&link, &src));
     }
 
     // ---- G2-PR2 batch cores ----
