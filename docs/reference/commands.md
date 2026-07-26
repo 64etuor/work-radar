@@ -32,6 +32,20 @@ Tauri CLI는 `pnpm tauri` 래퍼로 실행한다 (`package.json` `"tauri": "taur
 
 ---
 
+## Governance (Boule)
+
+`governance/`는 독립 TypeScript/Vitest 패키지다. 해당 디렉터리에서 실행한다.
+
+| 명령                     | 설명                          |
+| ------------------------ | ----------------------------- |
+| `pnpm exec tsc --noEmit` | 거버넌스 TypeScript 타입 검사 |
+| `pnpm exec vitest run`   | 거버넌스 Vitest 전체 테스트   |
+
+오케스트레이션 스크립트 변경 시에는 대상 스크립트 테스트를 우선 실행한다.
+전체 gate가 필요한 경우 `scripts/orchestration/gate.sh`를 사용한다.
+
+---
+
 ## Rust
 
 **Cargo manifest 위치: `src-tauri/Cargo.toml`**
