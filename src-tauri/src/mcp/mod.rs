@@ -49,6 +49,7 @@ pub use tools::queue::*;
 pub use tools::reading::*;
 pub use tools::signals::*;
 pub use tools::today::*;
+pub use tools::workout::*;
 
 /// MCP 서버 상태 — 앱과 동일한 SQLite 풀을 보유(별도 DB 아님).
 #[derive(Clone)]
@@ -75,6 +76,7 @@ impl WrServer {
             + Self::tool_router_signals()
             + Self::tool_router_okr()
             + Self::tool_router_today()
+            + Self::tool_router_workout()
     }
 }
 

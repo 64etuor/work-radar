@@ -548,8 +548,132 @@
 }
 
 .diet-dialog .diet-draftline-ingredient {
-  grid-template-columns: 1.4fr 0.6fr auto auto;
+  /* 식품 · g · 표기수량 · 단위 · 간 · 선택 · 삭제 */
+  grid-template-columns: 1.3fr 0.5fr 0.4fr 0.6fr auto auto auto;
   align-items: center;
+}
+
+.diet-dialog .diet-draftline-step {
+  /* 번호 · 본문 · 분 · 메모 · 액션 */
+  grid-template-columns: auto 1.8fr 0.4fr 1fr auto;
+  align-items: start;
+}
+
+.diet-dialog .diet-step-no {
+  min-width: 1.25rem;
+  padding-top: 8px;
+  color: var(--color-wr-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.diet-dialog .diet-step-minutes {
+  width: 100%;
+}
+
+.diet-dialog .diet-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.diet-dialog .diet-unit-select {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-surface);
+  color: var(--color-wr-text);
+}
+
+.diet-dialog .diet-hint {
+  color: var(--color-wr-text-muted);
+}
+
+/* 반복 튜닝 패널 — 폼 저장과 독립된 즉시 액션 묶음이므로 시각적으로 분리한다. */
+.diet-dialog .diet-tuning {
+  display: grid;
+  gap: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.diet-dialog .diet-tuning-block {
+  display: grid;
+  gap: 6px;
+}
+
+.diet-dialog .diet-tuning-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.diet-dialog .diet-tuning-servings {
+  width: 72px;
+}
+
+.diet-dialog .diet-tuning-axes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 6px;
+}
+
+.diet-dialog .diet-axis {
+  display: grid;
+  gap: 2px;
+}
+
+.diet-dialog .diet-revisions {
+  display: grid;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.diet-dialog .diet-revision {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+}
+
+.diet-dialog .diet-revision > span {
+  color: var(--color-wr-text-muted);
+}
+
+.diet .diet-suggestions {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 8px;
+}
+
+.diet .diet-suggestion-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.diet .diet-suggestion-card {
+  display: grid;
+  gap: 2px;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+  text-align: left;
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.diet .diet-suggestion-card:hover {
+  border-color: var(--color-wr-border);
+}
+
+.diet .diet-suggestion-missing {
+  color: var(--color-wr-text-muted);
 }
 
 .diet-dialog .diet-alias-editor {

@@ -22,6 +22,7 @@ mod skills;
 mod timeline_note;
 mod today;
 mod tokens;
+mod workout;
 mod worktree;
 
 pub use agent::*;
@@ -44,4 +45,5 @@ pub use skills::*;
 pub use timeline_note::*;
 pub use today::*;
 pub use tokens::*;
+pub use workout::*;
 pub use worktree::*;

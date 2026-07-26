@@ -31,6 +31,9 @@ const VIEW_ROOTS: Array<{ file: string; selector: string }> = [
   { file: "SkillsView.css", selector: ".skl" },
   { file: "bookkeeping/BookkeepingView.css", selector: ".bk-view" },
   { file: "reading/ReadingView.css", selector: ".rd" },
+  // `.wk`는 WeeklyView가 이미 쓰므로 운동 뷰는 `.wo` — 루트 클래스를 공유하면 두 뷰의
+  // 스코프 규칙(`.wk .wk-head` 등)이 서로 새어든다.
+  { file: "workout/WorkoutView.css", selector: ".wo" },
   { file: "control-room/ControlRoomView.css", selector: ".cr-view" },
 ];
 

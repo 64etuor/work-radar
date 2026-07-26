@@ -117,6 +117,16 @@ SQLite(외부 mutate 0), 영양은 커널 스냅샷(과거 재작성 불가), �
 UI confirm 전용), 세션은 진행을 전진만 시킨다. 카탈로그 검색은 고정 provider read-only
 아웃바운드 — 정본: `docs/adr/0013-reading-domain-catalog-providers.md` + `mcp/tools/reading.rs` 모듈 doc.
 
+**도메인 단위 위임 예외 — workout(2026-07-26).** 사용자 발주("추가 아이디어가 있다면(식단 관리
+및 운동) 제안해서 작업해봐" + 풀스택 선택)로 운동 도메인의 **실적 기록**(세션·세트·종목
+라이브러리·체성분·신체 프로필)을 에이전트에 위임했다. 전 write가 로컬 SQLite(외부 mutate 0)이고
+전부 관측 사실이다(했다/이만큼 들었다/체중이 이렇다). **표면에 없는 것이 경계다:** ① 계획/스케줄
+툴 없음 — "무엇을 언제 할 것인가"는 `routines`가 소유하며 여기에 계획을 열면 같은 운동을 두 곳에서
+트래킹한다. ② `diet_goals` mutate 능력 없음 — 활동량이 칼로리 목표를 자동으로 바꾸지 않는다
+(파생 판단값 자동 설정 = INVARIANT #1 위반). 연동은 `wr_workout_energy_balance` read-only 파생뿐.
+③ 세션 삭제 없음(앱 UI confirm 전용). 정본: `src-tauri/src/mcp/tools/workout.rs` 모듈 doc +
+`docs/plans/2026-07-26-recipe-authoring-workout.md` §8.
+
 **도메인 단위 위임 예외 — finance/bookkeeping(2026-07-22).** 사용자가 Hermes의 삭제 전 확인
 흐름을 전제로 가계부 도메인 전권을 명시적으로 위임했다. 에이전트는 거래 생성·수정, 리뷰 상태
 결정, 세부항목 교체, 휴지통 이동·복원, 예산 설정·해제, 반복 지출 규칙 생성과 발생분 상태·전표

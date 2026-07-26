@@ -9,6 +9,7 @@ export type View =
   | "bookkeeping"
   | "diet"
   | "reading"
+  | "workout"
   | "routines"
   | "settings"
   | "radar"

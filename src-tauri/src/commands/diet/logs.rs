@@ -14,7 +14,8 @@ use crate::diet;
 use crate::error::AppError;
 use crate::models::{DailyNutrition, DietMacros, MealLog, RecordMealLogInput};
 
-const LOG_COLS: &str = "id, date, at, planned_meal_id, recipe_id, food_id, description, servings, \
+pub(crate) const LOG_COLS: &str =
+    "id, date, at, planned_meal_id, recipe_id, food_id, description, servings, \
      qty_g, kcal, protein_g, fat_g, carb_g, satisfaction, fullness, note, created_at";
 
 /// 스냅샷 매크로 검증 — 수동 입력도 커널 계산값과 같은 안전 조건(유한·비음수)을 지킨다.

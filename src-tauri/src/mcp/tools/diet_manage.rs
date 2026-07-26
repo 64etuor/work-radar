@@ -19,11 +19,13 @@ use serde::{Deserialize, Serialize};
 use crate::commands::diet as diet_commands;
 use crate::mcp::{enum_wire_string, mcp_tool_error, parse_iso_date, truncate_preview, WrServer};
 use crate::models::{
-    AddPantryLotInput, AddPlannedMealInput, AddPlannedMealItemInput, CreateMealPlanInput,
-    CreateRecipeInput, FoodType, GroceryOrderLineInput, GroceryOrderStatus, MealPlanStatus,
-    MealType, PantryEventKind, PantryLocation, PlannedMealStatus, ReceiveOrderLineInput,
-    RecipeIngredientInput, RecordGroceryOrderInput, SetDietGoalInput, UpdateRecipeInput,
-    UpsertFoodInput,
+    AddPantryLotInput, AddPlannedMealInput, AddPlannedMealItemInput, AddRecipeFeedbackInput,
+    CookRecipeInput, CreateMealPlanInput, CreateRecipeInput, FoodType, GroceryOrderLineInput,
+    GroceryOrderStatus, MealPlanStatus, MealType, PantryEventKind, PantryLocation,
+    PatchRecipeInput, PlannedMealStatus, ReceiveOrderLineInput, RecipeClearableField, RecipeEditor,
+    RecipeIngredientInput, RecipeStepInput, RecordGroceryOrderInput, SetDietGoalInput,
+    SetRecipeIngredientInput, SetRecipeStepInput, UpdateRecipeInput, UpsertFoodInput,
+    UpsertUnitConversionInput,
 };
 
 const NOTE_MAX_CHARS: usize = 500;
@@ -31,6 +33,7 @@ const NAME_MAX_CHARS: usize = 120;
 const INSTRUCTIONS_MAX_CHARS: usize = 4000;
 const MAX_TAGS: usize = 8;
 const MAX_INGREDIENTS: usize = 50;
+const MAX_STEPS: usize = 40;
 const MAX_ORDER_LINES: usize = 50;
 const TEXT_PREVIEW_CHARS: usize = 200;
 const LIST_LIMIT: usize = 50;
@@ -322,9 +325,30 @@ pub struct DietUpsertFoodParams {
 #[serde(deny_unknown_fields)]
 pub struct DietIngredientParam {
     pub food_id: String,
-    pub qty_g: f64,
+    /// g 직접 지정. 있으면 이 값이 이긴다. 없으면 `qty`+`unit`을 g으로 환산한다.
+    pub qty_g: Option<f64>,
+    /// 표기 수량(예: 1.5). `unit`과 반드시 함께.
+    pub qty: Option<f64>,
+    /// 표기 단위('tbsp','tsp','clove','pinch','ea' …). 환산이 등록돼 있어야 한다 —
+    /// 없으면 오류이며 `wr_diet_upsert_unit_conversion`으로 먼저 등록한다.
+    pub unit: Option<String>,
+    /// "간 맞춰서" 표기 플래그(생략 시 false). 영양 계산은 여전히 g 값을 쓴다.
+    pub to_taste: Option<bool>,
     /// 선택 재료 여부(생략 시 false).
     pub optional: Option<bool>,
+    /// 짧은 메모(≤500자, 선택).
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietStepParam {
+    /// 단계 본문(≤4000자).
+    pub body: String,
+    /// 이 단계에 걸리는 시간 분(선택, > 0).
+    pub duration_minutes: Option<u32>,
+    /// 단계별 튜닝 메모(≤500자, 선택).
+    pub note: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -338,23 +362,227 @@ pub struct DietCreateRecipeParams {
     pub cook_minutes: Option<u32>,
     /// 태그(최대 8개).
     pub meal_tags: Option<Vec<String>>,
-    /// 조리법(≤4000자, 선택).
-    pub instructions: Option<String>,
+    /// 출처 URL(선택).
+    pub source_url: Option<String>,
+    /// 완성 총량 g(선택).
+    pub yield_g: Option<f64>,
+    /// 단계에 붙지 않는 총평 메모(≤4000자, 선택).
+    pub notes: Option<String>,
     /// 재료 목록(최대 50개).
     pub ingredients: Vec<DietIngredientParam>,
+    /// 조리 단계(순서대로, 최대 40개). 생략 가능 — 나중에 단계별로 채울 수 있다.
+    pub steps: Option<Vec<DietStepParam>>,
 }
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct DietUpdateRecipeParams {
     pub id: String,
+    /// 낙관적 동시성 토큰 — **필수**. `wr_diet_get_recipe`로 읽은 `revNo`를 그대로 넘겨라.
+    /// 이 툴은 재료·단계를 전부 덮어쓰므로, 그 사이 누군가(앱 UI 포함) 고쳤으면 거부된다.
+    pub expected_rev_no: i32,
     pub name: String,
     pub servings: f64,
     pub cook_minutes: Option<u32>,
     pub meal_tags: Option<Vec<String>>,
-    pub instructions: Option<String>,
+    pub source_url: Option<String>,
+    pub yield_g: Option<f64>,
+    pub notes: Option<String>,
     /// 전체 교체(replace-all) — 과거 계획/기록은 스냅샷이라 불변.
     pub ingredients: Vec<DietIngredientParam>,
+    pub steps: Option<Vec<DietStepParam>>,
+    /// 무엇을 왜 바꿨는지(≤500자). 리비전 이력에 남는다.
+    pub change_summary: Option<String>,
+}
+
+// ── patch 계열 파라미터 ──────────────────────────────────────────
+// 반복 튜닝은 전체 교체가 아니라 아래 patch 툴로 한다 — replace-all은 전문을 재전송하므로
+// 그 사이의 앱 UI 편집을 덮어쓴다.
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietPatchRecipeParams {
+    pub id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 준 필드만 바뀐다. 재료·단계는 건드리지 않는다(전용 툴 사용).
+    pub name: Option<String>,
+    pub servings: Option<f64>,
+    pub cook_minutes: Option<u32>,
+    pub meal_tags: Option<Vec<String>>,
+    pub source_url: Option<String>,
+    pub yield_g: Option<f64>,
+    pub notes: Option<String>,
+    /// 비울 필드 목록('cook_minutes','source_url','yield_g','notes'). 같은 필드를 값과
+    /// clear로 동시에 주면 오류.
+    pub clear: Option<Vec<DietClearableFieldParam>>,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema, Clone, Copy)]
+#[serde(rename_all = "snake_case")]
+pub enum DietClearableFieldParam {
+    CookMinutes,
+    SourceUrl,
+    YieldG,
+    Notes,
+}
+
+impl From<DietClearableFieldParam> for RecipeClearableField {
+    fn from(v: DietClearableFieldParam) -> Self {
+        match v {
+            DietClearableFieldParam::CookMinutes => RecipeClearableField::CookMinutes,
+            DietClearableFieldParam::SourceUrl => RecipeClearableField::SourceUrl,
+            DietClearableFieldParam::YieldG => RecipeClearableField::YieldG,
+            DietClearableFieldParam::Notes => RecipeClearableField::Notes,
+        }
+    }
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietSetRecipeIngredientParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 기존 재료 행 id(= `wr_diet_get_recipe`의 `ingredients[].id`). 생략하면 추가.
+    pub id: Option<String>,
+    pub ingredient: DietIngredientParam,
+    /// 추가 위치: 생략=맨 끝, 0=맨 앞, n=n번째 재료 뒤.
+    pub after_index: Option<i32>,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRemoveRecipeIngredientParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    pub ingredient_id: String,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietSetRecipeStepParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 1-based 단계 번호를 주면 **그 단계를 교체**한다. 생략하면 삽입.
+    pub step_no: Option<i32>,
+    /// 삽입 위치: 생략=맨 끝, 0=맨 앞, n=n번째 단계 뒤.
+    pub after_step_no: Option<i32>,
+    pub step: DietStepParam,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRemoveRecipeStepParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 1-based 단계 번호.
+    pub step_no: i32,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietReorderRecipeStepsParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 현재 1-based 단계 번호의 **완전 순열**(모든 단계를 정확히 한 번). 부분 목록은 오류.
+    pub order: Vec<i32>,
+    pub change_summary: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRecipeIdParams {
+    pub recipe_id: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRevertRecipeParams {
+    pub recipe_id: String,
+    pub expected_rev_no: Option<i32>,
+    /// 되돌릴 대상 리비전 번호. 이력을 재작성하지 않고 **새 리비전으로 재적용**된다.
+    pub rev_no: i32,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRecipeRevisionParams {
+    pub recipe_id: String,
+    pub rev_no: i32,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietScaleRecipeParams {
+    pub recipe_id: String,
+    /// 목표 인분(생략 = 레시피 기준 인분).
+    pub target_servings: Option<f64>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietRecipeFeedbackParams {
+    pub recipe_id: String,
+    /// 어느 리비전을 먹은 평가인지(생략 = 현재 리비전).
+    pub rev_no: Option<i32>,
+    /// 연결할 섭취 기록 id(선택).
+    pub meal_log_id: Option<String>,
+    /// 전체 만족도 1..5(선택).
+    pub rating: Option<i32>,
+    /// 축별 −2..+2. **부호 규약: +는 "그 방향이 과했다"**(salt=+2는 너무 짰다),
+    /// −는 "부족했다". 다음 튜닝의 근거로 집계된다.
+    pub salt_delta: Option<i32>,
+    pub spice_delta: Option<i32>,
+    pub sweet_delta: Option<i32>,
+    pub sour_delta: Option<i32>,
+    pub richness_delta: Option<i32>,
+    pub doneness_delta: Option<i32>,
+    /// 자유 코멘트(≤500자).
+    pub comment: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietSuggestionParams {
+    /// 오늘 날짜 YYYY-MM-DD(호출자 주입 — 유통기한 긴급도의 기준).
+    pub today: String,
+    /// 최대 개수(기본 10, 상한 50).
+    pub limit: Option<i32>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietCookRecipeParams {
+    pub recipe_id: String,
+    /// 만든 인분(생략 = 1). 레시피 기준 인분과 다르면 재료가 비례 스케일된다.
+    pub servings: Option<f64>,
+    /// 로컬 날짜 YYYY-MM-DD.
+    pub date: String,
+    /// 섭취 시각 RFC3339(생략 = 지금).
+    pub at: Option<String>,
+    /// 계획 식사 id — 주면 그 식사를 eaten으로 전이한다.
+    pub planned_meal_id: Option<String>,
+    /// 기본 true. false면 재고를 건드리지 않고 기록만.
+    pub consume_pantry: Option<bool>,
+    pub satisfaction: Option<i32>,
+    pub fullness: Option<i32>,
+    pub note: Option<String>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct DietUpsertUnitConversionParams {
+    /// 단위 이름('tbsp','clove' …). 소문자로 정규화된다.
+    pub unit: String,
+    /// 이 식품에만 적용할 환산(생략 = 전역 기본). 식품 전용이 전역을 이긴다.
+    pub food_id: Option<String>,
+    /// 1단위 = 몇 g인가(> 0).
+    pub grams_per_unit: f64,
+    pub note: Option<String>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -552,6 +780,180 @@ pub struct DietRecipeSummaryDto {
 pub struct DietRecipeListDto {
     pub recipes: Vec<DietRecipeSummaryDto>,
     pub truncated: bool,
+}
+
+// ── 레시피 저작 read DTO ─────────────────────────────────────────
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeIngredientDto {
+    /// patch 툴의 `id`로 그대로 넘길 수 있는 재료 행 id.
+    pub id: String,
+    pub food_id: String,
+    pub food_name: String,
+    pub qty_g: f64,
+    /// 표기(예: "1.5 tbsp") — 단위 표기가 있는 재료만.
+    pub display: Option<String>,
+    pub to_taste: bool,
+    pub optional: bool,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeStepDto {
+    /// 1-based 번호. patch 툴의 `step_no`로 그대로 넘긴다.
+    pub step_no: i32,
+    pub body: String,
+    pub duration_minutes: Option<i32>,
+    pub note: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietTasteHintDto {
+    /// 'salt' | 'spice' | 'sweet' | 'sour' | 'richness' | 'doneness'
+    pub axis: String,
+    /// 'reduce'(과했다) | 'increase'(부족했다)
+    pub direction: String,
+    pub magnitude: f64,
+    pub samples: i32,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeDetailDto {
+    pub id: String,
+    /// **patch 툴에 `expected_rev_no`로 그대로 넘겨라** — 동시 편집 덮어쓰기를 막는다.
+    pub rev_no: i32,
+    pub name: String,
+    pub servings: f64,
+    pub cook_minutes: Option<i32>,
+    pub meal_tags: Vec<String>,
+    pub source_url: Option<String>,
+    pub yield_g: Option<f64>,
+    pub notes: Option<String>,
+    pub archived: bool,
+    pub ingredients: Vec<DietRecipeIngredientDto>,
+    pub steps: Vec<DietRecipeStepDto>,
+    pub total_kcal: f64,
+    pub per_serving_kcal: f64,
+    pub per_serving_protein_g: f64,
+    /// 최근 피드백 수.
+    pub feedback_count: i32,
+    pub avg_rating: Option<f64>,
+    /// 다음 튜닝 제안(자동 적용되지 않는다 — 바꾸려면 patch 툴을 호출해야 한다).
+    pub taste_hints: Vec<DietTasteHintDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeRevisionDto {
+    pub rev_no: i32,
+    pub change_summary: Option<String>,
+    /// 'user' | 'agent'
+    pub changed_by: String,
+    pub created_at: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeRevisionListDto {
+    pub recipe_id: String,
+    pub current_rev_no: i32,
+    pub revisions: Vec<DietRecipeRevisionDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeDiffEntryDto {
+    /// 'meta_changed' | 'ingredient_added' | 'ingredient_removed' | 'ingredient_changed'
+    /// | 'step_added' | 'step_removed' | 'step_changed'
+    pub kind: String,
+    pub label: String,
+    pub before: Option<String>,
+    pub after: Option<String>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietRecipeRevisionDetailDto {
+    pub revision: DietRecipeRevisionDto,
+    /// 직전 리비전과의 차이(최초 리비전이면 빈 목록).
+    pub diff_from_previous: Vec<DietRecipeDiffEntryDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietScaledIngredientDto {
+    pub food_id: String,
+    pub food_name: String,
+    pub qty_g: f64,
+    pub display: Option<String>,
+    pub available_g: f64,
+    /// 부족분 g(0 = 재고 충분).
+    pub shortfall_g: f64,
+    pub optional: bool,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietScaledRecipeDto {
+    pub recipe_id: String,
+    pub name: String,
+    pub base_servings: f64,
+    pub target_servings: f64,
+    pub factor: f64,
+    pub ingredients: Vec<DietScaledIngredientDto>,
+    pub total_kcal: f64,
+    pub per_serving_kcal: f64,
+    /// 재고 커버리지 0..100.
+    pub coverage_pct: f64,
+    pub missing_count: i32,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietTasteSummaryDto {
+    pub recipe_id: String,
+    pub sample_count: i32,
+    pub avg_rating: Option<f64>,
+    pub taste_hints: Vec<DietTasteHintDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietUnitConversionDto {
+    pub unit: String,
+    /// None = 전역 기본(폴백). 값이 있으면 그 식품 전용(전역을 이긴다).
+    pub food_id: Option<String>,
+    pub food_name: Option<String>,
+    pub grams_per_unit: f64,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietUnitConversionListDto {
+    pub conversions: Vec<DietUnitConversionDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietSuggestionDto {
+    pub recipe_id: String,
+    pub name: String,
+    pub servings: f64,
+    pub per_serving_kcal: f64,
+    /// 재고 커버리지 0..100.
+    pub coverage_pct: f64,
+    /// 유통기한 임박 재고를 얼마나 소진하는가 0..100.
+    pub expiry_pressure_pct: f64,
+    pub earliest_expiry: Option<String>,
+    pub missing: Vec<String>,
+    /// 결정론 종합 점수 0..100(커버리지 0.5 + 임박 0.3 + 목표적합 0.2).
+    pub score: f64,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietSuggestionListDto {
+    pub suggestions: Vec<DietSuggestionDto>,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DietCookResultDto {
+    pub meal_log_id: String,
+    pub kcal: f64,
+    pub protein_g: f64,
+    /// 실제 차감된 총량 g.
+    pub consumed_g: f64,
+    pub lots_touched: i32,
+    pub pantry_consumed: bool,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -1042,13 +1444,20 @@ impl WrServer {
         p: DietCreateRecipeParams,
     ) -> Result<Json<DietIdResultDto>, rmcp::ErrorData> {
         validate_tags(p.meal_tags.as_ref())?;
+        cap_chars(Some(&p.name), NAME_MAX_CHARS, "name")?;
+        cap_chars(p.notes.as_deref(), INSTRUCTIONS_MAX_CHARS, "notes")?;
+        cap_chars(p.source_url.as_deref(), 500, "source_url")?;
         let input = CreateRecipeInput {
             name: p.name.clone(),
             servings: p.servings,
             cook_minutes: p.cook_minutes.map(|v| v.min(i32::MAX as u32) as i32),
             meal_tags: p.meal_tags.unwrap_or_default(),
-            instructions: p.instructions.clone(),
-            ingredients: validated_ingredients(&p.name, p.instructions.as_deref(), &p.ingredients)?,
+            source_url: p.source_url,
+            yield_g: p.yield_g,
+            notes: p.notes,
+            ingredients: validated_ingredients(&p.ingredients)?,
+            steps: validated_steps(p.steps.as_deref())?,
+            changed_by: Some(RecipeEditor::Agent),
         };
         let recipe = diet_commands::create_recipe_inner(&self.db, input)
             .await
@@ -1058,7 +1467,7 @@ impl WrServer {
 
     #[tool(
         name = "wr_diet_update_recipe",
-        description = "Update a recipe (ingredients replace-all). Past plan/log snapshots stay immutable."
+        description = "Replace a recipe wholesale (ingredients and steps replace-all). Prefer wr_diet_patch_recipe / wr_diet_set_recipe_step / wr_diet_set_recipe_ingredient for iterative taste tuning — replace-all overwrites concurrent edits. Pass expected_rev_no from wr_diet_get_recipe. Past plan/log snapshots stay immutable."
     )]
     pub async fn diet_update_recipe(
         &self,
@@ -1072,19 +1481,649 @@ impl WrServer {
         p: DietUpdateRecipeParams,
     ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
         validate_tags(p.meal_tags.as_ref())?;
+        cap_chars(Some(&p.name), NAME_MAX_CHARS, "name")?;
+        cap_chars(p.notes.as_deref(), INSTRUCTIONS_MAX_CHARS, "notes")?;
+        cap_chars(p.source_url.as_deref(), 500, "source_url")?;
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
         let input = UpdateRecipeInput {
             id: p.id,
+            expected_rev_no: p.expected_rev_no,
             name: p.name.clone(),
             servings: p.servings,
             cook_minutes: p.cook_minutes.map(|v| v.min(i32::MAX as u32) as i32),
             meal_tags: p.meal_tags.unwrap_or_default(),
-            instructions: p.instructions.clone(),
-            ingredients: validated_ingredients(&p.name, p.instructions.as_deref(), &p.ingredients)?,
+            source_url: p.source_url,
+            yield_g: p.yield_g,
+            notes: p.notes,
+            ingredients: validated_ingredients(&p.ingredients)?,
+            steps: validated_steps(p.steps.as_deref())?,
+            change_summary: p.change_summary,
+            changed_by: Some(RecipeEditor::Agent),
         };
         diet_commands::update_recipe_inner(&self.db, input)
             .await
             .map_err(|e| mcp_tool_error("wr_diet_update_recipe", &e))?;
         Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    // ── 레시피 반복 튜닝(patch 계열) ─────────────────────────────
+    // 전체 교체 대신 재료 1개·단계 1개 단위로 고친다. 모든 mutate는 리비전을 append하므로
+    // 되돌릴 수 있고 무엇이 왜 바뀌었는지 남는다.
+
+    #[tool(
+        name = "wr_diet_get_recipe",
+        description = "Full recipe for editing: ingredient row ids, 1-based step numbers, current revNo (pass it back as expected_rev_no), and aggregated taste feedback with tuning hints. Read-only."
+    )]
+    pub async fn diet_get_recipe(
+        &self,
+        Parameters(p): Parameters<DietRecipeIdParams>,
+    ) -> Result<Json<DietRecipeDetailDto>, rmcp::ErrorData> {
+        self.diet_get_recipe_inner(p).await
+    }
+
+    pub(crate) async fn diet_get_recipe_inner(
+        &self,
+        p: DietRecipeIdParams,
+    ) -> Result<Json<DietRecipeDetailDto>, rmcp::ErrorData> {
+        let recipe = diet_commands::fetch_recipe(&self.db, &p.recipe_id)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_get_recipe", &e))?;
+        let taste = diet_commands::recipe_taste_summary_inner(&self.db, &p.recipe_id, None)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_get_recipe", &e))?;
+        Ok(Json(DietRecipeDetailDto {
+            id: recipe.id,
+            rev_no: recipe.rev_no,
+            name: truncate_preview(&recipe.name, NAME_MAX_CHARS),
+            servings: recipe.servings,
+            cook_minutes: recipe.cook_minutes,
+            meal_tags: recipe.meal_tags,
+            source_url: recipe.source_url,
+            yield_g: recipe.yield_g,
+            notes: recipe
+                .notes
+                .map(|n| truncate_preview(&n, INSTRUCTIONS_MAX_CHARS)),
+            archived: recipe.archived,
+            ingredients: recipe
+                .ingredients
+                .iter()
+                .map(|i| DietRecipeIngredientDto {
+                    id: i.id.clone(),
+                    food_id: i.food_id.clone(),
+                    food_name: truncate_preview(&i.food_name, NAME_MAX_CHARS),
+                    qty_g: i.qty_g,
+                    display: unit_display(i.qty, i.unit.as_deref()),
+                    to_taste: i.to_taste,
+                    optional: i.optional,
+                    note: i.note.clone(),
+                })
+                .collect(),
+            steps: recipe
+                .steps
+                .iter()
+                .map(|s| DietRecipeStepDto {
+                    step_no: s.step_no,
+                    body: truncate_preview(&s.body, INSTRUCTIONS_MAX_CHARS),
+                    duration_minutes: s.duration_minutes,
+                    note: s.note.clone(),
+                })
+                .collect(),
+            total_kcal: recipe.total.kcal,
+            per_serving_kcal: recipe.per_serving.kcal,
+            per_serving_protein_g: recipe.per_serving.protein_g,
+            feedback_count: taste.sample_count,
+            avg_rating: taste.avg_rating,
+            taste_hints: taste.hints.iter().map(taste_hint_dto).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_patch_recipe",
+        description = "Change only the recipe metadata fields you pass (name, servings, cookMinutes, mealTags, sourceUrl, yieldG, notes). Ingredients and steps are untouched. Pass expected_rev_no from wr_diet_get_recipe; use `clear` to null a nullable field."
+    )]
+    pub async fn diet_patch_recipe(
+        &self,
+        Parameters(p): Parameters<DietPatchRecipeParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_patch_recipe_inner(p).await
+    }
+
+    pub(crate) async fn diet_patch_recipe_inner(
+        &self,
+        p: DietPatchRecipeParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        validate_tags(p.meal_tags.as_ref())?;
+        cap_chars(p.name.as_deref(), NAME_MAX_CHARS, "name")?;
+        cap_chars(p.notes.as_deref(), INSTRUCTIONS_MAX_CHARS, "notes")?;
+        cap_chars(p.source_url.as_deref(), 500, "source_url")?;
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        diet_commands::patch_recipe_inner(
+            &self.db,
+            PatchRecipeInput {
+                id: p.id,
+                expected_rev_no: p.expected_rev_no,
+                name: p.name,
+                servings: p.servings,
+                cook_minutes: p.cook_minutes.map(|v| v.min(i32::MAX as u32) as i32),
+                meal_tags: p.meal_tags,
+                source_url: p.source_url,
+                yield_g: p.yield_g,
+                notes: p.notes,
+                clear: p
+                    .clear
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(RecipeClearableField::from)
+                    .collect(),
+                change_summary: p.change_summary,
+                changed_by: Some(RecipeEditor::Agent),
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_patch_recipe", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_set_recipe_ingredient",
+        description = "Add or replace ONE ingredient. Give `id` (from wr_diet_get_recipe) to replace that row, omit it to add. Quantity is grams via qty_g, or qty+unit which is converted deterministically (register unknown units with wr_diet_upsert_unit_conversion first)."
+    )]
+    pub async fn diet_set_recipe_ingredient(
+        &self,
+        Parameters(p): Parameters<DietSetRecipeIngredientParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_set_recipe_ingredient_inner(p).await
+    }
+
+    pub(crate) async fn diet_set_recipe_ingredient_inner(
+        &self,
+        p: DietSetRecipeIngredientParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        let ingredient = validated_ingredient(&p.ingredient)?;
+        diet_commands::set_recipe_ingredient_inner(
+            &self.db,
+            SetRecipeIngredientInput {
+                recipe_id: p.recipe_id,
+                expected_rev_no: p.expected_rev_no,
+                id: p.id,
+                ingredient,
+                after_index: p.after_index,
+                change_summary: p.change_summary,
+                changed_by: Some(RecipeEditor::Agent),
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_set_recipe_ingredient", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_remove_recipe_ingredient",
+        description = "Remove ONE ingredient by its row id (from wr_diet_get_recipe). Recorded as a new revision, so it can be reverted."
+    )]
+    pub async fn diet_remove_recipe_ingredient(
+        &self,
+        Parameters(p): Parameters<DietRemoveRecipeIngredientParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_remove_recipe_ingredient_inner(p).await
+    }
+
+    pub(crate) async fn diet_remove_recipe_ingredient_inner(
+        &self,
+        p: DietRemoveRecipeIngredientParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        diet_commands::remove_recipe_ingredient_inner(
+            &self.db,
+            &p.recipe_id,
+            &p.ingredient_id,
+            p.expected_rev_no,
+            p.change_summary,
+            Some(RecipeEditor::Agent),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_remove_recipe_ingredient", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_set_recipe_step",
+        description = "Rewrite ONE cooking step (pass step_no to replace it) or insert a new one (omit step_no, use after_step_no for position). Step numbers are the 1-based numbers from wr_diet_get_recipe."
+    )]
+    pub async fn diet_set_recipe_step(
+        &self,
+        Parameters(p): Parameters<DietSetRecipeStepParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_set_recipe_step_inner(p).await
+    }
+
+    pub(crate) async fn diet_set_recipe_step_inner(
+        &self,
+        p: DietSetRecipeStepParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        let step = validated_step(&p.step)?;
+        diet_commands::set_recipe_step_inner(
+            &self.db,
+            SetRecipeStepInput {
+                recipe_id: p.recipe_id,
+                expected_rev_no: p.expected_rev_no,
+                step_no: p.step_no,
+                after_step_no: p.after_step_no,
+                step,
+                change_summary: p.change_summary,
+                changed_by: Some(RecipeEditor::Agent),
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_set_recipe_step", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_remove_recipe_step",
+        description = "Remove ONE cooking step by its 1-based number. Remaining steps renumber automatically."
+    )]
+    pub async fn diet_remove_recipe_step(
+        &self,
+        Parameters(p): Parameters<DietRemoveRecipeStepParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_remove_recipe_step_inner(p).await
+    }
+
+    pub(crate) async fn diet_remove_recipe_step_inner(
+        &self,
+        p: DietRemoveRecipeStepParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        diet_commands::remove_recipe_step_inner(
+            &self.db,
+            &p.recipe_id,
+            p.step_no,
+            p.expected_rev_no,
+            p.change_summary,
+            Some(RecipeEditor::Agent),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_remove_recipe_step", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_reorder_recipe_steps",
+        description = "Reorder cooking steps. `order` must be a complete permutation of the current 1-based step numbers — a partial list is rejected rather than silently dropping steps."
+    )]
+    pub async fn diet_reorder_recipe_steps(
+        &self,
+        Parameters(p): Parameters<DietReorderRecipeStepsParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_reorder_recipe_steps_inner(p).await
+    }
+
+    pub(crate) async fn diet_reorder_recipe_steps_inner(
+        &self,
+        p: DietReorderRecipeStepsParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        if p.order.len() > MAX_STEPS {
+            return Err(rmcp::ErrorData::invalid_params(
+                format!("order must be <= {MAX_STEPS}"),
+                None,
+            ));
+        }
+        cap_chars(
+            p.change_summary.as_deref(),
+            NOTE_MAX_CHARS,
+            "change_summary",
+        )?;
+        diet_commands::reorder_recipe_steps_inner(
+            &self.db,
+            &p.recipe_id,
+            &p.order,
+            p.expected_rev_no,
+            p.change_summary,
+            Some(RecipeEditor::Agent),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_reorder_recipe_steps", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_recipe_revisions",
+        description = "Revision history of a recipe (newest first) with who changed it and why. Read-only."
+    )]
+    pub async fn diet_recipe_revisions(
+        &self,
+        Parameters(p): Parameters<DietRecipeIdParams>,
+    ) -> Result<Json<DietRecipeRevisionListDto>, rmcp::ErrorData> {
+        self.diet_recipe_revisions_inner(p).await
+    }
+
+    pub(crate) async fn diet_recipe_revisions_inner(
+        &self,
+        p: DietRecipeIdParams,
+    ) -> Result<Json<DietRecipeRevisionListDto>, rmcp::ErrorData> {
+        let recipe = diet_commands::fetch_recipe(&self.db, &p.recipe_id)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_recipe_revisions", &e))?;
+        let revisions = diet_commands::list_recipe_revisions_inner(&self.db, &p.recipe_id)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_recipe_revisions", &e))?;
+        Ok(Json(DietRecipeRevisionListDto {
+            recipe_id: p.recipe_id,
+            current_rev_no: recipe.rev_no,
+            revisions: revisions.iter().map(revision_dto).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_recipe_revision_diff",
+        description = "What changed in one revision compared with the previous one (metadata, ingredients, steps). Read-only."
+    )]
+    pub async fn diet_recipe_revision_diff(
+        &self,
+        Parameters(p): Parameters<DietRecipeRevisionParams>,
+    ) -> Result<Json<DietRecipeRevisionDetailDto>, rmcp::ErrorData> {
+        self.diet_recipe_revision_diff_inner(p).await
+    }
+
+    pub(crate) async fn diet_recipe_revision_diff_inner(
+        &self,
+        p: DietRecipeRevisionParams,
+    ) -> Result<Json<DietRecipeRevisionDetailDto>, rmcp::ErrorData> {
+        let detail = diet_commands::get_recipe_revision_inner(&self.db, &p.recipe_id, p.rev_no)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_recipe_revision_diff", &e))?;
+        Ok(Json(DietRecipeRevisionDetailDto {
+            revision: revision_dto(&detail.revision),
+            diff_from_previous: detail
+                .diff_from_previous
+                .iter()
+                .map(|d| DietRecipeDiffEntryDto {
+                    kind: enum_token(&d.kind),
+                    label: truncate_preview(&d.label, NAME_MAX_CHARS),
+                    before: d
+                        .before
+                        .as_deref()
+                        .map(|v| truncate_preview(v, NOTE_MAX_CHARS)),
+                    after: d
+                        .after
+                        .as_deref()
+                        .map(|v| truncate_preview(v, NOTE_MAX_CHARS)),
+                })
+                .collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_revert_recipe",
+        description = "Restore a past revision. History is never rewritten — the old state is re-applied as a NEW revision, so the revert itself can be reverted."
+    )]
+    pub async fn diet_revert_recipe(
+        &self,
+        Parameters(p): Parameters<DietRevertRecipeParams>,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        self.diet_revert_recipe_inner(p).await
+    }
+
+    pub(crate) async fn diet_revert_recipe_inner(
+        &self,
+        p: DietRevertRecipeParams,
+    ) -> Result<Json<DietOkResultDto>, rmcp::ErrorData> {
+        diet_commands::revert_recipe_inner(
+            &self.db,
+            &p.recipe_id,
+            p.rev_no,
+            p.expected_rev_no,
+            Some(RecipeEditor::Agent),
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_revert_recipe", &e))?;
+        Ok(Json(DietOkResultDto { ok: true }))
+    }
+
+    #[tool(
+        name = "wr_diet_add_recipe_feedback",
+        description = "Record how a cooked recipe actually tasted: rating 1-5 and per-axis deltas from -2 to +2 where POSITIVE means 'too much of it' (salt_delta=+2 means it was too salty) and negative means 'not enough'. Returns the aggregated tuning hints. This records a fact; it does not change the recipe."
+    )]
+    pub async fn diet_add_recipe_feedback(
+        &self,
+        Parameters(p): Parameters<DietRecipeFeedbackParams>,
+    ) -> Result<Json<DietTasteSummaryDto>, rmcp::ErrorData> {
+        self.diet_add_recipe_feedback_inner(p).await
+    }
+
+    pub(crate) async fn diet_add_recipe_feedback_inner(
+        &self,
+        p: DietRecipeFeedbackParams,
+    ) -> Result<Json<DietTasteSummaryDto>, rmcp::ErrorData> {
+        cap_chars(p.comment.as_deref(), NOTE_MAX_CHARS, "comment")?;
+        let recipe_id = p.recipe_id.clone();
+        let summary = diet_commands::add_recipe_feedback_inner(
+            &self.db,
+            AddRecipeFeedbackInput {
+                recipe_id: p.recipe_id,
+                rev_no: p.rev_no,
+                meal_log_id: p.meal_log_id,
+                rating: p.rating,
+                salt_delta: p.salt_delta,
+                spice_delta: p.spice_delta,
+                sweet_delta: p.sweet_delta,
+                sour_delta: p.sour_delta,
+                richness_delta: p.richness_delta,
+                doneness_delta: p.doneness_delta,
+                comment: p.comment,
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_add_recipe_feedback", &e))?;
+        Ok(Json(DietTasteSummaryDto {
+            recipe_id,
+            sample_count: summary.sample_count,
+            avg_rating: summary.avg_rating,
+            taste_hints: summary.hints.iter().map(taste_hint_dto).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_recipe_scaled",
+        description = "Scale a recipe to a target number of servings and report per-ingredient grams, what is in stock, and the shortfall. Read-only."
+    )]
+    pub async fn diet_recipe_scaled(
+        &self,
+        Parameters(p): Parameters<DietScaleRecipeParams>,
+    ) -> Result<Json<DietScaledRecipeDto>, rmcp::ErrorData> {
+        self.diet_recipe_scaled_inner(p).await
+    }
+
+    pub(crate) async fn diet_recipe_scaled_inner(
+        &self,
+        p: DietScaleRecipeParams,
+    ) -> Result<Json<DietScaledRecipeDto>, rmcp::ErrorData> {
+        let scaled = diet_commands::scaled_recipe_inner(&self.db, &p.recipe_id, p.target_servings)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_recipe_scaled", &e))?;
+        Ok(Json(DietScaledRecipeDto {
+            recipe_id: scaled.recipe_id,
+            name: truncate_preview(&scaled.name, NAME_MAX_CHARS),
+            base_servings: scaled.base_servings,
+            target_servings: scaled.target_servings,
+            factor: scaled.factor,
+            ingredients: scaled
+                .ingredients
+                .iter()
+                .map(|i| DietScaledIngredientDto {
+                    food_id: i.food_id.clone(),
+                    food_name: truncate_preview(&i.food_name, NAME_MAX_CHARS),
+                    qty_g: i.qty_g,
+                    display: i.display.clone(),
+                    available_g: i.available_g,
+                    shortfall_g: i.shortfall_g,
+                    optional: i.optional,
+                })
+                .collect(),
+            total_kcal: scaled.total.kcal,
+            per_serving_kcal: scaled.per_serving.kcal,
+            coverage_pct: scaled.coverage_pct,
+            missing_count: scaled.missing_count,
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_recipe_suggestions",
+        description = "What to cook now, ranked deterministically (not by guesswork): stock coverage, how much expiring stock it burns down, and fit to the active calorie goal. Read-only."
+    )]
+    pub async fn diet_recipe_suggestions(
+        &self,
+        Parameters(p): Parameters<DietSuggestionParams>,
+    ) -> Result<Json<DietSuggestionListDto>, rmcp::ErrorData> {
+        self.diet_recipe_suggestions_inner(p).await
+    }
+
+    pub(crate) async fn diet_recipe_suggestions_inner(
+        &self,
+        p: DietSuggestionParams,
+    ) -> Result<Json<DietSuggestionListDto>, rmcp::ErrorData> {
+        let today = parse_iso_date(&p.today)?.to_string();
+        let suggestions = diet_commands::recipe_suggestions_inner(&self.db, &today, p.limit)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_recipe_suggestions", &e))?;
+        Ok(Json(DietSuggestionListDto {
+            suggestions: suggestions
+                .into_iter()
+                .map(|s| DietSuggestionDto {
+                    recipe_id: s.recipe_id,
+                    name: truncate_preview(&s.name, NAME_MAX_CHARS),
+                    servings: s.servings,
+                    per_serving_kcal: s.per_serving.kcal,
+                    coverage_pct: s.coverage_pct,
+                    expiry_pressure_pct: s.expiry_pressure_pct,
+                    earliest_expiry: s.earliest_expiry,
+                    missing: s
+                        .missing
+                        .iter()
+                        .map(|m| truncate_preview(m, NAME_MAX_CHARS))
+                        .collect(),
+                    score: s.score,
+                })
+                .collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_cook_recipe",
+        description = "Record that a recipe was actually cooked and eaten: deducts every ingredient from pantry stock (earliest expiry first), writes the meal log with a nutrition snapshot, links the stock events to that log, and marks a linked planned meal eaten — all in ONE transaction. If any required ingredient is short, NOTHING is consumed or logged. Pass consume_pantry=false to log without touching stock. Ingredients marked to_taste or optional never block cooking."
+    )]
+    pub async fn diet_cook_recipe(
+        &self,
+        Parameters(p): Parameters<DietCookRecipeParams>,
+    ) -> Result<Json<DietCookResultDto>, rmcp::ErrorData> {
+        self.diet_cook_recipe_inner(p).await
+    }
+
+    pub(crate) async fn diet_cook_recipe_inner(
+        &self,
+        p: DietCookRecipeParams,
+    ) -> Result<Json<DietCookResultDto>, rmcp::ErrorData> {
+        cap_chars(p.note.as_deref(), NOTE_MAX_CHARS, "note")?;
+        let date = parse_iso_date(&p.date)?.to_string();
+        let result = diet_commands::cook_recipe_inner(
+            &self.db,
+            CookRecipeInput {
+                recipe_id: p.recipe_id,
+                servings: p.servings,
+                date,
+                at: p.at,
+                planned_meal_id: p.planned_meal_id,
+                consume_pantry: p.consume_pantry,
+                satisfaction: p.satisfaction,
+                fullness: p.fullness,
+                note: p.note,
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_cook_recipe", &e))?;
+        Ok(Json(DietCookResultDto {
+            meal_log_id: result.log.id,
+            kcal: result.log.kcal,
+            protein_g: result.log.protein_g,
+            consumed_g: result.consumed_g,
+            lots_touched: result.lots_touched,
+            pantry_consumed: result.pantry_consumed,
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_list_unit_conversions",
+        description = "Registered gram conversions for recipe units. Food-specific rows win over the global fallback. Read-only."
+    )]
+    pub async fn diet_list_unit_conversions(
+        &self,
+    ) -> Result<Json<DietUnitConversionListDto>, rmcp::ErrorData> {
+        let conversions = diet_commands::list_unit_conversions_inner(&self.db)
+            .await
+            .map_err(|e| mcp_tool_error("wr_diet_list_unit_conversions", &e))?;
+        Ok(Json(DietUnitConversionListDto {
+            conversions: conversions.into_iter().map(unit_conversion_dto).collect(),
+        }))
+    }
+
+    #[tool(
+        name = "wr_diet_upsert_unit_conversion",
+        description = "Register or correct how many grams one unit is, either globally or for a specific food (food-specific wins). Needed before qty+unit ingredients can be converted."
+    )]
+    pub async fn diet_upsert_unit_conversion(
+        &self,
+        Parameters(p): Parameters<DietUpsertUnitConversionParams>,
+    ) -> Result<Json<DietUnitConversionListDto>, rmcp::ErrorData> {
+        self.diet_upsert_unit_conversion_inner(p).await
+    }
+
+    pub(crate) async fn diet_upsert_unit_conversion_inner(
+        &self,
+        p: DietUpsertUnitConversionParams,
+    ) -> Result<Json<DietUnitConversionListDto>, rmcp::ErrorData> {
+        cap_chars(Some(&p.unit), 40, "unit")?;
+        cap_chars(p.note.as_deref(), NOTE_MAX_CHARS, "note")?;
+        let conversions = diet_commands::upsert_unit_conversion_inner(
+            &self.db,
+            UpsertUnitConversionInput {
+                unit: p.unit,
+                food_id: p.food_id,
+                grams_per_unit: p.grams_per_unit,
+                note: p.note,
+            },
+        )
+        .await
+        .map_err(|e| mcp_tool_error("wr_diet_upsert_unit_conversion", &e))?;
+        Ok(Json(DietUnitConversionListDto {
+            conversions: conversions.into_iter().map(unit_conversion_dto).collect(),
+        }))
     }
 
     // ── 재고/주문 write ──────────────────────────────────────────
@@ -1332,28 +2371,109 @@ fn validate_tags(tags: Option<&Vec<String>>) -> Result<(), rmcp::ErrorData> {
 
 /// 레시피 재료 검증 공용(개수 상한 + 이름/조리법 길이 상한).
 #[allow(clippy::result_large_err)]
+fn validated_ingredient(i: &DietIngredientParam) -> Result<RecipeIngredientInput, rmcp::ErrorData> {
+    cap_chars(i.note.as_deref(), NOTE_MAX_CHARS, "ingredient note")?;
+    cap_chars(i.unit.as_deref(), 40, "unit")?;
+    Ok(RecipeIngredientInput {
+        food_id: i.food_id.clone(),
+        qty_g: i.qty_g,
+        qty: i.qty,
+        unit: i.unit.clone(),
+        to_taste: i.to_taste.unwrap_or(false),
+        optional: i.optional.unwrap_or(false),
+        note: i.note.clone(),
+    })
+}
+
 fn validated_ingredients(
-    name: &str,
-    instructions: Option<&str>,
     ingredients: &[DietIngredientParam],
 ) -> Result<Vec<RecipeIngredientInput>, rmcp::ErrorData> {
-    cap_chars(Some(name), NAME_MAX_CHARS, "name")?;
-    cap_chars(instructions, INSTRUCTIONS_MAX_CHARS, "instructions")?;
     if ingredients.len() > MAX_INGREDIENTS {
         return Err(rmcp::ErrorData::invalid_params(
             format!("ingredients must be <= {MAX_INGREDIENTS}"),
             None,
         ));
     }
-    Ok(ingredients
-        .iter()
-        .map(|i| RecipeIngredientInput {
-            food_id: i.food_id.clone(),
-            qty_g: i.qty_g,
-            optional: i.optional.unwrap_or(false),
-            note: None,
-        })
-        .collect())
+    ingredients.iter().map(validated_ingredient).collect()
+}
+
+fn validated_step(s: &DietStepParam) -> Result<RecipeStepInput, rmcp::ErrorData> {
+    cap_chars(Some(&s.body), INSTRUCTIONS_MAX_CHARS, "step body")?;
+    cap_chars(s.note.as_deref(), NOTE_MAX_CHARS, "step note")?;
+    Ok(RecipeStepInput {
+        body: s.body.clone(),
+        duration_minutes: s.duration_minutes.map(|v| v.min(i32::MAX as u32) as i32),
+        note: s.note.clone(),
+    })
+}
+
+fn validated_steps(
+    steps: Option<&[DietStepParam]>,
+) -> Result<Vec<RecipeStepInput>, rmcp::ErrorData> {
+    let Some(steps) = steps else {
+        return Ok(Vec::new());
+    };
+    if steps.len() > MAX_STEPS {
+        return Err(rmcp::ErrorData::invalid_params(
+            format!("steps must be <= {MAX_STEPS}"),
+            None,
+        ));
+    }
+    steps.iter().map(validated_step).collect()
+}
+
+fn unit_display(qty: Option<f64>, unit: Option<&str>) -> Option<String> {
+    let (qty, unit) = (qty?, unit?);
+    let rendered = if (qty.fract()).abs() < 1e-9 {
+        format!("{}", qty.round() as i64)
+    } else {
+        format!("{qty:.2}")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_string()
+    };
+    Some(format!("{rendered} {unit}"))
+}
+
+/// serde의 snake_case 표현을 그대로 문자열 토큰으로 — DTO가 enum 이름을 손으로 베끼지 않게 한다.
+fn enum_token<T: serde::Serialize>(value: &T) -> String {
+    serde_json::to_value(value)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
+fn taste_hint_dto(h: &crate::models::TasteHint) -> DietTasteHintDto {
+    DietTasteHintDto {
+        axis: enum_token(&h.axis),
+        direction: enum_token(&h.direction),
+        magnitude: h.magnitude,
+        samples: h.samples,
+    }
+}
+
+fn revision_dto(r: &crate::models::RecipeRevision) -> DietRecipeRevisionDto {
+    DietRecipeRevisionDto {
+        rev_no: r.rev_no,
+        change_summary: r
+            .change_summary
+            .as_deref()
+            .map(|v| truncate_preview(v, NOTE_MAX_CHARS)),
+        changed_by: enum_token(&r.changed_by),
+        created_at: r.created_at.clone(),
+    }
+}
+
+fn unit_conversion_dto(c: crate::models::UnitConversion) -> DietUnitConversionDto {
+    DietUnitConversionDto {
+        unit: c.unit,
+        food_id: c.food_id,
+        food_name: c
+            .food_name
+            .as_deref()
+            .map(|v| truncate_preview(v, NAME_MAX_CHARS)),
+        grams_per_unit: c.grams_per_unit,
+    }
 }
 
 #[cfg(test)]

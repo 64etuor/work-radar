@@ -9,7 +9,9 @@ import {
 
 import {
   type AddPantryLotInput,
+  type AddRecipeFeedbackInput,
   commands,
+  type CookRecipeInput,
   type CreateRecipeInput,
   type GroceryOrderStatus,
   type PantryEventKind,
@@ -36,6 +38,10 @@ export const dietKeys = {
     ["diet", "foods", query, includeArchived] as const,
   recipes: (query: string, includeArchived: boolean) =>
     ["diet", "recipes", query, includeArchived] as const,
+  revisions: (recipeId: string) => ["diet", "recipe-revisions", recipeId] as const,
+  taste: (recipeId: string) => ["diet", "recipe-taste", recipeId] as const,
+  suggestions: (today: string, limit: number) =>
+    ["diet", "recipe-suggestions", today, limit] as const,
   goals: ["diet", "goals"] as const,
 };
 
@@ -326,6 +332,68 @@ export function useSetRecipeArchived() {
   return useMutation({
     mutationFn: ({ id, archived }: { id: string; archived: boolean }) =>
       unwrap(commands.setRecipeArchived(id, archived)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("diet", e, "식단"),
+  });
+}
+
+// ── 레시피 저작(개정 이력 · 맛 피드백 · 조리 · 추천) ───────────────────
+
+export function useRecipeRevisions(recipeId: string | null) {
+  return useQuery({
+    queryKey: dietKeys.revisions(recipeId ?? ""),
+    queryFn: () => unwrap(commands.listRecipeRevisions(recipeId as string)),
+    enabled: recipeId != null,
+  });
+}
+
+export function useRecipeTasteSummary(recipeId: string | null) {
+  return useQuery({
+    queryKey: dietKeys.taste(recipeId ?? ""),
+    queryFn: () => unwrap(commands.recipeTasteSummary(recipeId as string, null)),
+    enabled: recipeId != null,
+  });
+}
+
+export function useRecipeSuggestions(today: string, limit: number) {
+  return useQuery({
+    queryKey: dietKeys.suggestions(today, limit),
+    queryFn: () => unwrap(commands.recipeSuggestions(today, limit)),
+    enabled: today.length > 0,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useRevertRecipe() {
+  const invalidate = useInvalidateDiet();
+  return useMutation({
+    mutationFn: ({
+      recipeId,
+      revNo,
+      expectedRevNo,
+    }: {
+      recipeId: string;
+      revNo: number;
+      expectedRevNo: number | null;
+    }) => unwrap(commands.revertRecipe(recipeId, revNo, expectedRevNo)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("diet", e, "식단"),
+  });
+}
+
+export function useAddRecipeFeedback() {
+  const invalidate = useInvalidateDiet();
+  return useMutation({
+    mutationFn: (input: AddRecipeFeedbackInput) => unwrap(commands.addRecipeFeedback(input)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("diet", e, "식단"),
+  });
+}
+
+export function useCookRecipe() {
+  const invalidate = useInvalidateDiet();
+  return useMutation({
+    mutationFn: (input: CookRecipeInput) => unwrap(commands.cookRecipe(input)),
     onSuccess: () => void invalidate(),
     onError: (e) => pushMutationError("diet", e, "식단"),
   });

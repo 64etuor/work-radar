@@ -27,4 +27,5 @@ export * from "./sprint";
 export * from "./timelineNotes";
 export * from "./today";
 export * from "./tokens";
+export * from "./workout";
 export * from "./worktree";

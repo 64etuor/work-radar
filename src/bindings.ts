@@ -106,9 +106,46 @@ export const commands = {
 	listDietGoals: () => typedError<DietGoal[], AppError>(__TAURI_INVOKE("list_diet_goals")),
 	createRecipe: (input: CreateRecipeInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("create_recipe", { input })),
 	updateRecipe: (input: UpdateRecipeInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("update_recipe", { input })),
+	patchRecipe: (input: PatchRecipeInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("patch_recipe", { input })),
+	setRecipeIngredient: (input: SetRecipeIngredientInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("set_recipe_ingredient", { input })),
+	removeRecipeIngredient: (recipeId: string, ingredientId: string, expectedRevNo: number | null, changeSummary: string | null) => typedError<Recipe, AppError>(__TAURI_INVOKE("remove_recipe_ingredient", { recipeId, ingredientId, expectedRevNo, changeSummary })),
+	setRecipeStep: (input: SetRecipeStepInput) => typedError<Recipe, AppError>(__TAURI_INVOKE("set_recipe_step", { input })),
+	removeRecipeStep: (recipeId: string, stepNo: number, expectedRevNo: number | null, changeSummary: string | null) => typedError<Recipe, AppError>(__TAURI_INVOKE("remove_recipe_step", { recipeId, stepNo, expectedRevNo, changeSummary })),
+	reorderRecipeSteps: (recipeId: string, order: number[], expectedRevNo: number | null) => typedError<Recipe, AppError>(__TAURI_INVOKE("reorder_recipe_steps", { recipeId, order, expectedRevNo })),
+	listRecipeRevisions: (recipeId: string) => typedError<RecipeRevision[], AppError>(__TAURI_INVOKE("list_recipe_revisions", { recipeId })),
+	getRecipeRevision: (recipeId: string, revNo: number) => typedError<RecipeRevisionDetail, AppError>(__TAURI_INVOKE("get_recipe_revision", { recipeId, revNo })),
+	revertRecipe: (recipeId: string, revNo: number, expectedRevNo: number | null) => typedError<Recipe, AppError>(__TAURI_INVOKE("revert_recipe", { recipeId, revNo, expectedRevNo })),
+	addRecipeFeedback: (input: AddRecipeFeedbackInput) => typedError<RecipeTasteSummary, AppError>(__TAURI_INVOKE("add_recipe_feedback", { input })),
+	recipeTasteSummary: (recipeId: string, limit: number | null) => typedError<RecipeTasteSummary, AppError>(__TAURI_INVOKE("recipe_taste_summary", { recipeId, limit })),
+	scaledRecipe: (recipeId: string, targetServings: number | null) => typedError<ScaledRecipe, AppError>(__TAURI_INVOKE("scaled_recipe", { recipeId, targetServings })),
+	listUnitConversions: () => typedError<UnitConversion[], AppError>(__TAURI_INVOKE("list_unit_conversions")),
+	upsertUnitConversion: (input: UpsertUnitConversionInput) => typedError<UnitConversion[], AppError>(__TAURI_INVOKE("upsert_unit_conversion", { input })),
 	getRecipe: (id: string) => typedError<Recipe, AppError>(__TAURI_INVOKE("get_recipe", { id })),
 	listRecipes: (query: string | null, includeArchived: boolean) => typedError<Recipe[], AppError>(__TAURI_INVOKE("list_recipes", { query, includeArchived })),
 	setRecipeArchived: (id: string, archived: boolean) => typedError<Recipe, AppError>(__TAURI_INVOKE("set_recipe_archived", { id, archived })),
+	cookRecipe: (input: CookRecipeInput) => typedError<CookRecipeResult, AppError>(__TAURI_INVOKE("cook_recipe", { input })),
+	recipeSuggestions: (today: string, limit: number | null) => typedError<RecipeSuggestion[], AppError>(__TAURI_INVOKE("recipe_suggestions", { today, limit })),
+	upsertExercise: (input: UpsertExerciseInput) => typedError<Exercise, AppError>(__TAURI_INVOKE("upsert_exercise", { input })),
+	listExercises: (query: string | null, includeArchived: boolean) => typedError<Exercise[], AppError>(__TAURI_INVOKE("list_exercises", { query, includeArchived })),
+	setExerciseArchived: (id: string, archived: boolean) => typedError<Exercise, AppError>(__TAURI_INVOKE("set_exercise_archived", { id, archived })),
+	addExerciseAlias: (exerciseId: string, alias: string) => typedError<Exercise, AppError>(__TAURI_INVOKE("add_exercise_alias", { exerciseId, alias })),
+	removeExerciseAlias: (exerciseId: string, alias: string) => typedError<Exercise, AppError>(__TAURI_INVOKE("remove_exercise_alias", { exerciseId, alias })),
+	startWorkoutSession: (input: StartWorkoutSessionInput) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("start_workout_session", { input })),
+	patchWorkoutSession: (input: PatchWorkoutSessionInput) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("patch_workout_session", { input })),
+	deleteWorkoutSession: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_workout_session", { id })),
+	getWorkoutSession: (id: string) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("get_workout_session", { id })),
+	listWorkoutSessions: (from: string, to: string) => typedError<WorkoutSession[], AppError>(__TAURI_INVOKE("list_workout_sessions", { from, to })),
+	addWorkoutSet: (input: AddWorkoutSetInput) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("add_workout_set", { input })),
+	patchWorkoutSet: (input: PatchWorkoutSetInput) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("patch_workout_set", { input })),
+	removeWorkoutSet: (id: string) => typedError<WorkoutSession, AppError>(__TAURI_INVOKE("remove_workout_set", { id })),
+	workoutVolumeSummary: (from: string, to: string) => typedError<WorkoutVolumeSummary, AppError>(__TAURI_INVOKE("workout_volume_summary", { from, to })),
+	exercisePersonalRecords: (exerciseId: string | null) => typedError<ExercisePersonalRecord[], AppError>(__TAURI_INVOKE("exercise_personal_records", { exerciseId })),
+	recordBodyMetric: (input: RecordBodyMetricInput) => typedError<BodyMetric, AppError>(__TAURI_INVOKE("record_body_metric", { input })),
+	deleteBodyMetric: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_body_metric", { id })),
+	bodyTrend: (limit: number | null) => typedError<BodyTrend, AppError>(__TAURI_INVOKE("body_trend", { limit })),
+	getBodyProfile: () => typedError<BodyProfile, AppError>(__TAURI_INVOKE("get_body_profile")),
+	setBodyProfile: (input: SetBodyProfileInput) => typedError<BodyProfile, AppError>(__TAURI_INVOKE("set_body_profile", { input })),
+	dailyEnergyBalance: (date: string) => typedError<DailyEnergyBalance, AppError>(__TAURI_INVOKE("daily_energy_balance", { date })),
 	createMealPlan: (input: CreateMealPlanInput) => typedError<MealPlan, AppError>(__TAURI_INVOKE("create_meal_plan", { input })),
 	listMealPlans: () => typedError<MealPlan[], AppError>(__TAURI_INVOKE("list_meal_plans")),
 	getMealPlan: (id: string) => typedError<MealPlanDetail, AppError>(__TAURI_INVOKE("get_meal_plan", { id })),
@@ -1002,6 +1039,33 @@ export type AddPlannedMealItemInput = {
 	note: string | null,
 };
 
+export type AddRecipeFeedbackInput = {
+	recipeId: string,
+	/**  어느 리비전을 먹고 남긴 평가인지. None이면 커맨드가 현재 rev를 채운다. */
+	revNo: number | null,
+	mealLogId: string | null,
+	rating: number | null,
+	saltDelta: number | null,
+	spiceDelta: number | null,
+	sweetDelta: number | null,
+	sourDelta: number | null,
+	richnessDelta: number | null,
+	donenessDelta: number | null,
+	comment: string | null,
+};
+
+export type AddWorkoutSetInput = {
+	sessionId: string,
+	exerciseId: string,
+	reps: number | null,
+	weightKg: number | null,
+	durationSec: number | null,
+	distanceM: number | null,
+	restSec: number | null,
+	rpe: number | null,
+	note: string | null,
+};
+
 /**  설정 > Agents에서 보이는 내부 프롬프트 실행 설정. */
 export type AgentPromptConfig = {
 	id: string,
@@ -1183,6 +1247,41 @@ export type BatchItemResult = {
  *  안전-critical 스킵(`Collision`/`NotOurs`)은 별도 값으로 가시 유지.
  */
 export type BatchOutcome = "applied" | "collision" | "no_source" | "removed" | "not_ours" | "unsupported_provider" | "error";
+
+export type BodyMetric = {
+	id: string,
+	measuredOn: string,
+	weightKg: number | null,
+	bodyFatPct: number | null,
+	skeletalMuscleKg: number | null,
+	waistCm: number | null,
+	note: string | null,
+	source: string,
+	createdAt: string,
+};
+
+/**
+ *  잘못 기록한 축을 지울 수 있는 필드. 생략한 축은 **보존**되므로(체중만 다시 재는 흔한 경우),
+ *  오기입을 없애려면 이 목록으로 명시해야 한다 — 행 전체 삭제는 정상 축까지 잃는다.
+ */
+export type BodyMetricField = "weight_kg" | "body_fat_pct" | "skeletal_muscle_kg" | "waist_cm" | "note";
+
+/**  변하지 않는 신체 정보(BMR 입력). 단일 행. */
+export type BodyProfile = {
+	birthYear: number | null,
+	heightCm: number | null,
+	/**  'male' | 'female' | 'other' | None. None/other는 BMR에서 두 식의 중간값을 쓴다. */
+	sex: string | null,
+	updatedAt: string,
+};
+
+export type BodyTrend = {
+	latest: BodyMetric | null,
+	/**  최근 7개 측정 이동평균(kg) — 일별 노이즈 제거. */
+	weightTrendKg: number | null,
+	/**  오래된 → 최신 순 시계열(그래프용). */
+	history: BodyMetric[],
+};
 
 export type Book = {
 	id: string,
@@ -2022,6 +2121,32 @@ export type ControlRoomSnapshot = {
 	unmergedPlanBranches?: UnmergedPlanBranch[],
 };
 
+/**  조리 = 재고 차감 + 섭취 기록을 한 번에. `consume_pantry=false`면 기록만(외식·남의 집). */
+export type CookRecipeInput = {
+	recipeId: string,
+	/**  만든 인분(생략 = 1인분). 레시피 기준 인분과 다르면 재료가 비례 스케일된다. */
+	servings: number | null,
+	/**  로컬 날짜(호출자 주입) 'YYYY-MM-DD'. */
+	date: string,
+	/**  섭취 시각 RFC3339. None이면 서버가 now(로컬)로 채운다. */
+	at: string | null,
+	/**  계획 식사와 연결하면 그 식사를 eaten으로 전이한다. */
+	plannedMealId: string | null,
+	/**  기본 true. false면 재고를 건드리지 않고 기록만 남긴다. */
+	consumePantry: boolean | null,
+	satisfaction: number | null,
+	fullness: number | null,
+	note: string | null,
+};
+
+export type CookRecipeResult = {
+	log: MealLog,
+	/**  실제 차감된 총량 g. */
+	consumedG: number | null,
+	lotsTouched: number,
+	pantryConsumed: boolean,
+};
+
 /**
  *  Control Room 스냅샷의 집계 대상 레포 식별. 프로젝트는 레포를 여러 개 가질 수 있지만
  *  스냅샷은 첫 enabled 로컬 레포 하나만 접는다(`resolve_project_repo_row`) — FE가 그
@@ -2139,8 +2264,14 @@ export type CreateRecipeInput = {
 	servings: number | null,
 	cookMinutes: number | null,
 	mealTags: string[],
-	instructions: string | null,
+	sourceUrl: string | null,
+	yieldG: number | null,
+	notes: string | null,
 	ingredients: RecipeIngredientInput[],
+	/**  조리 단계(순서대로). 빈 배열 허용 — 나중에 에이전트가 채울 수 있다. */
+	steps?: RecipeStepInput[],
+	/**  rev 1의 작성자 귀속. 생략 시 `user`. */
+	changedBy?: RecipeEditor | null,
 };
 
 /**  레포 추가 입력. */
@@ -2200,6 +2331,13 @@ export type CreateSkillInput = {
 export type CreatedCalendarEvent = {
 	id: string,
 	url: string | null,
+};
+
+export type DailyEnergyBalance = {
+	date: string,
+	balance: EnergyBalance,
+	weightKg: number | null,
+	sessionCount: number,
 };
 
 export type DailyNutrition = {
@@ -2300,6 +2438,21 @@ export type DuplicateWarnings = {
 	accounts: AccountDuplicate[],
 };
 
+/**
+ *  하루 에너지 수지 — **read-only 파생**. 이 값이 `diet_goals`를 자동으로 바꾸지 않는다
+ *  (결정레일 INVARIANT #1: 파생 판단값을 자동 설정하지 않는다).
+ */
+export type EnergyBalance = {
+	intakeKcal: number | null,
+	/**  프로필/체중이 없으면 None — 추정치를 채우지 않는다. */
+	bmrKcal: number | null,
+	workoutKcal: number | null,
+	expenditureKcal: number | null,
+	balanceKcal: number | null,
+	/**  false면 BMR 없이 "섭취 − 운동소모"까지만 계산된 값이다. */
+	bmrAvailable: boolean,
+};
+
 /**  잡 실행 엔진. agent_runs.engine CHECK과 동일. */
 export type Engine = "codex" | "hermes" | "claude";
 
@@ -2334,6 +2487,41 @@ export type ErrorKind =
 "validation" | 
 /**  버그/불변식 위반 — 로그 + 버그리포트 유도. */
 "unexpected";
+
+export type Exercise = {
+	id: string,
+	name: string,
+	modality: ExerciseModality,
+	primaryMuscle: string | null,
+	equipment: string | null,
+	/**  MET 계수 — 소모 kcal = MET × 체중kg × 시간h. None이면 소모를 계산하지 않는다(0). */
+	met: number | null,
+	source: string,
+	sourceRef: string | null,
+	archived: boolean,
+	aliases: string[],
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type ExerciseModality = "strength" | "cardio" | "mobility" | "sport";
+
+/**  종목별 최고 기록(추정 1RM 기준) — 쿼리타임 파생. */
+export type ExercisePersonalRecord = {
+	exerciseId: string,
+	exerciseName: string,
+	best1rmKg: number | null,
+	bestWeightKg: number | null,
+	bestReps: number | null,
+	achievedOn: string | null,
+};
+
+export type ExerciseVolumeRow = {
+	exerciseId: string,
+	exerciseName: string,
+	setCount: number,
+	volumeKg: number | null,
+};
 
 export type ExportBookkeepingInput = {
 	projectId: string | null,
@@ -2992,6 +3180,52 @@ export type PantryTake = {
 	qtyG: number | null,
 };
 
+/**
+ *  부분 수정 — **준 필드만** 바뀐다. 재료/단계는 건드리지 않는다(전용 커맨드가 있다).
+ *  nullable 필드를 비우려면 `clear`에 그 필드를 넣는다(값과 clear를 동시에 주면 검증 오류).
+ */
+export type PatchRecipeInput = {
+	id: string,
+	expectedRevNo: number | null,
+	name: string | null,
+	servings: number | null,
+	cookMinutes: number | null,
+	mealTags: string[] | null,
+	sourceUrl: string | null,
+	yieldG: number | null,
+	notes: string | null,
+	clear?: RecipeClearableField[],
+	changeSummary: string | null,
+	changedBy?: RecipeEditor | null,
+};
+
+export type PatchWorkoutSessionInput = {
+	id: string,
+	title: string | null,
+	startedAt: string | null,
+	endedAt: string | null,
+	perceivedExertion: number | null,
+	note: string | null,
+	clear?: WorkoutSessionField[],
+};
+
+/**
+ *  세트 부분 수정 — 준 필드만 바뀐다. nullable 축을 비우려면 `clear`에 넣는다
+ *  (`Option<Option<T>>`는 specta가 TS로 내리지 못한다).
+ */
+export type PatchWorkoutSetInput = {
+	id: string,
+	exerciseId: string | null,
+	reps: number | null,
+	weightKg: number | null,
+	durationSec: number | null,
+	distanceM: number | null,
+	restSec: number | null,
+	rpe: number | null,
+	note: string | null,
+	clear?: WorkoutSetField[],
+};
+
 export type PendingAction = {
 	id: string,
 	kind: string,
@@ -3347,9 +3581,16 @@ export type Recipe = {
 	servings: number | null,
 	cookMinutes: number | null,
 	mealTags: string[],
-	instructions: string | null,
+	sourceUrl: string | null,
+	/**  완성 총량 — 1인분 g 파생·스케일링에 사용. */
+	yieldG: number | null,
+	/**  단계에 붙지 않는 상시 튜닝 메모(총평). */
+	notes: string | null,
+	/**  현재 리비전 번호. patch 계열의 낙관적 동시성 토큰(`expectedRevNo`)으로도 쓴다. */
+	revNo: number,
 	archived: boolean,
 	ingredients: RecipeIngredient[],
+	steps: RecipeStep[],
 	/**  전체(모든 재료 합) — 쿼리타임 커널 계산(저장 안 함). */
 	total: DietMacros,
 	/**  1인분(total / servings). */
@@ -3358,12 +3599,53 @@ export type Recipe = {
 	updatedAt: string,
 };
 
+/**
+ *  지울 수 있는 nullable 메타 필드. patch에서 "안 줬음"과 "지워라"를 구분하는 수단 —
+ *  `Option<Option<T>>`는 specta가 TS로 내리지 못하고(둘 다 `T | null`로 붕괴) 쓸 수 없다.
+ */
+export type RecipeClearableField = "cook_minutes" | "source_url" | "yield_g" | "notes";
+
+export type RecipeDiffEntry = {
+	kind: RecipeDiffKind,
+	/**  무엇이 바뀌었나(필드명 / food_id / 단계 번호). */
+	label: string,
+	before: string | null,
+	after: string | null,
+};
+
+export type RecipeDiffKind = "meta_changed" | "ingredient_added" | "ingredient_removed" | "ingredient_changed" | "step_added" | "step_removed" | "step_changed";
+
+export type RecipeEditor = "user" | "agent";
+
+export type RecipeFeedback = {
+	id: string,
+	recipeId: string,
+	revNo: number | null,
+	mealLogId: string | null,
+	rating: number | null,
+	saltDelta: number | null,
+	spiceDelta: number | null,
+	sweetDelta: number | null,
+	sourDelta: number | null,
+	richnessDelta: number | null,
+	donenessDelta: number | null,
+	comment: string | null,
+	createdAt: string,
+};
+
 export type RecipeIngredient = {
 	id: string,
 	recipeId: string,
 	foodId: string,
 	foodName: string,
+	/**  영양 계산 SSOT. qty/unit이 주어졌으면 커널 환산 결과가 여기에 확정돼 있다. */
 	qtyG: number | null,
+	/**  표기 수량(1.5) — 표시 전용. 계산은 항상 `qty_g`. */
+	qty: number | null,
+	/**  표기 단위('tbsp','clove' …). None이면 g로 표기. */
+	unit: string | null,
+	/**  "간 맞춰서" 표기 플래그. 영양 계산은 여전히 `qty_g`(명목값)를 쓴다 — 빼면 나트륨 과소계상. */
+	toTaste: boolean,
 	optional: boolean,
 	note: string | null,
 	sortRank: number,
@@ -3371,9 +3653,117 @@ export type RecipeIngredient = {
 
 export type RecipeIngredientInput = {
 	foodId: string,
+	/**
+	 *  g 직접 지정. **있으면 이 값이 이긴다**(`qty`/`unit`은 표기로만 보존) — 되돌리기가
+	 *  환산 테이블 변경에 흔들리지 않게 하는 계약. 없으면 `qty`+`unit`을 커널이 환산한다.
+	 *  둘 다 없으면 검증 오류.
+	 */
 	qtyG: number | null,
+	/**  표기 수량. `unit`과 함께 준다. */
+	qty: number | null,
+	unit: string | null,
+	toTaste?: boolean,
 	optional: boolean,
 	note: string | null,
+};
+
+export type RecipeRevision = {
+	id: string,
+	recipeId: string,
+	revNo: number,
+	changeSummary: string | null,
+	changedBy: RecipeEditor,
+	createdAt: string,
+};
+
+export type RecipeRevisionDetail = {
+	revision: RecipeRevision,
+	snapshot: RecipeSnapshot,
+	/**  직전 리비전과의 차이 — **쿼리타임 계산**(저장하면 스냅샷과 어긋날 수 있다). */
+	diffFromPrevious: RecipeDiffEntry[],
+};
+
+export type RecipeSnapshot = {
+	name: string,
+	servings: number | null,
+	cookMinutes: number | null,
+	mealTags: string[],
+	sourceUrl: string | null,
+	yieldG: number | null,
+	notes: string | null,
+	ingredients: RecipeSnapshotIngredient[],
+	steps: RecipeSnapshotStep[],
+};
+
+export type RecipeSnapshotIngredient = {
+	foodId: string,
+	qtyG: number | null,
+	qty: number | null,
+	unit: string | null,
+	toTaste: boolean,
+	optional: boolean,
+	note: string | null,
+	sortRank: number,
+};
+
+export type RecipeSnapshotStep = {
+	sortRank: number | null,
+	body: string,
+	durationMinutes: number | null,
+	note: string | null,
+};
+
+export type RecipeStep = {
+	id: string,
+	recipeId: string,
+	/**  1-based 표시 번호 — **쿼리타임 파생**(ROW_NUMBER over sort_rank). 저장 컬럼이 아니다. */
+	stepNo: number,
+	sortRank: number | null,
+	body: string,
+	durationMinutes: number | null,
+	/**  단계별 튜닝 메모("여기서 불 줄이면 안 눌러붙음"). */
+	note: string | null,
+};
+
+export type RecipeStepInput = {
+	body: string,
+	durationMinutes: number | null,
+	note: string | null,
+};
+
+export type RecipeSuggestion = {
+	recipeId: string,
+	name: string,
+	servings: number | null,
+	perServing: DietMacros,
+	coveragePct: number | null,
+	/**  유통기한 임박 재료를 얼마나 소진하는가(0..100). */
+	expiryPressurePct: number | null,
+	earliestExpiry: string | null,
+	/**  부족한 재료 이름(표시용). */
+	missing: string[],
+	/**  결정론 종합 점수(0..100). 동점은 이름 → id 순으로 안정 정렬. */
+	score: number | null,
+};
+
+export type RecipeTasteSummary = {
+	sampleCount: number,
+	avgRating: number | null,
+	/**  축별 조정 **제안**. 자동 수정은 하지 않는다(사람/에이전트가 정한다). */
+	hints: TasteHint[],
+	recent: RecipeFeedback[],
+};
+
+export type RecordBodyMetricInput = {
+	/**  측정일 'YYYY-MM-DD'. 같은 날 재측정은 갱신(하루 한 행) — 생략한 축은 기존 값 보존. */
+	measuredOn: string,
+	weightKg: number | null,
+	bodyFatPct: number | null,
+	skeletalMuscleKg: number | null,
+	waistCm: number | null,
+	note: string | null,
+	/**  비울 축(오기입 정정). 같은 축을 값과 clear로 동시에 주면 검증 오류. */
+	clear?: BodyMetricField[],
 };
 
 export type RecordBookkeepingSyncFailureInput = {
@@ -3529,6 +3919,32 @@ export type RoutineTrackingItem = {
 /**  샌드박스 권한. 기본 read_only, 쓰기는 명시 승인 시에만. danger_full은 타입에 없음 (INVARIANT #6). */
 export type Sandbox = "read_only" | "workspace_write";
 
+export type ScaledIngredient = {
+	foodId: string,
+	foodName: string,
+	qtyG: number | null,
+	/**  표기(예: "1.5 tbsp") — 원 재료가 단위 표기를 가진 경우만. */
+	display: string | null,
+	availableG: number | null,
+	shortfallG: number | null,
+	optional: boolean,
+	toTaste: boolean,
+};
+
+export type ScaledRecipe = {
+	recipeId: string,
+	name: string,
+	baseServings: number | null,
+	targetServings: number | null,
+	factor: number | null,
+	ingredients: ScaledIngredient[],
+	total: DietMacros,
+	perServing: DietMacros,
+	/**  재고 커버리지(0..100). */
+	coveragePct: number | null,
+	missingCount: number,
+};
+
 export type SelectWeeklyFocusInput = {
 	weekStart: string,
 	title: string,
@@ -3571,6 +3987,12 @@ export type SessionRow = {
 	ownership: Ownership,
 	taskId: string | null,
 	phase: SessionPhase,
+};
+
+export type SetBodyProfileInput = {
+	birthYear: number | null,
+	heightCm: number | null,
+	sex: string | null,
 };
 
 export type SetBookkeepingBudgetInput = {
@@ -3665,6 +4087,32 @@ export type SetProjectNotionDbIdsInput = {
 	projectId: string,
 	backlogDbId: string | null,
 	agendaDbId: string | null,
+};
+
+/**  재료 1개 upsert. `id`가 있으면 그 행을 갱신, 없으면 추가. */
+export type SetRecipeIngredientInput = {
+	recipeId: string,
+	expectedRevNo: number | null,
+	/**  None = 추가. Some = 그 재료 행 갱신. */
+	id: string | null,
+	ingredient: RecipeIngredientInput,
+	/**  None = 맨 끝. Some(0) = 맨 앞, Some(n) = n번째 재료 뒤. */
+	afterIndex: number | null,
+	changeSummary: string | null,
+	changedBy?: RecipeEditor | null,
+};
+
+/**  단계 1개 upsert. `step_no`는 **1-based 파생 번호** — 커맨드가 내부 id로 해석한다. */
+export type SetRecipeStepInput = {
+	recipeId: string,
+	expectedRevNo: number | null,
+	/**  Some = 그 번호의 단계를 교체. None = 삽입(`after_step_no` 위치). */
+	stepNo: number | null,
+	/**  삽입 위치. None이면 맨 끝. Some(0) = 맨 앞. */
+	afterStepNo: number | null,
+	step: RecipeStepInput,
+	changeSummary: string | null,
+	changedBy?: RecipeEditor | null,
 };
 
 export type ShoppingListEntry = {
@@ -3924,6 +4372,14 @@ export type StageWriteRequest = {
 	idempotency_key: string,
 };
 
+export type StartWorkoutSessionInput = {
+	/**  로컬 날짜(호출자 주입) 'YYYY-MM-DD'. */
+	date: string,
+	startedAt: string | null,
+	title: string | null,
+	note: string | null,
+};
+
 export type SyncBookkeepingGmailReceiptsInput = {
 	projectId: string,
 	labelIds: string[],
@@ -3940,6 +4396,23 @@ export type TaskRow = {
 	taskId: string,
 	title: string,
 	phase: TaskPhase,
+};
+
+export type TasteAxis = "salt" | "spice" | "sweet" | "sour" | "richness" | "doneness";
+
+export type TasteDirection = 
+/**  과했다 → 줄여라. */
+"reduce" | 
+/**  부족했다 → 늘려라. */
+"increase";
+
+export type TasteHint = {
+	axis: TasteAxis,
+	direction: TasteDirection,
+	/**  최근 가중 평균의 절대값(0..2). */
+	magnitude: number | null,
+	/**  이 축에 값을 남긴 피드백 수. */
+	samples: number,
 };
 
 export type TickProjectNowResult = {
@@ -4106,6 +4579,16 @@ export type TriggerPrSelfCheckInput = {
 	costCapUsd: number | null,
 };
 
+export type UnitConversion = {
+	id: string,
+	unit: string,
+	/**  None = 전역 기본(폴백). Some = 그 식품 전용(전역을 이긴다). */
+	foodId: string | null,
+	foodName: string | null,
+	gramsPerUnit: number | null,
+	note: string | null,
+};
+
 /**
  *  완주-미머지 plan 브랜치 한 행 — governance `repo/planBranches.ts`의 `UnmergedPlanBranch`
  *  JSON(camelCase) 미러. 읽기 전용 가시화 데이터(이 모듈엔 git/merge 경로 없음).
@@ -4216,15 +4699,29 @@ export type UpdateObjectiveInput = {
 	linkedProjectIds: string[],
 };
 
+/**
+ *  전체 교체(replace-all). UI 폼 저장·되돌리기 재적용 경로가 쓴다.
+ *  에이전트의 반복 튜닝은 이걸 쓰지 말고 patch 계열(`PatchRecipeInput` 등)을 써야 한다 —
+ *  replace-all은 전문을 재전송하므로 동시 편집을 덮어쓴다.
+ */
 export type UpdateRecipeInput = {
 	id: string,
+	/**
+	 *  낙관적 동시성 토큰 — **필수**. 이 경로는 재료·단계를 전부 덮어쓰므로 stale 전문을
+	 *  그냥 받으면 그 사이의 편집이 조용히 사라진다(patch 계열은 스코프가 한 행이라 optional).
+	 */
+	expectedRevNo: number,
 	name: string,
 	servings: number | null,
 	cookMinutes: number | null,
 	mealTags: string[],
-	instructions: string | null,
-	/**  전체 교체(replace-all) — 부분 patch 아님. */
+	sourceUrl: string | null,
+	yieldG: number | null,
+	notes: string | null,
 	ingredients: RecipeIngredientInput[],
+	steps?: RecipeStepInput[],
+	changeSummary: string | null,
+	changedBy?: RecipeEditor | null,
 };
 
 /**
@@ -4267,6 +4764,18 @@ export type UpdateStatus = {
 	updateAvailable: boolean,
 };
 
+export type UpsertExerciseInput = {
+	/**  None = 새 종목 생성, Some = 갱신. */
+	id: string | null,
+	name: string,
+	modality: ExerciseModality,
+	primaryMuscle: string | null,
+	equipment: string | null,
+	met: number | null,
+	source: string | null,
+	sourceRef: string | null,
+};
+
 export type UpsertFoodInput = {
 	/**  None = 새 식품 생성, Some = 해당 식품 갱신. */
 	id: string | null,
@@ -4294,6 +4803,13 @@ export type UpsertGuardrailInput = {
 	unit: string | null,
 	sourceRoutineIds: string[],
 	sortRank: number,
+};
+
+export type UpsertUnitConversionInput = {
+	unit: string,
+	foodId: string | null,
+	gramsPerUnit: number | null,
+	note: string | null,
 };
 
 /**  사용량 윈도(5시간/주간). `used_percent`는 0..=100. */
@@ -4447,6 +4963,66 @@ export type WorkSignal = {
 	linkedCalendarId: string | null,
 	createdAt: string,
 	updatedAt: string,
+};
+
+export type WorkoutSession = {
+	id: string,
+	date: string,
+	startedAt: string | null,
+	endedAt: string | null,
+	title: string | null,
+	perceivedExertion: number | null,
+	note: string | null,
+	sets: WorkoutSet[],
+	volume: WorkoutVolume,
+	/**  MET × 그 날 체중 × 세트 시간 합. MET/체중이 없으면 0(추정하지 않는다). */
+	energyKcal: number | null,
+	createdAt: string,
+	updatedAt: string,
+};
+
+export type WorkoutSessionField = "title" | "started_at" | "ended_at" | "perceived_exertion" | "note";
+
+export type WorkoutSet = {
+	id: string,
+	sessionId: string,
+	exerciseId: string,
+	exerciseName: string,
+	modality: ExerciseModality,
+	/**  1-based 표시 번호 — 쿼리타임 파생. */
+	setNo: number,
+	sortRank: number,
+	reps: number | null,
+	weightKg: number | null,
+	durationSec: number | null,
+	distanceM: number | null,
+	restSec: number | null,
+	rpe: number | null,
+	note: string | null,
+	/**  Epley 추정 1RM — 저장 안 함(커널 파생). */
+	estimated1rmKg: number | null,
+};
+
+export type WorkoutSetField = "reps" | "weight_kg" | "duration_sec" | "distance_m" | "rest_sec" | "rpe" | "note";
+
+/**  세션 볼륨 — 전부 커널 파생(저장 컬럼 아님). */
+export type WorkoutVolume = {
+	setCount: number,
+	totalReps: number,
+	/**  톤수 = Σ(reps × weight). 맨몸 세트는 0으로 기여한다. */
+	volumeKg: number | null,
+	durationSec: number,
+	distanceM: number | null,
+};
+
+export type WorkoutVolumeSummary = {
+	from: string,
+	to: string,
+	sessionCount: number,
+	volume: WorkoutVolume,
+	energyKcal: number | null,
+	/**  종목별 톤수 상위(내림차순). */
+	byExercise: ExerciseVolumeRow[],
 };
 
 /**  repo별 git worktree (ambient — `git worktree list`로 매번 도출). 토큰 등 비밀 미포함. */

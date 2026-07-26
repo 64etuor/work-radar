@@ -45,6 +45,7 @@ pub mod sprint;
 pub mod timeline_notes;
 pub mod today;
 pub mod tokens;
+pub mod workout;
 pub mod worktree;
 
 pub use agents::*;
@@ -80,4 +81,5 @@ pub use sprint::*;
 pub use timeline_notes::*;
 pub use today::*;
 pub use tokens::*;
+pub use workout::*;
 pub use worktree::*;

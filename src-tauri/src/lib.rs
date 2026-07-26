@@ -55,6 +55,8 @@ pub mod skills;
 mod timezone; // OS 로컬 타임존/시각 SSOT — 설정 없음, chrono::Local 직접 사용 금지.
 mod tray;
 mod urgency;
+// 운동 순수 커널 — 볼륨/1RM/MET 소모/BMR 결정론. 계획은 routines 소유(§8 경계 결정).
+mod workout;
 
 use tauri::{Manager, WindowEvent};
 use tauri_specta::{collect_commands, Builder as SpectaBuilder};
@@ -146,9 +148,47 @@ pub fn tauri_specta_builder() -> SpectaBuilder<tauri::Wry> {
         commands::list_diet_goals,
         commands::create_recipe,
         commands::update_recipe,
+        commands::patch_recipe,
+        commands::set_recipe_ingredient,
+        commands::remove_recipe_ingredient,
+        commands::set_recipe_step,
+        commands::remove_recipe_step,
+        commands::reorder_recipe_steps,
+        commands::list_recipe_revisions,
+        commands::get_recipe_revision,
+        commands::revert_recipe,
+        commands::add_recipe_feedback,
+        commands::recipe_taste_summary,
+        commands::scaled_recipe,
+        commands::list_unit_conversions,
+        commands::upsert_unit_conversion,
         commands::get_recipe,
         commands::list_recipes,
         commands::set_recipe_archived,
+        commands::cook_recipe,
+        commands::recipe_suggestions,
+        // Workout — 운동 실적 기록 + 체성분(0076). 계획은 routines가 소유(§8 경계 결정).
+        commands::upsert_exercise,
+        commands::list_exercises,
+        commands::set_exercise_archived,
+        commands::add_exercise_alias,
+        commands::remove_exercise_alias,
+        commands::start_workout_session,
+        commands::patch_workout_session,
+        commands::delete_workout_session,
+        commands::get_workout_session,
+        commands::list_workout_sessions,
+        commands::add_workout_set,
+        commands::patch_workout_set,
+        commands::remove_workout_set,
+        commands::workout_volume_summary,
+        commands::exercise_personal_records,
+        commands::record_body_metric,
+        commands::delete_body_metric,
+        commands::body_trend,
+        commands::get_body_profile,
+        commands::set_body_profile,
+        commands::daily_energy_balance,
         commands::create_meal_plan,
         commands::list_meal_plans,
         commands::get_meal_plan,

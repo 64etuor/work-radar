@@ -6,6 +6,7 @@
 // AppError는 레포 전역 IPC envelope — 크기 경고는 도메인별 allow가 관례(okr.rs 등 동일).
 #![allow(clippy::result_large_err)]
 
+pub mod cook;
 pub mod foods;
 pub mod goals;
 pub mod logs;
@@ -15,6 +16,7 @@ pub mod plans;
 pub mod recipes;
 pub mod shopping;
 
+pub use cook::*;
 pub use foods::*;
 pub use goals::*;
 pub use logs::*;

@@ -1,0 +1,269 @@
+/* ── 운동 뷰 (세션/세트 · 종목 · 체성분 · 에너지 수지) ─────────────────── */
+.wo {
+  /* component-local tokens */
+  --wo-gutter: 22px;
+  --wo-content-max: 1180px;
+
+  display: flex;
+  flex-direction: column;
+  /* 뷰 루트는 height:100% — 뷰포트 단위를 쓰면 에이전트바/뉴스티커 높이만큼 하단이 잘린다. */
+  height: 100%;
+  background: var(--color-wr-bg);
+}
+
+.wo .wo-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 32px;
+  width: min(100%, var(--wo-content-max));
+  margin: 0 auto;
+  padding: 26px var(--wo-gutter) 22px;
+  border-bottom: 1px solid var(--color-wr-border-light);
+}
+
+.wo .wo-head-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.wo .wo-head-copy p {
+  max-width: 52ch;
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wo .wo-body {
+  display: grid;
+  flex: 1 1 auto;
+  align-content: start;
+  gap: 26px;
+  width: min(100%, var(--wo-content-max));
+  margin: 0 auto;
+  padding: 22px var(--wo-gutter) 40px;
+  overflow-y: auto;
+}
+
+.wo .wo-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.wo .wo-kpi {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+}
+
+.wo .wo-kpi-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.wo .wo-kpi-label,
+.wo .wo-hint {
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-section {
+  display: grid;
+  gap: 10px;
+}
+
+.wo .wo-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wo .wo-section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wo .wo-count {
+  color: var(--color-wr-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wo .wo-search {
+  width: 220px;
+}
+
+/* ── 세션 카드 ─────────────────────────────────────────────────────── */
+
+.wo .wo-session {
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.wo .wo-session.is-open {
+  border-color: var(--color-wr-border);
+}
+
+.wo .wo-session-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.wo .wo-session-head > span:last-child {
+  margin-left: auto;
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-session-body {
+  display: grid;
+  gap: 10px;
+  padding: 0 14px 14px;
+}
+
+.wo .wo-set-list {
+  display: grid;
+  gap: 2px;
+}
+
+.wo .wo-set-row {
+  display: grid;
+  grid-template-columns: auto 1.4fr 0.9fr 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.wo .wo-set-no {
+  min-width: 1.5rem;
+  color: var(--color-wr-text-muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.wo .wo-set-meta {
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-session-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.wo .wo-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── 입력 폼 ───────────────────────────────────────────────────────── */
+
+.wo .wo-composer,
+.wo .wo-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.wo .wo-composer-num {
+  width: 84px;
+}
+
+.wo .wo-select {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid var(--color-wr-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-wr-surface);
+  color: var(--color-wr-text);
+}
+
+/* ── 몸 / 에너지 ───────────────────────────────────────────────────── */
+
+.wo .wo-body-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.wo .wo-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+}
+
+.wo .wo-card-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 볼륨 / PR / 종목 목록 ─────────────────────────────────────────── */
+
+.wo .wo-volume-list,
+.wo .wo-exercise-list {
+  display: grid;
+  gap: 2px;
+}
+
+.wo .wo-volume-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 12px;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.wo .wo-volume-row > span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.wo .wo-pr-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-top: 6px;
+}
+
+.wo .wo-pr-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-exercise-row {
+  display: grid;
+  grid-template-columns: 1.2fr auto 1fr 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-top: 1px solid var(--color-wr-border-light);
+}
+
+.wo .wo-exercise-aliases {
+  color: var(--color-wr-text-muted);
+}

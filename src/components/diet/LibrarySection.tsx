@@ -1,7 +1,14 @@
-import { Plus, X } from "lucide-react";
+import { ChefHat, ChevronDown, ChevronUp, Plus, RotateCcw, X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
-import type { Food, FoodType, Recipe, RecipeIngredientInput } from "@/bindings";
+import type {
+  Food,
+  FoodType,
+  Recipe,
+  RecipeIngredientInput,
+  RecipeStepInput,
+  TasteAxis,
+} from "@/bindings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,11 +25,18 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  localToday,
   useAddFoodAlias,
+  useAddRecipeFeedback,
+  useCookRecipe,
   useCreateRecipe,
   useFoods,
+  useRecipeRevisions,
   useRecipes,
+  useRecipeSuggestions,
+  useRecipeTasteSummary,
   useRemoveFoodAlias,
+  useRevertRecipe,
   useSetFoodArchived,
   useSetRecipeArchived,
   useUpdateRecipe,
@@ -368,6 +382,12 @@ function RecipesPanel() {
           </Button>
         </div>
       </div>
+      <SuggestionStrip
+        onPick={(recipeId) => {
+          const picked = recipes?.find((r) => r.id === recipeId);
+          if (picked != null) setEditing(picked);
+        }}
+      />
       {recipes == null || recipes.length === 0 ? (
         <EmptyState className="diet-empty" title="레시피 없음">
           재료(g)로 등록하면 영양은 식품 데이터에서 자동 계산된다.
@@ -416,7 +436,40 @@ function RecipesPanel() {
   );
 }
 
-type DraftIngredient = { foodId: string | null; qtyG: string; optional: boolean };
+type DraftIngredient = {
+  foodId: string | null;
+  qtyG: string;
+  /** 표기 수량 — 단위와 함께 입력하면 g은 커널이 환산한다(빈 값이면 qtyG를 그대로 쓴다). */
+  qty: string;
+  unit: string;
+  toTaste: boolean;
+  optional: boolean;
+};
+
+type DraftStep = { body: string; durationMinutes: string; note: string };
+
+const EMPTY_INGREDIENT: DraftIngredient = {
+  foodId: null,
+  qtyG: "",
+  qty: "",
+  unit: "",
+  toTaste: false,
+  optional: false,
+};
+
+const EMPTY_STEP: DraftStep = { body: "", durationMinutes: "", note: "" };
+
+/** 재료 입력 단위 후보 — 0075가 seed한 전역 환산과 같은 집합. */
+const UNIT_OPTIONS = ["g", "ml", "tsp", "tbsp", "cup", "pinch", "ea", "slice", "clove"] as const;
+
+const TASTE_AXIS_LABEL: Record<TasteAxis, string> = {
+  salt: "간(소금)",
+  spice: "매움",
+  sweet: "단맛",
+  sour: "산미",
+  richness: "기름짐",
+  doneness: "익힘",
+};
 
 function RecipeDialog({
   open,
@@ -451,19 +504,44 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
     recipe?.cookMinutes != null ? String(recipe.cookMinutes) : "",
   );
   const [tags, setTags] = useState(recipe?.mealTags.join(", ") ?? "");
-  const [instructions, setInstructions] = useState(recipe?.instructions ?? "");
+  const [sourceUrl, setSourceUrl] = useState(recipe?.sourceUrl ?? "");
+  const [notes, setNotes] = useState(recipe?.notes ?? "");
   const [ingredients, setIngredients] = useState<DraftIngredient[]>(
     recipe != null && recipe.ingredients.length > 0
       ? recipe.ingredients.map((i) => ({
           foodId: i.foodId,
           qtyG: String(num(i.qtyG)),
+          qty: i.qty != null ? String(num(i.qty)) : "",
+          unit: i.unit ?? "",
+          toTaste: i.toTaste,
           optional: i.optional,
         }))
-      : [{ foodId: null, qtyG: "", optional: false }],
+      : [EMPTY_INGREDIENT],
+  );
+  const [steps, setSteps] = useState<DraftStep[]>(
+    recipe != null && recipe.steps.length > 0
+      ? recipe.steps.map((s) => ({
+          body: s.body,
+          durationMinutes: s.durationMinutes != null ? String(s.durationMinutes) : "",
+          note: s.note ?? "",
+        }))
+      : [EMPTY_STEP],
   );
 
   const patchIngredient = (index: number, patch: Partial<DraftIngredient>) => {
     setIngredients((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+  const patchStep = (index: number, patch: Partial<DraftStep>) => {
+    setSteps((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  };
+  const moveStep = (index: number, delta: number) => {
+    setSteps((prev) => {
+      const next = prev.slice();
+      const target = index + delta;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const pending = create.isPending || update.isPending;
@@ -474,12 +552,27 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
     const servingsN = Number(servings);
     if (!Number.isFinite(servingsN) || servingsN <= 0) return;
     const cleanIngredients: RecipeIngredientInput[] = ingredients
-      .filter((row) => row.foodId != null && Number(row.qtyG) > 0)
+      .filter((row) => row.foodId != null)
+      .map((row) => {
+        // 단위 표기가 있으면 g은 백엔드 커널이 환산한다 — 프런트에서 환산표를 복제하지 않는다.
+        const hasUnit = row.unit.trim().length > 0 && Number(row.qty) > 0;
+        return {
+          foodId: row.foodId as string,
+          qtyG: hasUnit ? null : Number(row.qtyG),
+          qty: hasUnit ? Number(row.qty) : null,
+          unit: hasUnit ? row.unit.trim() : null,
+          toTaste: row.toTaste,
+          optional: row.optional,
+          note: null,
+        };
+      })
+      .filter((row) => row.qty != null || (row.qtyG != null && row.qtyG > 0));
+    const cleanSteps: RecipeStepInput[] = steps
+      .filter((row) => row.body.trim().length > 0)
       .map((row) => ({
-        foodId: row.foodId as string,
-        qtyG: Number(row.qtyG),
-        optional: row.optional,
-        note: null,
+        body: row.body.trim(),
+        durationMinutes: parseOptionalInt(row.durationMinutes),
+        note: row.note.trim() || null,
       }));
     const shared = {
       name: name.trim(),
@@ -489,11 +582,21 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
         .split(",")
         .map((t) => t.trim())
         .filter((t) => t.length > 0),
-      instructions: instructions.trim() || null,
+      sourceUrl: sourceUrl.trim() || null,
+      yieldG: null,
+      notes: notes.trim() || null,
       ingredients: cleanIngredients,
+      steps: cleanSteps,
+      changedBy: null,
     };
     if (recipe) {
-      await update.mutateAsync({ id: recipe.id, ...shared });
+      await update.mutateAsync({
+        id: recipe.id,
+        // 다이얼로그를 여는 동안 에이전트가 고쳤다면 덮어쓰지 않고 실패한다.
+        expectedRevNo: recipe.revNo,
+        changeSummary: null,
+        ...shared,
+      });
     } else {
       await create.mutateAsync(shared);
     }
@@ -534,6 +637,14 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
               placeholder="dinner, pasta"
             />
           </label>
+          <label className="diet-field">
+            <span className="typo-label-sm">출처 링크</span>
+            <Input
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              placeholder="https://"
+            />
+          </label>
         </div>
 
         <div className="diet-field">
@@ -551,7 +662,35 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
                   value={row.qtyG}
                   onChange={(e) => patchIngredient(i, { qtyG: e.target.value })}
                   placeholder="g"
+                  disabled={row.unit.trim().length > 0}
                 />
+                <Input
+                  inputMode="decimal"
+                  value={row.qty}
+                  onChange={(e) => patchIngredient(i, { qty: e.target.value })}
+                  placeholder="양"
+                  aria-label="표기 수량"
+                />
+                <select
+                  className="diet-unit-select typo-caption-sm"
+                  value={row.unit}
+                  aria-label="단위"
+                  onChange={(e) => patchIngredient(i, { unit: e.target.value })}
+                >
+                  <option value="">g 직접</option>
+                  {UNIT_OPTIONS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
+                </select>
+                <label className="diet-check typo-caption-sm">
+                  <Checkbox
+                    checked={row.toTaste}
+                    onCheckedChange={(v) => patchIngredient(i, { toTaste: v === true })}
+                  />
+                  간
+                </label>
                 <label className="diet-check typo-caption-sm">
                   <Checkbox
                     checked={row.optional}
@@ -574,31 +713,101 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() =>
-                setIngredients((prev) => [...prev, { foodId: null, qtyG: "", optional: false }])
-              }
+              onClick={() => setIngredients((prev) => [...prev, EMPTY_INGREDIENT])}
             >
               <Plus className="size-4" /> 재료 추가
+            </Button>
+          </div>
+          <span className="typo-caption-sm diet-hint">
+            단위를 고르면 g은 환산표(식품 전용 &gt; 전역)로 계산된다. 환산이 없는 단위는 저장이
+            거부된다.
+          </span>
+        </div>
+
+        <div className="diet-field">
+          <span className="typo-label-sm">조리 단계</span>
+          <div className="diet-draftlines">
+            {steps.map((row, i) => (
+              <div key={i} className="diet-draftline diet-draftline-step">
+                <span className="diet-step-no typo-label-sm">{i + 1}</span>
+                <Textarea
+                  value={row.body}
+                  onChange={(e) => patchStep(i, { body: e.target.value })}
+                  rows={2}
+                  placeholder="무엇을 하는가"
+                />
+                <Input
+                  inputMode="numeric"
+                  className="diet-step-minutes"
+                  value={row.durationMinutes}
+                  onChange={(e) => patchStep(i, { durationMinutes: e.target.value })}
+                  placeholder="분"
+                  aria-label="소요 분"
+                />
+                <Input
+                  value={row.note}
+                  onChange={(e) => patchStep(i, { note: e.target.value })}
+                  placeholder="튜닝 메모"
+                  aria-label="단계 메모"
+                />
+                <div className="diet-step-actions">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="위로"
+                    disabled={i === 0}
+                    onClick={() => moveStep(i, -1)}
+                  >
+                    <ChevronUp className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="아래로"
+                    disabled={i === steps.length - 1}
+                    onClick={() => moveStep(i, 1)}
+                  >
+                    <ChevronDown className="size-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label="단계 삭제"
+                    onClick={() => setSteps((prev) => prev.filter((_, idx) => idx !== i))}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSteps((prev) => [...prev, EMPTY_STEP])}
+            >
+              <Plus className="size-4" /> 단계 추가
             </Button>
           </div>
         </div>
 
         <label className="diet-field">
-          <span className="typo-label-sm">조리법</span>
-          <Textarea
-            value={instructions}
-            onChange={(e) => setInstructions(e.target.value)}
-            rows={4}
-          />
+          <span className="typo-label-sm">총평 메모</span>
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
         </label>
 
         {recipe && (
           <p className="typo-caption-sm">
-            현재 재료 기준 전체 {fmtKcal(recipe.total.kcal)} · 1인분{" "}
+            rev {recipe.revNo} · 현재 재료 기준 전체 {fmtKcal(recipe.total.kcal)} · 1인분{" "}
             {fmtKcal(recipe.perServing.kcal)} · 재료 총량{" "}
             {fmtG(recipe.ingredients.reduce((sum, i) => sum + num(i.qtyG), 0))}
           </p>
         )}
+
+        {recipe && <RecipeTuningPanel recipe={recipe} />}
 
         <div className="diet-form-actions">
           {recipe && (
@@ -620,5 +829,223 @@ function RecipeDialogBody({ recipe, onDone }: { recipe: Recipe | null; onDone: (
         </div>
       </form>
     </DialogContent>
+  );
+}
+
+/**
+ * 반복 튜닝 패널 — 조리 기록 · 축별 맛 피드백 · 개정 이력/되돌리기.
+ *
+ * 폼(위 replace-all 저장)과 **분리된 즉시 액션**이다: 저장 버튼을 누르지 않아도 각각 독립적인
+ * 사실 기록이고, 되돌리기는 새 리비전을 만들므로 폼 드래프트와 섞이면 안 된다.
+ */
+function RecipeTuningPanel({ recipe }: { recipe: Recipe }) {
+  const { data: revisions } = useRecipeRevisions(recipe.id);
+  const { data: taste } = useRecipeTasteSummary(recipe.id);
+  const revert = useRevertRecipe();
+  const cook = useCookRecipe();
+  const feedback = useAddRecipeFeedback();
+
+  const [cookServings, setCookServings] = useState(String(num(recipe.servings)));
+  const [rating, setRating] = useState("");
+  const [axes, setAxes] = useState<Partial<Record<TasteAxis, string>>>({});
+  const [comment, setComment] = useState("");
+
+  const axisValue = (axis: TasteAxis) => axes[axis] ?? "0";
+  const submitFeedback = async () => {
+    if (feedback.isPending) return;
+    const delta = (axis: TasteAxis) => {
+      const raw = axes[axis];
+      if (raw == null || raw === "0") return null;
+      const parsed = Number(raw);
+      return Number.isFinite(parsed) ? parsed : null;
+    };
+    await feedback.mutateAsync({
+      recipeId: recipe.id,
+      revNo: recipe.revNo,
+      mealLogId: null,
+      rating: parseOptionalInt(rating),
+      saltDelta: delta("salt"),
+      spiceDelta: delta("spice"),
+      sweetDelta: delta("sweet"),
+      sourDelta: delta("sour"),
+      richnessDelta: delta("richness"),
+      donenessDelta: delta("doneness"),
+      comment: comment.trim() || null,
+    });
+    setAxes({});
+    setRating("");
+    setComment("");
+  };
+
+  return (
+    <div className="diet-tuning">
+      <div className="diet-tuning-block">
+        <span className="typo-label-sm">조리 기록</span>
+        <div className="diet-tuning-row">
+          <Input
+            inputMode="decimal"
+            className="diet-tuning-servings"
+            value={cookServings}
+            onChange={(e) => setCookServings(e.target.value)}
+            aria-label="조리 인분"
+          />
+          <span className="typo-caption-sm">인분</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={cook.isPending}
+            onClick={() => {
+              const servings = Number(cookServings);
+              if (!Number.isFinite(servings) || servings <= 0) return;
+              void cook.mutateAsync({
+                recipeId: recipe.id,
+                servings,
+                date: localToday(),
+                at: null,
+                plannedMealId: null,
+                consumePantry: true,
+                satisfaction: null,
+                fullness: null,
+                note: null,
+              });
+            }}
+          >
+            <ChefHat className="size-4" /> 조리 (재고 차감 + 기록)
+          </Button>
+        </div>
+        <span className="typo-caption-sm diet-hint">
+          재료가 모자라면 아무것도 차감·기록되지 않는다. 간 맞춤·선택 재료는 조리를 막지 않는다.
+        </span>
+      </div>
+
+      <div className="diet-tuning-block">
+        <span className="typo-label-sm">먹어본 평가 (다음 튜닝 근거)</span>
+        <div className="diet-tuning-axes">
+          {(Object.keys(TASTE_AXIS_LABEL) as TasteAxis[]).map((axis) => (
+            <label key={axis} className="diet-axis">
+              <span className="typo-caption-sm">{TASTE_AXIS_LABEL[axis]}</span>
+              <select
+                className="diet-unit-select typo-caption-sm"
+                value={axisValue(axis)}
+                onChange={(e) => setAxes((prev) => ({ ...prev, [axis]: e.target.value }))}
+              >
+                <option value="-2">많이 부족</option>
+                <option value="-1">부족</option>
+                <option value="0">적당</option>
+                <option value="1">과함</option>
+                <option value="2">많이 과함</option>
+              </select>
+            </label>
+          ))}
+        </div>
+        <div className="diet-tuning-row">
+          <Input
+            inputMode="numeric"
+            className="diet-tuning-servings"
+            value={rating}
+            onChange={(e) => setRating(e.target.value)}
+            placeholder="1-5"
+            aria-label="만족도"
+          />
+          <Input
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+            placeholder="한 줄 메모"
+            aria-label="평가 메모"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={feedback.isPending}
+            onClick={() => void submitFeedback()}
+          >
+            평가 저장
+          </Button>
+        </div>
+        {taste != null && taste.hints.length > 0 && (
+          <p className="typo-caption-sm">
+            누적 제안:{" "}
+            {taste.hints
+              .map(
+                (h) =>
+                  `${TASTE_AXIS_LABEL[h.axis]} ${h.direction === "reduce" ? "줄이기" : "늘리기"}`,
+              )
+              .join(" · ")}
+            {taste.avgRating != null && ` · 평균 ${taste.avgRating.toFixed(1)}점`}
+          </p>
+        )}
+      </div>
+
+      {revisions != null && revisions.length > 0 && (
+        <div className="diet-tuning-block">
+          <span className="typo-label-sm">개정 이력</span>
+          <ul className="diet-revisions">
+            {revisions.map((rev) => (
+              <li key={rev.id} className="diet-revision">
+                <span className="typo-caption-sm">
+                  rev {rev.revNo} · {rev.changedBy === "agent" ? "에이전트" : "나"}
+                  {rev.changeSummary != null && ` · ${rev.changeSummary}`}
+                </span>
+                {rev.revNo !== recipe.revNo && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={revert.isPending}
+                    onClick={() =>
+                      void revert.mutateAsync({
+                        recipeId: recipe.id,
+                        revNo: rev.revNo,
+                        expectedRevNo: recipe.revNo,
+                      })
+                    }
+                  >
+                    <RotateCcw className="size-4" /> 되돌리기
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+          <span className="typo-caption-sm diet-hint">
+            되돌리기도 새 리비전으로 남는다 — 되돌린 것을 다시 되돌릴 수 있다.
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 지금 재고로 만들 수 있는 것 — 결정론 순위(재고 커버리지 · 유통기한 압력 · 목표 적합도). */
+function SuggestionStrip({ onPick }: { onPick: (recipeId: string) => void }) {
+  const today = localToday();
+  const { data: suggestions } = useRecipeSuggestions(today, 5);
+  if (suggestions == null || suggestions.length === 0) return null;
+  return (
+    <div className="diet-suggestions">
+      <span className="typo-label-sm">지금 만들 수 있는 것</span>
+      <div className="diet-suggestion-row">
+        {suggestions.map((s) => (
+          <button
+            key={s.recipeId}
+            type="button"
+            className="diet-suggestion-card"
+            onClick={() => onPick(s.recipeId)}
+          >
+            <span className="typo-body-strong">{s.name}</span>
+            <span className="typo-caption-sm">
+              재고 {Math.round(num(s.coveragePct))}%
+              {s.earliestExpiry != null && ` · ${s.earliestExpiry}까지`}
+            </span>
+            {s.missing.length > 0 && (
+              <span className="typo-caption-sm diet-suggestion-missing">
+                부족: {s.missing.slice(0, 3).join(", ")}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
