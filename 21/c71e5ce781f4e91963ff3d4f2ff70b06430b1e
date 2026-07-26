@@ -1,0 +1,21 @@
+docs/reference/commands.md
+  s_6ff78ed60309b9::t_3386ec0379788e 35-48
+governance/AGENTS.md
+  s_6ff78ed60309b9::t_d470d888242f7b 1-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "21c71e5ce781f4e91963ff3d4f2ff70b06430b1e",
+  "prompts": {},
+  "sessions": {
+    "s_6ff78ed60309b9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f63c9-6b28-7141-81cf-75c093e729e8",
+        "model": "unknown"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
