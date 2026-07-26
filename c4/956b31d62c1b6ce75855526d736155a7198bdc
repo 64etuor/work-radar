@@ -1,0 +1,19 @@
+.codex/config.toml
+  s_6cfe0f5f25d4e5::t_e0d42955edad83 14-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.16",
+  "base_commit_sha": "c4956b31d62c1b6ce75855526d736155a7198bdc",
+  "prompts": {},
+  "sessions": {
+    "s_6cfe0f5f25d4e5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019f5c0a-f294-78b2-af01-6c5483dbfcbe",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
