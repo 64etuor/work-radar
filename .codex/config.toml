@@ -19,3 +19,6 @@ plan_mode_reasoning_effort = "xhigh"
 
 [features.multi_agent_v2]
 max_concurrent_threads_per_session = 1000
+
+[agents]
+max_threads = 1000
