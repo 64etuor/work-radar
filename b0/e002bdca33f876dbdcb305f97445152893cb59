@@ -1,0 +1,126 @@
+src/components/reading/readingEditDrafts.ts
+  s_a6f81f1f0b81bb::t_c9280d2332b9e2 1-2,4-82,96-113,115-139
+  s_a6f81f1f0b81bb::t_7b48450e3d5b5e 3,83-95,114
+src/components/reading/ReadingView.css
+  s_a6f81f1f0b81bb::t_b2f486cf9d903e 748-798,805-806,808-812,864-867
+  s_a6f81f1f0b81bb::t_d9424b8c6f6986 807
+  s_a6f81f1f0b81bb::t_18239dae3ddcf9 872
+  s_a6f81f1f0b81bb::t_b6cf74cd6c569c 868
+src-tauri/src/commands/reading/quotes.rs
+  s_a6f81f1f0b81bb::t_f63336176253ea 139,166-184
+  s_a6f81f1f0b81bb::t_27e5a097fd2090 11,69-108,118-125
+  s_a6f81f1f0b81bb::t_a1132395d0c3ef 126
+  s_a6f81f1f0b81bb::t_bcf510c33c42f8 185
+src/components/workout/workoutEditDrafts.ts
+  s_a6f81f1f0b81bb::t_c9280d2332b9e2 1-21,23-78,80-100,102-143
+  s_a6f81f1f0b81bb::t_062538aad80822 22,79,101
+src/bindings.ts
+  s_a6f81f1f0b81bb::t_624748d983fbf4 1316-1317,4648
+  s_a6f81f1f0b81bb::t_4d44d385d898f8 3208
+  s_a6f81f1f0b81bb::t_ae85664e67c606 184,187,4651-4656,4712-4717
+  s_c85ac92eed5e28::t_e49c0e305be8aa 4649-4650,4718-4719
+src-tauri/src/commands/reading/stats.rs
+  s_a6f81f1f0b81bb::t_c4117066089710 240
+src/components/reading/readingFormat.ts
+  s_a6f81f1f0b81bb::t_c4117066089710 28
+src/components/reading/BookDetailsSection.tsx
+  s_a6f81f1f0b81bb::t_1dd765e435a8ed 11
+  s_a6f81f1f0b81bb::t_e4f630b2b07f3f 108
+  s_a6f81f1f0b81bb::t_4900426129647e 1-10,12-107,109-204
+src/lib/query/reading.ts
+  s_a6f81f1f0b81bb::t_825a13fee0cf63 16-17,162-170,180-188
+src/components/workout/workoutEditDrafts.test.ts
+  s_a6f81f1f0b81bb::t_062538aad80822 85
+  s_a6f81f1f0b81bb::t_f63336176253ea 1-70,72-84,86-110
+  s_a6f81f1f0b81bb::t_c9280d2332b9e2 71
+src-tauri/src/commands/reading/books.rs
+  s_a6f81f1f0b81bb::t_7b48450e3d5b5e 389-448,460,462-468,470,475-476
+  s_a6f81f1f0b81bb::t_1376294cb37c2b 590,843
+  s_a6f81f1f0b81bb::t_c4117066089710 15-16,635
+  s_a6f81f1f0b81bb::t_64aef6a42c1c53 840-842,844-850
+  s_a6f81f1f0b81bb::t_459f3041d52b5f 851
+src/components/workout/WorkoutSessionEditor.tsx
+  s_a6f81f1f0b81bb::t_cd7e379c602ed7 1-92
+src/components/reading/BookQuoteSection.tsx
+  s_a6f81f1f0b81bb::t_18239dae3ddcf9 96-100,103,107-132
+  s_a6f81f1f0b81bb::t_1f60bf1f2266c1 1,9-11,17,21-22,82-94,101-102,104-106,133-202
+src-tauri/src/mcp/tools/workout.rs
+  s_a6f81f1f0b81bb::t_062538aad80822 686
+src/components/workout/WorkoutView.css
+  s_a6f81f1f0b81bb::t_46f76b14a39c50 232
+  s_a6f81f1f0b81bb::t_b2f486cf9d903e 137-145,187-231,233-243
+  s_a6f81f1f0b81bb::t_4995229850a018 244
+src-tauri/src/commands/reading/sessions.rs
+  s_a6f81f1f0b81bb::t_27e5a097fd2090 13-15,95-151,161-168
+  s_a6f81f1f0b81bb::t_f63336176253ea 181,249-273
+  s_a6f81f1f0b81bb::t_96bb261fa8fa2d 169
+src-tauri/src/commands/workout/sessions.rs
+  s_a6f81f1f0b81bb::t_f8b4fd450d7082 896-927
+  s_a6f81f1f0b81bb::t_062538aad80822 187-201,235-241,928
+  s_a6f81f1f0b81bb::t_e5a8a08f6314cf 895
+  s_a6f81f1f0b81bb::t_72cfff08bcb74c 929
+src/components/workout/ExerciseLibrary.tsx
+  s_a6f81f1f0b81bb::t_a74a4622910434 1,29-31,39-40,47-48,61-72,110-142
+  s_a6f81f1f0b81bb::t_3d534f89097030 10
+src/components/reading/BookSessionSection.tsx
+  s_a6f81f1f0b81bb::t_18239dae3ddcf9 100-149
+  s_a6f81f1f0b81bb::t_1f60bf1f2266c1 1,7-13,30,34-35,87-99,150-204
+src/components/workout/SessionCard.tsx
+  s_a6f81f1f0b81bb::t_1dd765e435a8ed 12-13
+  s_a6f81f1f0b81bb::t_cd7e379c602ed7 1,7,27,29-30,46-64,70-107,111
+  s_d8f321dd73853a::t_4f7da381aafdad 108-110,112
+src/components/workout/ExerciseEditor.tsx
+  s_a6f81f1f0b81bb::t_a74a4622910434 1-65,69-142
+  s_a6f81f1f0b81bb::t_b718ac062b0a84 66-68
+src-tauri/src/models/reading.rs
+  s_a6f81f1f0b81bb::t_c4117066089710 126-143
+  s_a6f81f1f0b81bb::t_27e5a097fd2090 170-179,202-209
+  s_a6f81f1f0b81bb::t_6bb956e3286573 210-211
+src-tauri/src/models/workout.rs
+  s_a6f81f1f0b81bb::t_062538aad80822 161
+src/lib/query/workout.ts
+  s_a6f81f1f0b81bb::t_825a13fee0cf63 174-175,177-193
+  s_a6f81f1f0b81bb::t_19903f03c1eca8 176
+src/components/workout/WorkoutSetEditor.tsx
+  s_a6f81f1f0b81bb::t_b718ac062b0a84 10-30,73
+  s_a6f81f1f0b81bb::t_cd7e379c602ed7 1-9,31-72,74-100
+src/components/reading/BookDetailSheet.tsx
+  s_a6f81f1f0b81bb::t_4900426129647e 10,102
+src-tauri/src/lib.rs
+  s_a6f81f1f0b81bb::t_27e5a097fd2090 228,231
+src/components/reading/readingEditDrafts.test.ts
+  s_a6f81f1f0b81bb::t_64aef6a42c1c53 82-100
+  s_a6f81f1f0b81bb::t_f63336176253ea 1-81,101-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "b0e002bdca33f876dbdcb305f97445152893cb59",
+  "prompts": {},
+  "sessions": {
+    "s_a6f81f1f0b81bb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fac1b-57aa-7d40-9620-274a5c851de6",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_c85ac92eed5e28": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fef21-fcc2-7841-86ac-e1c0b8aef715",
+        "model": "gpt-5.6-terra"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_d8f321dd73853a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "75873341-d233-4cce-885e-6a47a5d6e2f1",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
