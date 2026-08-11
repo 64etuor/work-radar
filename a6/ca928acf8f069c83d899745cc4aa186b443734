@@ -1,0 +1,82 @@
+src/components/board/BrainDumpToggle.dom.test.tsx
+  s_d8f321dd73853a::t_dc67935f73db05 23,29
+  s_d8f321dd73853a::t_16bea1400462ad 86-110
+src/components/board/useBoardKeyboard.dom.test.tsx
+  s_d8f321dd73853a::t_e2fee1bbdea4c6 1-81
+src/components/board/lifeWheelTags.ts
+  s_d8f321dd73853a::t_8360fd2ca55209 21-23,25-26
+  s_d8f321dd73853a::t_01f2cf8152279e 15-20,24,27-28
+src/lib/useListReorder.ts
+  s_d8f321dd73853a::t_ebf70a807d4f12 126
+  s_d8f321dd73853a::t_2570fea6f62aaf 92-93,96,103-108,111
+  s_d8f321dd73853a::t_02ad7b66d7c60e 109-110,112
+src/components/board/LifeWheelPalette.tsx
+  s_d8f321dd73853a::t_3c62f9601edbf8 243
+  s_d8f321dd73853a::t_41610f9cced732 261
+  s_d8f321dd73853a::t_6452b91bffee6b 206
+  s_d8f321dd73853a::t_3dc256df349bf9 157,165-166,174,185-186,188,190-198
+  s_d8f321dd73853a::t_fed70a7a2b4cfd 167-171,175-179,182,184,187,189,199
+  s_d8f321dd73853a::t_1957fb8f924b72 1
+  s_d8f321dd73853a::t_ab187addf49120 214-215
+src/lib/useListReorder.dom.test.tsx
+  s_d8f321dd73853a::t_6151a0ba7cfbfa 1-72
+docs/decisions.md
+  s_d8f321dd73853a::t_b246b40d1816b4 688
+  s_d8f321dd73853a::t_0b4613a83e9952 689
+src/components/board/MatrixCanvas.dom.test.tsx
+  s_d8f321dd73853a::t_fedcc6be2d7fbb 58-59,77-78
+  s_d8f321dd73853a::t_a030a837254c58 246-258
+  s_d8f321dd73853a::t_8b765937372454 217-224
+  s_d8f321dd73853a::t_d79f50c27b1991 141-153
+  s_d8f321dd73853a::t_4c993449e153a3 87
+  s_d8f321dd73853a::t_490ee32be1b350 61,73
+  s_d8f321dd73853a::t_9351c7f21d41a4 171,173-176,180,184,186-187,189-216,225-245
+  s_d8f321dd73853a::t_5a6c5f95604865 104-105,109-119,122-127,139-140,154-170,259
+  s_d8f321dd73853a::t_5c10fb483d51ed 172,177-179,181-183,185,188
+  s_d8f321dd73853a::t_75e2125f3542c5 106-108,120-121,128-138
+  s_d8f321dd73853a::t_b652e254f7812a 60,68
+src/components/board/RoutinesPanel.tsx
+  s_d8f321dd73853a::t_ba420b3f931065 214
+  s_d8f321dd73853a::t_39241c2b481256 7
+  s_d8f321dd73853a::t_7b6f1fb3cf8eca 169
+src/components/board/TodayRail.tsx
+  s_d8f321dd73853a::t_d85cf4d8fe9976 125
+  s_d8f321dd73853a::t_f1e5582000dd47 99
+  s_d8f321dd73853a::t_5c87711b4a3c12 7
+src/components/board/MatrixCanvas.tsx
+  s_d8f321dd73853a::t_b01e501bd34ad1 278-279,282,286-287,289-300
+  s_d8f321dd73853a::t_2fe74fa7c7cbc4 248
+  s_d8f321dd73853a::t_e2929e64cbedca 247,249-255
+  s_d8f321dd73853a::t_a4d7375c3d90fc 8
+  s_d8f321dd73853a::t_eec3f899c9031b 329
+  s_d8f321dd73853a::t_c6bdb62c655ffb 545-546
+  s_d8f321dd73853a::t_423b6b45ff2f8e 423-430
+  s_d8f321dd73853a::t_1b0cada3e63f9c 348,351
+  s_d8f321dd73853a::t_82ffe676d5ba9f 436-438
+  s_d8f321dd73853a::t_2d4c7412641fc9 431,439,441,444,455,492,547
+src/components/board/LifeWheelPalette.test.tsx
+  s_d8f321dd73853a::t_7a5ba1f76349d4 30-59
+  s_d8f321dd73853a::t_476bc0d135f7f9 2,5
+src/components/board/useBoardKeyboard.ts
+  s_d8f321dd73853a::t_20a046eb8c0c2d 16,18
+  s_d8f321dd73853a::t_d0eb24109a4266 51-52,54
+  s_d8f321dd73853a::t_f51fe315186e05 53,55
+src/components/board/BrainDumpToggle.tsx
+  s_d8f321dd73853a::t_172e104047820d 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "a6ca928acf8f069c83d899745cc4aa186b443734",
+  "prompts": {},
+  "sessions": {
+    "s_d8f321dd73853a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "75873341-d233-4cce-885e-6a47a5d6e2f1",
+        "model": "claude-fable-5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
