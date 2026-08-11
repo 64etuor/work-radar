@@ -4,6 +4,7 @@ import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { quadrantToZone, type ZoneKey } from "@/components/board/boardUtils";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { clampPaletteAnchor } from "@/components/board/lifeWheelTags";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/components/ui/cn";
 import { ageFromForDate, isTodayDone, localToday } from "@/lib/query";
@@ -93,11 +94,9 @@ export function TodayRail({
                       tags={lifeWheelTags}
                       onSetKind={onSetKind}
                       onOpenAreaPalette={(button) => {
-                        const rect = button.getBoundingClientRect();
                         setAreaPalette({
                           signalId: s.id,
-                          x: rect.left + rect.width / 2,
-                          y: rect.top + rect.height / 2,
+                          ...clampPaletteAnchor(button.getBoundingClientRect()),
                         });
                       }}
                     />
@@ -123,7 +122,7 @@ export function TodayRail({
           return (
             <AreaRadialPalette
               target={target}
-              tags={lifeWheelTags.filter((tag) => tag.enabled)}
+              tags={lifeWheelTags}
               anchor={{ x: areaPalette.x, y: areaPalette.y }}
               onClose={() => setAreaPalette(null)}
               onSetAreaTagKey={onSetAreaTagKey}

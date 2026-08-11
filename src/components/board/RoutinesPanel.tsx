@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import type { Kind, LifeWheelTagConfig, Project, RoutineToday } from "@/bindings";
 import { CheckIcon } from "@/components/board/CheckIcon";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { clampPaletteAnchor } from "@/components/board/lifeWheelTags";
 import {
   RoutineModal,
   type RoutineModalAnchor,
@@ -163,11 +164,9 @@ export function RoutinesPanel({
                     tags={lifeWheelTags}
                     onSetKind={onSetKind}
                     onOpenAreaPalette={(button) => {
-                      const rect = button.getBoundingClientRect();
                       setAreaPalette({
                         routineId: r.id,
-                        x: rect.left + rect.width / 2,
-                        y: rect.top + rect.height / 2,
+                        ...clampPaletteAnchor(button.getBoundingClientRect()),
                       });
                     }}
                   />
@@ -212,7 +211,7 @@ export function RoutinesPanel({
           return (
             <AreaRadialPalette
               target={target}
-              tags={lifeWheelTags.filter((tag) => tag.enabled)}
+              tags={lifeWheelTags}
               anchor={{ x: areaPalette.x, y: areaPalette.y }}
               onClose={() => setAreaPalette(null)}
               onSetAreaTagKey={onSetAreaTagKey}

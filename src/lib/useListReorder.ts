@@ -89,18 +89,27 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
       }
       setOver(computeOver(ev.clientY));
     };
-    const up = (ev: PointerEvent) => {
-      handle.releasePointerCapture(e.pointerId);
+    // 리스너 해제 + 들어올림 원복 + 드래그 상태 리셋 (up/cancel 공통).
+    const teardown = () => {
       handle.removeEventListener("pointermove", move);
       handle.removeEventListener("pointerup", up);
-      const target = computeOver(ev.clientY);
-      // 들어올림 해제(따라다니던 transform 원복) 후 새 순서 반영.
+      handle.removeEventListener("pointercancel", cancel);
       if (draggingEl) {
         draggingEl.style.transform = "";
         draggingEl.style.willChange = "";
       }
       setDragId(null);
       setOver(null);
+    };
+    // 포인터 취소(터치 스크롤 전환·포커스 상실 등) 시 pointerup이 안 온다 — 정리 없이는
+    // dragId/transform이 유령으로 남아 리스트가 어긋난 채 고착된다. 순서 반영은 하지 않는다.
+    const cancel = () => teardown();
+    const up = (ev: PointerEvent) => {
+      handle.releasePointerCapture(e.pointerId);
+      // 드롭 대상은 teardown(transform 원복·상태 리셋) 전에 계산 — 원복이 레이아웃에
+      // 영향 주는 스타일로 바뀌어도 드롭 위치가 틀어지지 않게 원래 순서를 유지한다.
+      const target = computeOver(ev.clientY);
+      teardown();
       if (!target || target.id === id) return;
 
       // 새 순서 계산: id를 빼고, target 위치(before/after)에 끼운다.
@@ -114,6 +123,7 @@ export function useListReorder(ids: string[], onReorder: (orderedIds: string[]) 
     };
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", cancel);
   };
 
   return {

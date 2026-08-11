@@ -5,6 +5,7 @@ import type { Kind, LifeWheelTagConfig, WorkSignal } from "@/bindings";
 import { quadrantToZone, shortDate, type ZoneKey, ZONES } from "@/components/board/boardUtils";
 import { BrainDumpToggle } from "@/components/board/BrainDumpToggle";
 import { AreaRadialPalette, CardTagEditor } from "@/components/board/LifeWheelPalette";
+import { clampPaletteAnchor } from "@/components/board/lifeWheelTags";
 import {
   CARD_WIDTH,
   computeInboxHeight,
@@ -243,7 +244,15 @@ function useMatrixCanvasView({
   };
 
   const onCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, id: string) => {
-    if ((e.target as HTMLElement).closest(".menu-btn")) return;
+    const target = e.target as HTMLElement;
+    // 태그 칩(.postit-tag-button)은 드래그 표면에서 제외 — 카드에 pointer capture가 걸리면
+    // pointerup이 카드로 리타게팅돼 칩의 click(kind 전환·라이프휠 팔레트)이 유실된다(ca25a666 의도 반전).
+    // 칩은 preventDefault로 compat mousedown이 억제돼 카드 onMouseDown 선택도 안 타므로 여기서 선택 유지.
+    if (target.closest(".postit-tag-button")) {
+      if (!isOptimisticSignalId(id)) cbRef.current.onSelect(id);
+      return;
+    }
+    if (target.closest(".menu-btn")) return;
     // 낙관 임시 카드(서버 왕복 전)는 드래그/선택 비활성 — 존재하지 않는 id로 분류/메뉴가 나가면 안 됨.
     if (isOptimisticSignalId(id)) return;
     // 인라인 편집 중인 카드는 드래그 비활성(입력 조작 보호).
@@ -266,15 +275,29 @@ function useMatrixCanvasView({
       el.style.top = `${ev.clientY - o.top - oy}px`;
       highlight(ev.clientX, ev.clientY);
     };
-    const up = (ev: PointerEvent) => {
-      el.releasePointerCapture(e.pointerId);
+    // 리스너 해제 + 드래그 비주얼 원복 (up/cancel 공통).
+    const teardown = () => {
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", cancel);
       el.classList.remove("dragging");
       el.style.transition = "";
       clearHighlights();
+    };
+    const currentZoneOf = (): ZoneKey => {
       const sig = signalsRef.current.find((s) => s.id === id);
-      const currentZone: ZoneKey = sig ? quadrantToZone(sig.quadrant) : "unclassified";
+      return sig ? quadrantToZone(sig.quadrant) : "unclassified";
+    };
+    // OS/브라우저가 포인터를 취소하면(포커스 상실 등) pointerup이 안 온다 —
+    // 정리 없이는 카드가 .dragging + transition:none 상태로 커서 위치에 남는다.
+    const cancel = () => {
+      teardown();
+      layoutZone(currentZoneOf(), false);
+    };
+    const up = (ev: PointerEvent) => {
+      el.releasePointerCapture(e.pointerId);
+      teardown();
+      const currentZone = currentZoneOf();
       if (!moved) {
         layoutZone(currentZone, false);
         return;
@@ -303,6 +326,7 @@ function useMatrixCanvasView({
     };
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", cancel);
   };
 
   const inboxCount = signals.filter((s) => zoneOf(s) === "unclassified").length;
@@ -321,8 +345,10 @@ function useMatrixCanvasView({
     <div className="canvas" ref={canvasRef}>
       <InboxColumn
         ref={(el) => {
+          inboxRef.current = el; // fitInbox(≤900px 높이 맞춤)가 읽는 ref — 누락 시 죽은 코드가 된다.
           cellRefs.current.unclassified = el;
         }}
+        className="inbox" // CaptureBoard.css 반응형(≤1180px/≤900px) 셀렉터 대상.
         label="Inbox"
         ko="미분류"
         count={inboxCount}
@@ -394,24 +420,28 @@ function useMatrixCanvasView({
               if (isOptimisticSignalId(s.id)) return; // 서버 왕복 전 임시 카드 — 선택 금지
               cbRef.current.onSelect(s.id);
             }}
+            // 제목 편집 진입은 카드 루트에서 받는다 — 본문 pointerdown이 카드에 pointer capture를
+            // 걸면 dblclick이 카드로 리타게팅돼 .body의 onDoubleClick은 실기에서 절대 안 불린다.
+            onDoubleClick={(e) => {
+              const t = e.target as HTMLElement;
+              if (t.closest(".postit-tag-button, .menu-btn, .today-quick-btn, .postit-edit"))
+                return;
+              if (isOptimisticSignalId(s.id) || s.id === editingId) return;
+              onEditStart(s.id);
+            }}
           >
             <CardTagEditor
               target={s}
               tags={lifeWheelTags}
-              onSetKind={onSetKind}
+              onSetKind={(id, kind) => {
+                if (isOptimisticSignalId(id)) return; // 서버 왕복 전 임시 카드 — 무음 flip-rollback 방지
+                onSetKind(id, kind);
+              }}
               onOpenAreaPalette={(button) => {
-                const rect = button.getBoundingClientRect();
-                const margin = 156;
+                if (isOptimisticSignalId(s.id)) return; // 서버 왕복 전 임시 카드
                 setAreaPalette({
                   signalId: s.id,
-                  x: Math.min(
-                    Math.max(rect.left + rect.width / 2, margin),
-                    window.innerWidth - margin,
-                  ),
-                  y: Math.min(
-                    Math.max(rect.top + rect.height / 2, margin),
-                    window.innerHeight - margin,
-                  ),
+                  ...clampPaletteAnchor(button.getBoundingClientRect()),
                 });
               }}
             />
@@ -422,14 +452,7 @@ function useMatrixCanvasView({
                 onCancel={onEditCancel}
               />
             ) : (
-              <div
-                className="body"
-                onDoubleClick={(e) => {
-                  e.stopPropagation();
-                  onEditStart(s.id);
-                }}
-                title="더블클릭해서 제목 편집"
-              >
+              <div className="body" title="더블클릭해서 제목 편집">
                 {s.title}
               </div>
             )}
@@ -466,7 +489,7 @@ function useMatrixCanvasView({
       {paletteSignal && areaPalette && (
         <AreaRadialPalette
           target={paletteSignal}
-          tags={lifeWheelTags.filter((tag) => tag.enabled)}
+          tags={lifeWheelTags}
           anchor={areaPalette}
           onClose={() => setAreaPalette(null)}
           onSetAreaTagKey={onSetAreaTagKey}
@@ -519,6 +542,9 @@ function TitleEditor({
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // 라이프휠 팔레트가 열려 있으면 그쪽 Esc에 양보 — 같은 window-capture 시제라
+        // stopPropagation으로는 서로 못 막아서, 한 Esc가 팔레트 닫기+편집 폐기를 동시에 한다.
+        if (document.querySelector(".area-radial-layer:not(.closing)")) return;
         e.stopPropagation();
         e.preventDefault();
         cancelEdit();

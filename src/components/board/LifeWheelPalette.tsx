@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { AreaTag, Kind, LifeWheelTagConfig } from "@/bindings";
 import { kindLabel } from "@/components/board/boardUtils";
@@ -154,6 +154,7 @@ export function AreaRadialPalette({
   onSetAreaTagKey,
 }: {
   target: CardTagTarget;
+  /** 전체 태그 목록 — enabled 필터는 내부에서. (숨김 처리된 태그도 현재 선택이면 보여야 한다.) */
   tags: LifeWheelTagConfig[];
   anchor: { x: number; y: number };
   onClose: () => void;
@@ -161,21 +162,48 @@ export function AreaRadialPalette({
 }) {
   const selectedAreas = parseAreaTagKeys(target.areaTags, target.area);
   const selectedArea = selectedAreas[0] ?? null;
+  // 숨김(enabled=false) 태그는 새로 고를 수 없지만, 카드에 이미 붙어 있으면 세그먼트로
+  // 노출해야 현재 선택이 보이고 유지도 가능하다 — 칩(전체 목록)과의 비대칭 버그 방지.
+  // 열림 시점에 동결 — 태그 선택의 낙관 업데이트가 exit 애니메이션 중 세그먼트 수/딜레이를
+  // 재계산해 닫힘 타이머가 재시작되는 것을 막는다.
+  const [visibleTags] = useState(() =>
+    tags.filter((tag) => tag.enabled || tag.id === selectedArea),
+  );
   const [closing, setClosing] = useState(false);
   const closePalette = () => setClosing(true);
-  const closeDurationMs = 260 + Math.max(tags.length - 1, 0) * 18;
+  const closeDurationMs = 260 + Math.max(visibleTags.length - 1, 0) * 18;
+  // onClose 정체성 변화(부모 인라인 arrow 재렌더)가 닫힘 타이머를 재시작하지 않도록 ref 경유.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!closing) return;
-    const timeout = window.setTimeout(onClose, closeDurationMs);
+    const timeout = window.setTimeout(() => onCloseRef.current(), closeDurationMs);
     return () => window.clearTimeout(timeout);
-  }, [closeDurationMs, closing, onClose]);
+  }, [closeDurationMs, closing]);
+  // overlay-stack 계약(마커는 아래 layer div): Esc는 팔레트만 닫는다 — capture 단계에서
+  // 셸/보드 핸들러보다 먼저 가로챈다(CardMenu·BrainDumpToggle과 동일 패턴).
+  // exit 중(closing)에는 이미 '닫힌' 것 — 리스너를 내려 keydown 소비를 멈춘다(App.tsx 계약).
+  useEffect(() => {
+    if (closing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation();
+        setClosing(true);
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [closing]);
   const selectArea = (tagKey: string | null) => {
     onSetAreaTagKey(target.id, tagKey);
     closePalette();
   };
   const innerRadius = 82;
   const outerRadius = 124;
-  const segmentCount = Math.max(tags.length, 1);
+  const segmentCount = Math.max(visibleTags.length, 1);
   const segmentStep = 360 / segmentCount;
   const segmentGap = Math.min(10, segmentStep * 0.22);
   const labelRadius = (innerRadius + outerRadius) / 2;
@@ -183,6 +211,8 @@ export function AreaRadialPalette({
   return (
     <div
       className={cn("area-radial-layer wr-radial-effect-layer", closing && "closing")}
+      // overlay-stack 단일 진실원: 열린 동안 마커 → 전역 Enter(브레인덤프 열기)·셸 Esc 양보.
+      data-wr-overlay-open={closing ? undefined : ""}
       onPointerDown={closePalette}
     >
       <div
@@ -210,7 +240,7 @@ export function AreaRadialPalette({
           <span>미분류</span>
         </button>
         <svg className="area-wheel" viewBox="-150 -150 300 300" aria-label="Life Wheel 태그">
-          {tags.map((choice, index) => {
+          {visibleTags.map((choice, index) => {
             const centerAngle = -90 + segmentStep * index;
             const startAngle = centerAngle - (segmentStep - segmentGap) / 2;
             const endAngle = centerAngle + (segmentStep - segmentGap) / 2;
@@ -228,7 +258,7 @@ export function AreaRadialPalette({
                     "--area-color": choice.color,
                     "--area-text-color": readableTextColor(choice.color),
                     "--radial-delay": `${index * 18}ms`,
-                    "--radial-close-delay": `${(tags.length - index - 1) * 18}ms`,
+                    "--radial-close-delay": `${(visibleTags.length - index - 1) * 18}ms`,
                   } as React.CSSProperties
                 }
                 onClick={() => selectArea(choice.id)}

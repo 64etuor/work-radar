@@ -85,6 +85,7 @@ export function BrainDumpToggle({ onSubmit, disabled, inputRef }: Props) {
   }, [open]);
 
   const submit = () => {
+    if (disabled) return; // Enter 경로도 버튼과 같은 규칙(제출 in-flight 중 차단).
     const raw = value;
     if (!raw.trim()) return;
     const { kind, text } = parseDump(raw);

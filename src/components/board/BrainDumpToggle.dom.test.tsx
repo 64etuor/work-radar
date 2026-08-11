@@ -20,13 +20,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-function renderToggle() {
+function renderToggle(props: { disabled?: boolean } = {}) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   const onSubmit = vi.fn();
   act(() => {
-    root?.render(<BrainDumpToggle onSubmit={onSubmit} />);
+    root?.render(<BrainDumpToggle onSubmit={onSubmit} disabled={props.disabled} />);
   });
   return { onSubmit };
 }
@@ -82,5 +82,30 @@ describe("BrainDumpToggle DOM behavior", () => {
     });
 
     expect(state()).toBe("closed");
+  });
+
+  it("does not submit from Enter while disabled (same rule as the submit button)", () => {
+    const { onSubmit } = renderToggle({ disabled: true });
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
+    });
+    expect(state()).toBe("open");
+
+    const input = container!.querySelector("input")!;
+    const setValue = Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value",
+    )!.set!;
+    act(() => {
+      setValue.call(input, "메모");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 });
