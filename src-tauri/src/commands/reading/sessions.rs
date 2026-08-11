@@ -10,7 +10,9 @@ use super::books::fetch_book;
 use super::{clean_optional, new_id, validate_date, validate_non_negative_i32};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{LogReadingSessionInput, ReadingSession, ReadingStatus};
+use crate::models::{
+    LogReadingSessionInput, ReadingSession, ReadingStatus, UpdateReadingSessionInput,
+};
 
 const NOTE_MAX: usize = 2000;
 
@@ -90,6 +92,63 @@ pub(crate) async fn delete_reading_session_inner(db: &Db, id: &str) -> Result<()
     Ok(())
 }
 
+pub(crate) async fn update_reading_session_inner(
+    db: &Db,
+    input: UpdateReadingSessionInput,
+) -> Result<ReadingSession, AppError> {
+    validate_date(&input.date, "reading.session.date")?;
+    if let Some(page) = input.end_page {
+        validate_non_negative_i32(page, "reading.session.end_page")?;
+    }
+    if input.minutes.is_some_and(|minutes| minutes <= 0) {
+        return Err(AppError::validation(
+            "reading.session.minutes",
+            "minutes must be > 0",
+        ));
+    }
+    let note = clean_optional(input.note);
+    if note
+        .as_ref()
+        .is_some_and(|value| value.chars().count() > NOTE_MAX)
+    {
+        return Err(AppError::validation(
+            "reading.session.note",
+            format!("note exceeds {NOTE_MAX} characters"),
+        ));
+    }
+
+    let mut tx = db.begin().await?;
+    let updated = sqlx::query_as::<_, ReadingSession>(
+        "UPDATE reading_sessions \
+         SET date = ?2, end_page = ?3, minutes = ?4, note = ?5 \
+         WHERE id = ?1 \
+         RETURNING id, book_id, date, end_page, minutes, note, created_at",
+    )
+    .bind(&input.id)
+    .bind(input.date.trim())
+    .bind(input.end_page)
+    .bind(input.minutes)
+    .bind(note)
+    .fetch_optional(&mut *tx)
+    .await?;
+    let Some(session) = updated else {
+        return Err(AppError::not_found(
+            "reading.session.not_found",
+            "session not found",
+        ));
+    };
+    sqlx::query(
+        "UPDATE books SET current_page = MAX(current_page, COALESCE(?2, 0)), \
+         updated_at = datetime('now') WHERE id = ?1",
+    )
+    .bind(&session.book_id)
+    .bind(session.end_page)
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(session)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn log_reading_session(
@@ -97,6 +156,15 @@ pub async fn log_reading_session(
     input: LogReadingSessionInput,
 ) -> Result<ReadingSession, AppError> {
     log_reading_session_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_reading_session(
+    db: State<'_, Db>,
+    input: UpdateReadingSessionInput,
+) -> Result<ReadingSession, AppError> {
+    update_reading_session_inner(db.inner(), input).await
 }
 
 #[tauri::command]
@@ -110,7 +178,7 @@ mod tests {
     use crate::commands::reading::books::tests::book_input;
     use crate::commands::reading::books::{add_book_inner, fetch_book};
     use crate::commands::shared::test_support::fresh_db;
-    use crate::models::{LogReadingSessionInput, ReadingStatus};
+    use crate::models::{LogReadingSessionInput, ReadingStatus, UpdateReadingSessionInput};
 
     fn session(book_id: &str, date: &str, end_page: Option<i32>) -> LogReadingSessionInput {
         LogReadingSessionInput {
@@ -178,6 +246,31 @@ mod tests {
         let s = super::log_reading_session_inner(&db, session(&book.id, "2026-07-10", Some(10)))
             .await
             .unwrap();
+        let updated = super::update_reading_session_inner(
+            &db,
+            UpdateReadingSessionInput {
+                id: s.id.clone(),
+                date: "2026-07-11".into(),
+                end_page: Some(25),
+                minutes: Some(45),
+                note: Some("정정한 기록".into()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.id, s.id);
+        assert_eq!(updated.book_id, book.id);
+        assert_eq!(updated.date, "2026-07-11");
+        assert_eq!(updated.end_page, Some(25));
+        assert_eq!(updated.minutes, Some(45));
+        assert_eq!(updated.note.as_deref(), Some("정정한 기록"));
+        assert_eq!(updated.created_at, s.created_at);
+        assert_eq!(
+            fetch_book(&db, &book.id).await.unwrap().current_page,
+            25,
+            "상향 정정은 책 진행에도 반영"
+        );
+
         super::delete_reading_session_inner(&db, &s.id)
             .await
             .unwrap();

@@ -8,7 +8,7 @@ use super::books::fetch_book;
 use super::{clean_optional, clean_required, new_id, validate_non_negative_i32};
 use crate::db::Db;
 use crate::error::AppError;
-use crate::models::{AddBookQuoteInput, BookQuote};
+use crate::models::{AddBookQuoteInput, BookQuote, UpdateBookQuoteInput};
 
 const QUOTE_MAX: usize = 4000;
 const THOUGHT_MAX: usize = 4000;
@@ -66,6 +66,46 @@ pub(crate) async fn delete_book_quote_inner(db: &Db, id: &str) -> Result<(), App
     Ok(())
 }
 
+pub(crate) async fn update_book_quote_inner(
+    db: &Db,
+    input: UpdateBookQuoteInput,
+) -> Result<BookQuote, AppError> {
+    let quote = clean_required(&input.quote, "reading.quote.text", "quote")?;
+    if quote.chars().count() > QUOTE_MAX {
+        return Err(AppError::validation(
+            "reading.quote.text",
+            format!("quote exceeds {QUOTE_MAX} characters"),
+        ));
+    }
+    if let Some(page) = input.page {
+        validate_non_negative_i32(page, "reading.quote.page")?;
+    }
+    let thought = clean_optional(input.thought);
+    if thought
+        .as_ref()
+        .is_some_and(|value| value.chars().count() > THOUGHT_MAX)
+    {
+        return Err(AppError::validation(
+            "reading.quote.thought",
+            format!("thought exceeds {THOUGHT_MAX} characters"),
+        ));
+    }
+
+    let updated = sqlx::query_as::<_, BookQuote>(
+        "UPDATE book_quotes SET quote = ?2, page = ?3, thought = ?4, favorite = ?5 \
+         WHERE id = ?1 \
+         RETURNING id, book_id, quote, page, thought, favorite, created_at",
+    )
+    .bind(&input.id)
+    .bind(quote)
+    .bind(input.page)
+    .bind(thought)
+    .bind(input.favorite)
+    .fetch_optional(db)
+    .await?;
+    updated.ok_or_else(|| AppError::not_found("reading.quote.not_found", "quote not found"))
+}
+
 #[tauri::command]
 #[specta::specta]
 pub async fn add_book_quote(
@@ -73,6 +113,15 @@ pub async fn add_book_quote(
     input: AddBookQuoteInput,
 ) -> Result<BookQuote, AppError> {
     add_book_quote_inner(db.inner(), input).await
+}
+
+#[tauri::command]
+#[specta::specta]
+pub async fn update_book_quote(
+    db: State<'_, Db>,
+    input: UpdateBookQuoteInput,
+) -> Result<BookQuote, AppError> {
+    update_book_quote_inner(db.inner(), input).await
 }
 
 #[tauri::command]
@@ -87,7 +136,7 @@ mod tests {
     use crate::commands::reading::books::tests::book_input;
     use crate::commands::reading::get_book_detail_inner;
     use crate::commands::shared::test_support::fresh_db;
-    use crate::models::AddBookQuoteInput;
+    use crate::models::{AddBookQuoteInput, UpdateBookQuoteInput};
 
     #[tokio::test]
     async fn quote_roundtrip_and_validation() {
@@ -113,6 +162,26 @@ mod tests {
 
         let detail = get_book_detail_inner(&db, &book.id).await.unwrap();
         assert_eq!(detail.quotes.len(), 1);
+
+        let updated = super::update_book_quote_inner(
+            &db,
+            UpdateBookQuoteInput {
+                id: q.id.clone(),
+                quote: "어려운 일에는 정답이 없다".into(),
+                page: Some(43),
+                thought: Some("수정한 생각".into()),
+                favorite: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.id, q.id);
+        assert_eq!(updated.book_id, book.id);
+        assert_eq!(updated.quote, "어려운 일에는 정답이 없다");
+        assert_eq!(updated.page, Some(43));
+        assert_eq!(updated.thought.as_deref(), Some("수정한 생각"));
+        assert!(!updated.favorite);
+        assert_eq!(updated.created_at, q.created_at);
 
         assert!(super::add_book_quote_inner(
             &db,

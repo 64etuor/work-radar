@@ -99,8 +99,6 @@ pub struct AddBookResult {
     pub created: bool,
 }
 
-/// 부분 갱신 — None = 유지. `Option<Option<_>>`는 specta 표면이 지저분해져 명시 클리어
-/// 플래그로 대신한다(rating/review는 0값 구분이 필요 없어 None=유지, 클리어는 플래그).
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct UpdateBookInput {
@@ -125,6 +123,24 @@ pub struct UpdateBookInput {
     pub favorite: Option<bool>,
     pub started_on: Option<String>,
     pub finished_on: Option<String>,
+    #[serde(default)]
+    pub clear: Vec<BookClearableField>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum BookClearableField {
+    Subtitle,
+    Publisher,
+    PublishedDate,
+    Isbn13,
+    Isbn10,
+    PageCount,
+    CoverUrl,
+    Description,
+    Language,
+    StartedOn,
+    FinishedOn,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
@@ -151,6 +167,16 @@ pub struct LogReadingSessionInput {
     pub note: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateReadingSessionInput {
+    pub id: String,
+    pub date: String,
+    pub end_page: Option<i32>,
+    pub minutes: Option<i32>,
+    pub note: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Type, sqlx::FromRow)]
 #[serde(rename_all = "camelCase")]
 pub struct BookQuote {
@@ -171,6 +197,16 @@ pub struct AddBookQuoteInput {
     pub page: Option<i32>,
     pub thought: Option<String>,
     pub favorite: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct UpdateBookQuoteInput {
+    pub id: String,
+    pub quote: String,
+    pub page: Option<i32>,
+    pub thought: Option<String>,
+    pub favorite: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]

@@ -25,6 +25,7 @@ export function emptyBookPatch(id: string): UpdateBookInput {
     favorite: null,
     startedOn: null,
     finishedOn: null,
+    clear: [],
   };
 }
 

@@ -181,8 +181,10 @@ export const commands = {
 	setBookStatus: (id: string, status: ReadingStatus, date: string) => typedError<Book, AppError>(__TAURI_INVOKE("set_book_status", { id, status, date })),
 	deleteBook: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_book", { id })),
 	logReadingSession: (input: LogReadingSessionInput) => typedError<ReadingSession, AppError>(__TAURI_INVOKE("log_reading_session", { input })),
+	updateReadingSession: (input: UpdateReadingSessionInput) => typedError<ReadingSession, AppError>(__TAURI_INVOKE("update_reading_session", { input })),
 	deleteReadingSession: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_reading_session", { id })),
 	addBookQuote: (input: AddBookQuoteInput) => typedError<BookQuote, AppError>(__TAURI_INVOKE("add_book_quote", { input })),
+	updateBookQuote: (input: UpdateBookQuoteInput) => typedError<BookQuote, AppError>(__TAURI_INVOKE("update_book_quote", { input })),
 	deleteBookQuote: (id: string) => typedError<null, AppError>(__TAURI_INVOKE("delete_book_quote", { id })),
 	readingStats: (year: number, today: string) => typedError<ReadingStats, AppError>(__TAURI_INVOKE("reading_stats", { year, today })),
 	setReadingGoal: (year: number, targetBooks: number) => typedError<ReadingGoal, AppError>(__TAURI_INVOKE("set_reading_goal", { year, targetBooks })),
@@ -1310,6 +1312,8 @@ export type Book = {
 	createdAt: string,
 	updatedAt: string,
 };
+
+export type BookClearableField = "subtitle" | "publisher" | "published_date" | "isbn13" | "isbn10" | "page_count" | "cover_url" | "description" | "language" | "started_on" | "finished_on";
 
 export type BookDetail = {
 	book: Book,
@@ -3201,6 +3205,7 @@ export type PatchRecipeInput = {
 
 export type PatchWorkoutSessionInput = {
 	id: string,
+	date: string | null,
 	title: string | null,
 	startedAt: string | null,
 	endedAt: string | null,
@@ -4618,10 +4623,6 @@ export type UpdateAgentPromptConfigInput = {
 	fastMode: boolean,
 };
 
-/**
- *  부분 갱신 — None = 유지. `Option<Option<_>>`는 specta 표면이 지저분해져 명시 클리어
- *  플래그로 대신한다(rating/review는 0값 구분이 필요 없어 None=유지, 클리어는 플래그).
- */
 export type UpdateBookInput = {
 	id: string,
 	title: string | null,
@@ -4644,6 +4645,15 @@ export type UpdateBookInput = {
 	favorite: boolean | null,
 	startedOn: string | null,
 	finishedOn: string | null,
+	clear?: BookClearableField[],
+};
+
+export type UpdateBookQuoteInput = {
+	id: string,
+	quote: string,
+	page: number | null,
+	thought: string | null,
+	favorite: boolean,
 };
 
 export type UpdateBookkeepingTransactionInput = {
@@ -4697,6 +4707,14 @@ export type UpdateObjectiveInput = {
 	sortRank: number,
 	linkedAreaKeys: string[],
 	linkedProjectIds: string[],
+};
+
+export type UpdateReadingSessionInput = {
+	id: string,
+	date: string,
+	endPage: number | null,
+	minutes: number | null,
+	note: string | null,
 };
 
 /**

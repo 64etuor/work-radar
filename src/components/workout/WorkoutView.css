@@ -134,6 +134,15 @@
   padding: 0 14px 14px;
 }
 
+.wo .wo-session-tools,
+.wo .wo-row-actions,
+.wo .wo-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
 .wo .wo-set-list {
   display: grid;
   gap: 2px;
@@ -173,6 +182,64 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.wo .wo-edit-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-elevated);
+}
+
+.wo .wo-edit-form label {
+  display: grid;
+  gap: 4px;
+}
+
+.wo .wo-edit-wide,
+.wo .wo-edit-actions {
+  grid-column: 1 / -1;
+}
+
+.wo .wo-set-edit,
+.wo .wo-exercise-edit {
+  margin: 4px 0 8px;
+}
+
+.wo .wo-alias-editor {
+  display: grid;
+  gap: 6px;
+}
+
+.wo .wo-alias-list,
+.wo .wo-alias-add,
+.wo .wo-alias-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wo .wo-alias-list {
+  flex-wrap: wrap;
+}
+
+.wo .wo-alias-chip {
+  padding: 3px 7px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-pill);
+  background: var(--color-wr-surface);
+}
+
+.wo .wo-alias-chip button {
+  display: inline-flex;
+  color: var(--color-wr-text-muted);
+}
+
+.wo .wo-alias-add {
+  max-width: 360px;
 }
 
 /* ── 입력 폼 ───────────────────────────────────────────────────────── */

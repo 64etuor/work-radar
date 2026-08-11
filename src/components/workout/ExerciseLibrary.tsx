@@ -1,4 +1,4 @@
-import { Archive, Plus } from "lucide-react";
+import { Archive, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { ExerciseModality } from "@/bindings";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useExercises, useSetExerciseArchived, useUpsertExercise } from "@/lib/query";
 
+import { ExerciseEditor } from "./ExerciseEditor";
 import { MODALITY_LABEL, parseOptionalNumber, trimNum } from "./workoutFormat";
 
 const MODALITIES: ExerciseModality[] = ["strength", "cardio", "mobility", "sport"];
@@ -25,6 +26,9 @@ export function ExerciseLibrary() {
   const [name, setName] = useState("");
   const [modality, setModality] = useState<ExerciseModality>("strength");
   const [met, setMet] = useState("");
+  const [primaryMuscle, setPrimaryMuscle] = useState("");
+  const [equipment, setEquipment] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const add = async () => {
     if (upsert.isPending || name.trim().length === 0) return;
@@ -32,14 +36,16 @@ export function ExerciseLibrary() {
       id: null,
       name: name.trim(),
       modality,
-      primaryMuscle: null,
-      equipment: null,
+      primaryMuscle: primaryMuscle.trim() || null,
+      equipment: equipment.trim() || null,
       met: parseOptionalNumber(met),
       source: null,
       sourceRef: null,
     });
     setName("");
     setMet("");
+    setPrimaryMuscle("");
+    setEquipment("");
   };
 
   return (
@@ -51,6 +57,18 @@ export function ExerciseLibrary() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="이름/별칭 검색"
+        />
+        <Input
+          value={primaryMuscle}
+          onChange={(e) => setPrimaryMuscle(e.target.value)}
+          placeholder="주요 근육"
+          aria-label="주요 근육"
+        />
+        <Input
+          value={equipment}
+          onChange={(e) => setEquipment(e.target.value)}
+          placeholder="장비"
+          aria-label="장비"
         />
       </div>
 
@@ -89,16 +107,39 @@ export function ExerciseLibrary() {
       {(exercises ?? []).length > 0 && (
         <ul className="wo-exercise-list">
           {(exercises ?? []).map((exercise) => (
-            <li key={exercise.id} className="wo-exercise-row">
-              <span className="typo-body-md">{exercise.name}</span>
-              <Badge variant="outline">{MODALITY_LABEL[exercise.modality]}</Badge>
-              <span className="typo-caption-sm">
-                {exercise.met != null ? `MET ${trimNum(exercise.met)}` : "MET 미설정 → 소모 0"}
-              </span>
-              <span className="wo-exercise-aliases typo-caption-sm">
-                {exercise.aliases.join(", ")}
-              </span>
-              <ArchiveButton id={exercise.id} />
+            <li key={exercise.id}>
+              <div className="wo-exercise-row">
+                <span className="typo-body-md">{exercise.name}</span>
+                <Badge variant="outline">{MODALITY_LABEL[exercise.modality]}</Badge>
+                <span className="typo-caption-sm">
+                  {[
+                    exercise.primaryMuscle,
+                    exercise.equipment,
+                    exercise.met != null ? `MET ${trimNum(exercise.met)}` : "MET 미설정 → 소모 0",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <span className="wo-exercise-aliases typo-caption-sm">
+                  {exercise.aliases.join(", ")}
+                </span>
+                <div className="wo-row-actions">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="종목 수정"
+                    onClick={() =>
+                      setEditingId((current) => (current === exercise.id ? null : exercise.id))
+                    }
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                  <ArchiveButton id={exercise.id} />
+                </div>
+              </div>
+              {editingId === exercise.id && (
+                <ExerciseEditor exercise={exercise} onClose={() => setEditingId(null)} />
+              )}
             </li>
           ))}
         </ul>

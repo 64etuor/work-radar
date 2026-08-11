@@ -12,8 +12,8 @@ use super::{
 use crate::db::Db;
 use crate::error::AppError;
 use crate::models::{
-    AddBookInput, AddBookResult, Book, BookDetail, BookQuote, ReadingSession, ReadingStatus,
-    UpdateBookInput,
+    AddBookInput, AddBookResult, Book, BookClearableField, BookDetail, BookQuote, ReadingSession,
+    ReadingStatus, UpdateBookInput,
 };
 
 const TITLE_MAX: usize = 300;
@@ -330,7 +330,6 @@ pub(crate) async fn get_book_detail_inner(db: &Db, id: &str) -> Result<BookDetai
     })
 }
 
-/// 부분 갱신 — None 필드는 유지. rating/review 클리어는 명시 플래그.
 pub(crate) async fn update_book_inner(db: &Db, input: UpdateBookInput) -> Result<Book, AppError> {
     let current = fetch_book(db, &input.id).await?;
 
@@ -387,6 +386,66 @@ pub(crate) async fn update_book_inner(db: &Db, input: UpdateBookInput) -> Result
     } else {
         clean_optional(input.review).or(current.review)
     };
+    let clear = &input.clear;
+    let subtitle = if clear.contains(&BookClearableField::Subtitle) {
+        None
+    } else {
+        clean_optional(input.subtitle).or(current.subtitle)
+    };
+    let publisher = if clear.contains(&BookClearableField::Publisher) {
+        None
+    } else {
+        clean_optional(input.publisher).or(current.publisher)
+    };
+    let published_date = if clear.contains(&BookClearableField::PublishedDate) {
+        None
+    } else {
+        clean_optional(input.published_date).or(current.published_date)
+    };
+    let isbn13 = if clear.contains(&BookClearableField::Isbn13) {
+        None
+    } else {
+        clean_optional(input.isbn13)
+            .and_then(|value| crate::reading::normalize_isbn(&value))
+            .or(current.isbn13)
+    };
+    let isbn10 = if clear.contains(&BookClearableField::Isbn10) {
+        None
+    } else {
+        clean_optional(input.isbn10)
+            .and_then(|value| crate::reading::normalize_isbn(&value))
+            .or(current.isbn10)
+    };
+    let page_count = if clear.contains(&BookClearableField::PageCount) {
+        None
+    } else {
+        input.page_count.or(current.page_count)
+    };
+    let cover_url = if clear.contains(&BookClearableField::CoverUrl) {
+        None
+    } else {
+        clean_optional(input.cover_url).or(current.cover_url)
+    };
+    let description = if clear.contains(&BookClearableField::Description) {
+        None
+    } else {
+        clean_optional(input.description).or(current.description)
+    };
+    let language = if clear.contains(&BookClearableField::Language) {
+        None
+    } else {
+        clean_optional(input.language).or(current.language)
+    };
+    let started_on = if clear.contains(&BookClearableField::StartedOn) {
+        None
+    } else {
+        clean_optional(input.started_on).or(current.started_on)
+    };
+    let finished_on = if clear.contains(&BookClearableField::FinishedOn) {
+        None
+    } else {
+        clean_optional(input.finished_on).or(current.finished_on)
+    };
 
     let row = sqlx::query_as::<_, BookRow>(&format!(
         "UPDATE books SET title = ?2, subtitle = ?3, authors = ?4, publisher = ?5, \
@@ -398,31 +457,23 @@ pub(crate) async fn update_book_inner(db: &Db, input: UpdateBookInput) -> Result
     ))
     .bind(&input.id)
     .bind(&title)
-    .bind(clean_optional(input.subtitle).or(current.subtitle))
+    .bind(subtitle)
     .bind(&authors)
-    .bind(clean_optional(input.publisher).or(current.publisher))
-    .bind(clean_optional(input.published_date).or(current.published_date))
-    .bind(
-        clean_optional(input.isbn13)
-            .and_then(|v| crate::reading::normalize_isbn(&v))
-            .or(current.isbn13),
-    )
-    .bind(
-        clean_optional(input.isbn10)
-            .and_then(|v| crate::reading::normalize_isbn(&v))
-            .or(current.isbn10),
-    )
-    .bind(input.page_count.or(current.page_count))
-    .bind(clean_optional(input.cover_url).or(current.cover_url))
-    .bind(clean_optional(input.description).or(current.description))
+    .bind(publisher)
+    .bind(published_date)
+    .bind(isbn13)
+    .bind(isbn10)
+    .bind(page_count)
+    .bind(cover_url)
+    .bind(description)
     .bind(&categories)
-    .bind(clean_optional(input.language).or(current.language))
+    .bind(language)
     .bind(rating)
     .bind(review)
     .bind(input.current_page.unwrap_or(current.current_page))
     .bind(input.favorite.unwrap_or(current.favorite))
-    .bind(clean_optional(input.started_on).or(current.started_on))
-    .bind(clean_optional(input.finished_on).or(current.finished_on))
+    .bind(started_on)
+    .bind(finished_on)
     .fetch_one(db)
     .await?;
     row.into_book()
@@ -536,7 +587,7 @@ pub async fn delete_book(db: State<'_, Db>, id: String) -> Result<(), AppError> 
 #[cfg(test)]
 pub(crate) mod tests {
     use crate::commands::shared::test_support::fresh_db;
-    use crate::models::{AddBookInput, ReadingStatus, UpdateBookInput};
+    use crate::models::{AddBookInput, BookClearableField, ReadingStatus, UpdateBookInput};
 
     pub(crate) fn book_input(title: &str, isbn13: Option<&str>) -> AddBookInput {
         AddBookInput {
@@ -581,6 +632,7 @@ pub(crate) mod tests {
             favorite: None,
             started_on: None,
             finished_on: None,
+            clear: Vec::new(),
         }
     }
 
@@ -784,6 +836,18 @@ pub(crate) mod tests {
         .unwrap();
         assert!(cleared.rating.is_none(), "클리어 플래그로만 제거");
         assert_eq!(cleared.review.as_deref(), Some("전권 추천"), "리뷰는 유지");
+
+        let cleared_details = super::update_book_inner(
+            &db,
+            UpdateBookInput {
+                clear: vec![BookClearableField::PageCount, BookClearableField::Language],
+                ..patch(&book.id)
+            },
+        )
+        .await
+        .unwrap();
+        assert!(cleared_details.page_count.is_none());
+        assert!(cleared_details.language.is_none());
 
         assert!(super::update_book_inner(
             &db,

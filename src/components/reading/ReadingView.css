@@ -745,10 +745,69 @@
   color: var(--color-wr-fg);
 }
 
+.rd-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rd-book-edit {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--color-wr-border-light);
+  border-radius: var(--radius-md);
+  background: var(--color-wr-surface);
+}
+
+.rd-edit-field {
+  display: grid;
+  gap: 4px;
+}
+
+.rd-edit-wide {
+  grid-column: 1 / -1;
+}
+
+.rd-book-description {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.rd-book-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+
+.rd-favorite-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+}
+
+.rd-edit-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
 .rd-session-form {
   display: grid;
   grid-template-columns: 1fr 72px 1fr auto;
   gap: 6px;
+}
+
+.rd-session-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-column: 1 / -1;
+  gap: 6px;
+  width: 100%;
 }
 
 .rd-session-list {
@@ -802,9 +861,15 @@
   gap: 6px;
 }
 
+.rd-quote-edit {
+  display: grid;
+  gap: 6px;
+}
+
 .rd-quote-form-row {
   display: grid;
   grid-template-columns: 84px 1fr auto;
+  align-items: end;
   gap: 6px;
 }
 

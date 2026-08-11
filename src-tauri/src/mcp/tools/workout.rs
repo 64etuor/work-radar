@@ -683,6 +683,7 @@ impl WrServer {
             &self.db,
             PatchWorkoutSessionInput {
                 id: p.session_id,
+                date: None,
                 title: p.title,
                 started_at: p.started_at,
                 ended_at: p.ended_at,

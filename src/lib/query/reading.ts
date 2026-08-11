@@ -13,6 +13,8 @@ import {
   type LogReadingSessionInput,
   type ReadingStatus,
   type UpdateBookInput,
+  type UpdateBookQuoteInput,
+  type UpdateReadingSessionInput,
 } from "@/bindings";
 
 import { pushMutationError, unwrap } from "./client";
@@ -157,10 +159,28 @@ export function useDeleteReadingSession() {
   });
 }
 
+export function useUpdateReadingSession() {
+  const invalidate = useInvalidateReading();
+  return useMutation({
+    mutationFn: (input: UpdateReadingSessionInput) => unwrap(commands.updateReadingSession(input)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("reading", e, "독서"),
+  });
+}
+
 export function useAddBookQuote() {
   const invalidate = useInvalidateReading();
   return useMutation({
     mutationFn: (input: AddBookQuoteInput) => unwrap(commands.addBookQuote(input)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("reading", e, "독서"),
+  });
+}
+
+export function useUpdateBookQuote() {
+  const invalidate = useInvalidateReading();
+  return useMutation({
+    mutationFn: (input: UpdateBookQuoteInput) => unwrap(commands.updateBookQuote(input)),
     onSuccess: () => void invalidate(),
     onError: (e) => pushMutationError("reading", e, "독서"),
   });

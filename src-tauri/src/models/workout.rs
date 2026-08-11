@@ -158,6 +158,7 @@ pub struct StartWorkoutSessionInput {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PatchWorkoutSessionInput {
     pub id: String,
+    pub date: Option<String>,
     pub title: Option<String>,
     pub started_at: Option<String>,
     pub ended_at: Option<String>,

@@ -237,6 +237,7 @@ mod tests {
                 favorite: None,
                 started_on: None,
                 finished_on: None,
+                clear: Vec::new(),
             },
         )
         .await

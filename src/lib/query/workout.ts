@@ -174,6 +174,26 @@ export function useUpsertExercise() {
   });
 }
 
+export function useAddExerciseAlias() {
+  const invalidate = useInvalidateWorkout();
+  return useMutation({
+    mutationFn: ({ exerciseId, alias }: { exerciseId: string; alias: string }) =>
+      unwrap(commands.addExerciseAlias(exerciseId, alias)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("workout", e, "운동"),
+  });
+}
+
+export function useRemoveExerciseAlias() {
+  const invalidate = useInvalidateWorkout();
+  return useMutation({
+    mutationFn: ({ exerciseId, alias }: { exerciseId: string; alias: string }) =>
+      unwrap(commands.removeExerciseAlias(exerciseId, alias)),
+    onSuccess: () => void invalidate(),
+    onError: (e) => pushMutationError("workout", e, "운동"),
+  });
+}
+
 export function useSetExerciseArchived() {
   const invalidate = useInvalidateWorkout();
   return useMutation({

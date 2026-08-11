@@ -7,6 +7,7 @@ import { cn } from "@/components/ui/cn";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { useBookDetail, useDeleteBook, useSetBookStatus } from "@/lib/query";
 
+import { BookDetailsSection } from "./BookDetailsSection";
 import { BookQuoteSection } from "./BookQuoteSection";
 import { BookRatingSection } from "./BookRatingSection";
 import { BookSessionSection } from "./BookSessionSection";
@@ -98,6 +99,7 @@ export function BookDetailSheet({
               </div>
             )}
 
+            <BookDetailsSection book={book} />
             <BookSessionSection bookId={book.id} today={today} sessions={detail.sessions} />
             <BookRatingSection book={book} />
             <BookQuoteSection bookId={book.id} quotes={detail.quotes} />

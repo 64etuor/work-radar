@@ -184,6 +184,21 @@ pub(crate) async fn patch_workout_session_inner(
     db: &Db,
     input: PatchWorkoutSessionInput,
 ) -> Result<WorkoutSession, AppError> {
+    let date = input
+        .date
+        .as_deref()
+        .map(|value| validate_date(value, "workout.session.date"))
+        .transpose()?;
+    if date
+        .as_ref()
+        .is_some_and(|value| value.as_str() > crate::timezone::local_today_string().as_str())
+    {
+        return Err(AppError::validation(
+            "workout.session.future",
+            "a workout session records training that already happened — \
+             use routines to plan future sessions",
+        ));
+    }
     validate_range(
         input.perceived_exertion,
         1,
@@ -217,6 +232,13 @@ pub(crate) async fn patch_workout_session_inner(
         ));
     }
 
+    if let Some(date) = date {
+        sqlx::query("UPDATE workout_sessions SET date = ?2 WHERE id = ?1")
+            .bind(&input.id)
+            .bind(&date)
+            .execute(&mut *tx)
+            .await?;
+    }
     if let Some(title) = clean_optional(input.title) {
         sqlx::query("UPDATE workout_sessions SET title = ?2 WHERE id = ?1")
             .bind(&input.id)
@@ -868,6 +890,41 @@ mod tests {
         )
         .await
         .is_ok());
+    }
+
+    #[tokio::test]
+    async fn session_date_and_metadata_can_be_corrected() {
+        let db = fresh_db().await;
+        let id = session_on(&db, "2026-07-25").await;
+        let updated = patch_workout_session_inner(
+            &db,
+            PatchWorkoutSessionInput {
+                id,
+                date: Some("2026-07-26".into()),
+                ended_at: Some("10:30".into()),
+                perceived_exertion: Some(7),
+                note: Some("정정".into()),
+                ..PatchWorkoutSessionInput::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated.date, "2026-07-26");
+        assert_eq!(updated.ended_at.as_deref(), Some("10:30"));
+        assert_eq!(updated.perceived_exertion, Some(7));
+        assert_eq!(updated.note.as_deref(), Some("정정"));
+
+        let err = patch_workout_session_inner(
+            &db,
+            PatchWorkoutSessionInput {
+                id: updated.id,
+                date: Some("2099-01-01".into()),
+                ..PatchWorkoutSessionInput::default()
+            },
+        )
+        .await
+        .expect_err("미래 날짜 정정 거부");
+        assert!(format!("{err:?}").contains("session.future"));
     }
 
     #[tokio::test]
