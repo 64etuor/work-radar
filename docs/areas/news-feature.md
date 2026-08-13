@@ -62,6 +62,8 @@ injection-by-pattern 방어. 9 store tests.
 - **#1 결정 레일 침범 없음** — 뉴스는 자기 뷰만, 매트릭스 escalate 0.
 - **#3 dedup** — `external_id` (per-source) 기반 upsert.
 - **#5 bounded** — fetcher가 단일 tokio task, bounded retry + interval.
+- **응답 예산** — 성공 본문은 압축 해제 후 2 MiB 상한을 스트리밍 중 강제하고, 비-2xx 본문은
+  로그/에러에 복사하지 않는다. RSS 파싱은 blocking pool로 격리하며 `feed-rs 2.4` 계열을 사용한다.
 
 ## 잔존 follow-up (비차단)
 

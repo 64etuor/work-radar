@@ -21,6 +21,10 @@ use specta::Type;
 
 use crate::error::AppError;
 
+/// 뉴스/RSS 응답의 압축 해제 후 본문 상한. 일반 피드보다 충분히 크면서 비정상 응답이
+/// 프로세스 메모리를 고갈시키지 못하게 한다.
+const MAX_NEWS_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Type, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
 pub enum NewsCategory {
@@ -29,15 +33,22 @@ pub enum NewsCategory {
     AiResearch,
 }
 
-/// 비-2xx HTTP status + (잘린) 응답 본문을 AppError로 분류한다.
+/// 비-2xx HTTP status를 AppError로 분류한다. 외부 응답 본문은 PII/시크릿이 포함될 수
+/// 있으므로 에러나 로그에 넣지 않고 서버가 공개한 크기만 기록한다.
 ///
 /// 정책: 5xx + 429만 Transient(retryable, warn 레벨), 나머지 비-2xx는 Terminal(error 레벨).
 /// 기본 `From<reqwest::Error>`(error.rs)는 timeout/connect만 Transient라 5xx 응답이
 /// Terminal로 떨어져 `errors.log`에 노이즈를 만들었음(follow-up #1). 이 함수는 순수 — HTTP
 /// I/O 없이 분기 로직만 담당해 단위 테스트 가능.
-fn classify_http_status(status: StatusCode, code_prefix: &str, body_snip: &str) -> AppError {
-    let snip: String = body_snip.chars().take(200).collect();
-    let msg = format!("HTTP {status}: {snip}");
+fn classify_http_status(
+    status: StatusCode,
+    code_prefix: &str,
+    content_length: Option<u64>,
+) -> AppError {
+    let body_size = content_length
+        .map(|length| length.to_string())
+        .unwrap_or_else(|| "unknown".to_string());
+    let msg = format!("HTTP {status} (body_bytes={body_size})");
     let code = format!("{code_prefix}.http_{}", status.as_u16());
     if status.is_server_error() || status == StatusCode::TOO_MANY_REQUESTS {
         AppError::transient(code, msg)
@@ -46,19 +57,61 @@ fn classify_http_status(status: StatusCode, code_prefix: &str, body_snip: &str) 
     }
 }
 
-/// HTTP 응답을 받아 status 분류 후 JSON으로 디코드한다. 비-2xx면 본문 200자까지
-/// 잘라 `classify_http_status`로 분류, 2xx면 reqwest의 기본 `From<reqwest::Error>`로
-/// JSON 디코드 실패를 Terminal로 처리.
+fn append_capped(buffer: &mut Vec<u8>, chunk: &[u8], max_bytes: usize) -> Result<(), usize> {
+    let observed = buffer.len().saturating_add(chunk.len());
+    if chunk.len() > max_bytes.saturating_sub(buffer.len()) {
+        return Err(observed);
+    }
+    buffer.extend_from_slice(chunk);
+    Ok(())
+}
+
+async fn read_body_capped(mut resp: Response, code_prefix: &str) -> Result<Vec<u8>, AppError> {
+    if let Some(length) = resp.content_length() {
+        if length > MAX_NEWS_RESPONSE_BYTES as u64 {
+            return Err(AppError::terminal(
+                format!("{code_prefix}.response_too_large"),
+                format!(
+                    "response too large (body_bytes={length}, max_bytes={MAX_NEWS_RESPONSE_BYTES})"
+                ),
+            ));
+        }
+    }
+
+    let mut body = Vec::with_capacity(
+        resp.content_length()
+            .unwrap_or_default()
+            .min(MAX_NEWS_RESPONSE_BYTES as u64) as usize,
+    );
+    while let Some(chunk) = resp.chunk().await? {
+        if let Err(observed) = append_capped(&mut body, &chunk, MAX_NEWS_RESPONSE_BYTES) {
+            return Err(AppError::terminal(
+                format!("{code_prefix}.response_too_large"),
+                format!(
+                    "response too large (body_bytes_at_least={observed}, max_bytes={MAX_NEWS_RESPONSE_BYTES})"
+                ),
+            ));
+        }
+    }
+    Ok(body)
+}
+
 pub(crate) async fn http_json<T: serde::de::DeserializeOwned>(
     resp: Response,
     code_prefix: &str,
 ) -> Result<T, AppError> {
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(classify_http_status(status, code_prefix, &body));
+        return Err(classify_http_status(
+            status,
+            code_prefix,
+            resp.content_length(),
+        ));
     }
-    let value = resp.json::<T>().await?;
+    let body = read_body_capped(resp, code_prefix).await?;
+    let value = serde_json::from_slice::<T>(&body).map_err(|_| {
+        AppError::terminal(format!("{code_prefix}.decode"), "invalid JSON response")
+    })?;
     Ok(value)
 }
 
@@ -67,10 +120,13 @@ pub(crate) async fn http_json<T: serde::de::DeserializeOwned>(
 pub(crate) async fn http_bytes(resp: Response, code_prefix: &str) -> Result<Vec<u8>, AppError> {
     let status = resp.status();
     if !status.is_success() {
-        let body = resp.text().await.unwrap_or_default();
-        return Err(classify_http_status(status, code_prefix, &body));
+        return Err(classify_http_status(
+            status,
+            code_prefix,
+            resp.content_length(),
+        ));
     }
-    Ok(resp.bytes().await?.to_vec())
+    read_body_capped(resp, code_prefix).await
 }
 
 /// 정규화된 뉴스 아이템 — 모든 소스가 이 형태로 반환.
@@ -300,24 +356,24 @@ mod tests {
 
     #[test]
     fn classify_5xx_is_transient_warn() {
-        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn.top", "oops");
+        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn.top", Some(4));
         assert_eq!(e.kind, ErrorKind::Transient, "5xx은 Transient(retry+warn)");
         assert!(e.retryable);
         assert_eq!(e.code, "hn.top.http_500");
         assert!(e.message.contains("HTTP 500"));
-        assert!(e.message.contains("oops"));
+        assert!(e.message.contains("body_bytes=4"));
     }
 
     #[test]
     fn classify_503_is_transient() {
-        let e = classify_http_status(StatusCode::SERVICE_UNAVAILABLE, "geeknews", "");
+        let e = classify_http_status(StatusCode::SERVICE_UNAVAILABLE, "geeknews", None);
         assert_eq!(e.kind, ErrorKind::Transient);
         assert_eq!(e.code, "geeknews.http_503");
     }
 
     #[test]
     fn classify_429_is_transient() {
-        let e = classify_http_status(StatusCode::TOO_MANY_REQUESTS, "lobsters", "rate limited");
+        let e = classify_http_status(StatusCode::TOO_MANY_REQUESTS, "lobsters", Some(12));
         assert_eq!(e.kind, ErrorKind::Transient, "429는 명시적으로 Transient");
         assert!(e.retryable);
         assert_eq!(e.code, "lobsters.http_429");
@@ -325,7 +381,7 @@ mod tests {
 
     #[test]
     fn classify_404_is_terminal_not_retryable() {
-        let e = classify_http_status(StatusCode::NOT_FOUND, "hn.item", "not found");
+        let e = classify_http_status(StatusCode::NOT_FOUND, "hn.item", Some(9));
         assert_eq!(e.kind, ErrorKind::Terminal, "4xx(429 제외)는 Terminal");
         assert!(!e.retryable);
         assert_eq!(e.code, "hn.item.http_404");
@@ -333,38 +389,30 @@ mod tests {
 
     #[test]
     fn classify_400_is_terminal() {
-        let e = classify_http_status(StatusCode::BAD_REQUEST, "hn.top", "bad");
+        let e = classify_http_status(StatusCode::BAD_REQUEST, "hn.top", Some(3));
         assert_eq!(e.kind, ErrorKind::Terminal);
         assert_eq!(e.code, "hn.top.http_400");
     }
 
     #[test]
     fn classify_403_is_terminal() {
-        let e = classify_http_status(StatusCode::FORBIDDEN, "geeknews", "");
+        let e = classify_http_status(StatusCode::FORBIDDEN, "geeknews", None);
         assert_eq!(e.kind, ErrorKind::Terminal);
         assert_eq!(e.code, "geeknews.http_403");
     }
 
     #[test]
-    fn classify_truncates_body_to_200_chars() {
-        let body = "x".repeat(500);
-        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn", &body);
-        // "HTTP 500 Internal Server Error: " 접두 + 잘린 본문.
-        let snip_start = e
-            .message
-            .find(": ")
-            .expect("colon-space in HTTP error message")
-            + 2;
-        let snip = &e.message[snip_start..];
-        assert_eq!(snip.len(), 200, "본문은 200자로 잘림");
+    fn classify_never_copies_external_body() {
+        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "hn", Some(500));
+        assert_eq!(e.message, "HTTP 500 Internal Server Error (body_bytes=500)");
     }
 
     #[test]
-    fn classify_handles_multibyte_safely() {
-        // chars().take(200)은 grapheme이 아니라 char 단위지만 UTF-8 경계는 안전.
-        let body = "가".repeat(300); // 각 '가'는 3바이트
-        let e = classify_http_status(StatusCode::INTERNAL_SERVER_ERROR, "geeknews", &body);
-        // 패닉 없이 끝나면 OK + 메시지 길이가 비어있지 않음.
-        assert!(e.message.contains("HTTP 500"));
+    fn append_capped_accepts_exact_limit_and_rejects_next_byte() {
+        let mut body = vec![1, 2];
+        assert_eq!(append_capped(&mut body, &[3, 4], 4), Ok(()));
+        assert_eq!(body, vec![1, 2, 3, 4]);
+        assert_eq!(append_capped(&mut body, &[5], 4), Err(5));
+        assert_eq!(body, vec![1, 2, 3, 4]);
     }
 }

@@ -17,6 +17,9 @@ use crate::retry::{with_retry, Retryable};
 /// tarball fetch bounded retry 예산(무한 retry 금지 가드).
 pub(crate) const FETCH_MAX_ATTEMPTS: u32 = 3;
 const FETCH_BASE_DELAY_MS: u64 = 200;
+pub(crate) const MAX_COMPRESSED_ARCHIVE_BYTES: usize = 64 * 1024 * 1024;
+const FETCH_CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+const FETCH_REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 /// 압축 해제 총량 상한(decompression/tar-bomb 가드, bounded INVARIANT). 실제 스킬 repo는 이보다
 /// 훨씬 작다 — bomb(수 KB → 수 GB)만 차단된다. 쿼터가 아니라 안전 가드.
@@ -135,6 +138,51 @@ pub fn extract_tarball(gz_bytes: &[u8]) -> Result<(TempDir, String), RemoteFetch
     extract_tarball_capped(gz_bytes, MAX_TOTAL_UNCOMPRESSED_BYTES, MAX_ARCHIVE_ENTRIES)
 }
 
+fn append_compressed_chunk(
+    buffer: &mut Vec<u8>,
+    chunk: &[u8],
+    max_bytes: usize,
+) -> Result<(), usize> {
+    let observed = buffer.len().saturating_add(chunk.len());
+    if chunk.len() > max_bytes.saturating_sub(buffer.len()) {
+        return Err(observed);
+    }
+    buffer.extend_from_slice(chunk);
+    Ok(())
+}
+
+async fn read_tarball_body_capped(
+    mut resp: reqwest::Response,
+) -> Result<Vec<u8>, RemoteFetchError> {
+    if let Some(length) = resp.content_length() {
+        if length > MAX_COMPRESSED_ARCHIVE_BYTES as u64 {
+            return Err(RemoteFetchError::Terminal(format!(
+                "archive too large (compressed_bytes={length}, max_bytes={MAX_COMPRESSED_ARCHIVE_BYTES})"
+            )));
+        }
+    }
+
+    let mut body = Vec::with_capacity(
+        resp.content_length()
+            .unwrap_or_default()
+            .min(MAX_COMPRESSED_ARCHIVE_BYTES as u64) as usize,
+    );
+    while let Some(chunk) = resp
+        .chunk()
+        .await
+        .map_err(|e| RemoteFetchError::Transient(format!("read body failed: {e}")))?
+    {
+        if let Err(observed) =
+            append_compressed_chunk(&mut body, &chunk, MAX_COMPRESSED_ARCHIVE_BYTES)
+        {
+            return Err(RemoteFetchError::Terminal(format!(
+                "archive too large (compressed_bytes_at_least={observed}, max_bytes={MAX_COMPRESSED_ARCHIVE_BYTES})"
+            )));
+        }
+    }
+    Ok(body)
+}
+
 /// [`extract_tarball`]의 상한 주입형 코어. `max_total_bytes`는 전체 압축 해제 바이트 합,
 /// `max_entries`는 엔트리(파일+디렉터리) 개수의 상한이다. 어느 쪽이든 넘으면 `Terminal`로 거부하며,
 /// 파일 버퍼는 남은 예산+1로 bound해 피크 메모리도 상한 이내로 유지한다(bomb가 메모리/디스크 고갈 불가).
@@ -235,15 +283,18 @@ pub async fn fetch_tarball_bytes(
         source.owner, source.repo, reference
     );
     let base = std::time::Duration::from_millis(FETCH_BASE_DELAY_MS);
+    let client = reqwest::Client::builder()
+        .user_agent("work-radar")
+        .connect_timeout(FETCH_CONNECT_TIMEOUT)
+        .timeout(FETCH_REQUEST_TIMEOUT)
+        .build()
+        .map_err(|e| RemoteFetchError::Terminal(format!("http client: {e}")))?;
 
     with_retry(FETCH_MAX_ATTEMPTS, base, |_attempt| {
         let url = url.clone();
         let token = token.map(|t| t.to_string());
+        let client = client.clone();
         async move {
-            let client = reqwest::Client::builder()
-                .user_agent("work-radar")
-                .build()
-                .map_err(|e| RemoteFetchError::Terminal(format!("http client: {e}")))?;
             let mut req = client
                 .get(&url)
                 .header("Accept", "application/vnd.github+json");
@@ -256,11 +307,7 @@ pub async fn fetch_tarball_bytes(
                 .map_err(|e| RemoteFetchError::Transient(format!("request failed: {e}")))?;
             let status = resp.status();
             if status.is_success() {
-                let bytes = resp
-                    .bytes()
-                    .await
-                    .map_err(|e| RemoteFetchError::Transient(format!("read body failed: {e}")))?;
-                return Ok(bytes.to_vec());
+                return read_tarball_body_capped(resp).await;
             }
             // 상태 → 분류. 응답 본문은 로그/메시지에 넣지 않는다(detail 노출 가능).
             let code = status.as_u16();
@@ -273,4 +320,18 @@ pub async fn fetch_tarball_bytes(
         }
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compressed_body_cap_accepts_limit_and_rejects_overflow() {
+        let mut body = vec![1, 2];
+        assert_eq!(append_compressed_chunk(&mut body, &[3, 4], 4), Ok(()));
+        assert_eq!(body, vec![1, 2, 3, 4]);
+        assert_eq!(append_compressed_chunk(&mut body, &[5], 4), Err(5));
+        assert_eq!(body, vec![1, 2, 3, 4]);
+    }
 }

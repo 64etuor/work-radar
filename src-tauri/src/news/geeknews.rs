@@ -6,7 +6,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use feed_rs::parser;
-use reqwest::Client;
+use reqwest::{header::USER_AGENT, Client};
 use tokio::task::JoinSet;
 
 use super::{http_bytes, NewsItem, NewsSource};
@@ -14,6 +14,7 @@ use crate::error::AppError;
 
 const RSS_URL: &str = "https://news.hada.io/rss/news";
 const TAKE: usize = 30;
+const TOPIC_USER_AGENT: &str = "Mozilla/5.0 WorkRadar/0.1";
 
 pub struct GeekNewsSource;
 
@@ -82,7 +83,11 @@ async fn enrich_comment_count(client: Client, mut item: NewsItem) -> NewsItem {
 }
 
 async fn fetch_comment_count(client: &Client, url: &str) -> Result<Option<u32>, AppError> {
-    let resp = client.get(url).send().await?;
+    let resp = client
+        .get(url)
+        .header(USER_AGENT, TOPIC_USER_AGENT)
+        .send()
+        .await?;
     let bytes = http_bytes(resp, "geeknews.topic").await?;
     let html = String::from_utf8_lossy(&bytes);
     Ok(parse_comment_count(&html))
@@ -114,7 +119,13 @@ fn parse_jsonish_u32(html: &str, key: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_comment_count;
+    use reqwest::Client;
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpListener,
+    };
+
+    use super::{fetch_comment_count, parse_comment_count};
 
     #[test]
     fn parses_comment_count_from_topic_link_attr() {
@@ -132,5 +143,61 @@ mod tests {
     fn parses_comment_count_from_json_ld_fallback() {
         let html = r#"<script>{"commentCount": 7}</script>"#;
         assert_eq!(parse_comment_count(html), Some(7));
+    }
+
+    #[tokio::test]
+    async fn topic_request_uses_browser_compatible_work_radar_user_agent() {
+        let listener = match TcpListener::bind("127.0.0.1:0").await {
+            Ok(listener) => listener,
+            Err(error) => panic!("bind test listener: {error}"),
+        };
+        let address = match listener.local_addr() {
+            Ok(address) => address,
+            Err(error) => panic!("read test listener address: {error}"),
+        };
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = match listener.accept().await {
+                Ok(connection) => connection,
+                Err(error) => panic!("accept test request: {error}"),
+            };
+            let mut request = [0_u8; 4096];
+            let size = match stream.read(&mut request).await {
+                Ok(size) => size,
+                Err(error) => panic!("read test request: {error}"),
+            };
+            let request = String::from_utf8_lossy(&request[..size]);
+            let allowed = request
+                .lines()
+                .any(|line| line.eq_ignore_ascii_case("user-agent: Mozilla/5.0 WorkRadar/0.1"));
+            let (status, body) = if allowed {
+                ("200 OK", "<a data-topic-comment-count='12'>댓글 12개</a>")
+            } else {
+                ("403 Forbidden", "forbidden")
+            };
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            if let Err(error) = stream.write_all(response.as_bytes()).await {
+                panic!("write test response: {error}");
+            }
+        });
+
+        let client = match Client::builder()
+            .user_agent("work-radar/news-fetcher")
+            .build()
+        {
+            Ok(client) => client,
+            Err(error) => panic!("build test client: {error}"),
+        };
+        let result = fetch_comment_count(&client, &format!("http://{address}/topic?id=1")).await;
+        if let Err(error) = server.await {
+            panic!("join test server: {error}");
+        }
+
+        match result {
+            Ok(count) => assert_eq!(count, Some(12)),
+            Err(error) => panic!("topic request was rejected: {error}"),
+        }
     }
 }

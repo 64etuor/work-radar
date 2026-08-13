@@ -67,8 +67,18 @@ impl NewsSource for GenericRssSource {
         }
         let resp = req.send().await?;
         let bytes = http_bytes(resp, &format!("rss.{}", self.id)).await?;
-        let feed = parser::parse(&bytes[..])
-            .map_err(|e| AppError::transient(format!("rss.{}.parse", self.id), e.to_string()))?;
+        let parser_id = self.id;
+        let feed = tokio::task::spawn_blocking(move || {
+            parser::parse(&bytes[..]).map_err(|error| error.to_string())
+        })
+        .await
+        .map_err(|error| {
+            AppError::unexpected(
+                format!("rss.{parser_id}.parse_task"),
+                format!("RSS parser task failed: {error}"),
+            )
+        })?
+        .map_err(|e| AppError::transient(format!("rss.{}.parse", self.id), e.to_string()))?;
         let id = self.id;
         let items: Vec<NewsItem> = feed
             .entries
