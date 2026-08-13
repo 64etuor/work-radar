@@ -1,0 +1,21 @@
+docs/decisions.md
+  s_f6ac5b1a48044a::t_47c355c91b7fcd 690-691
+.react-doctor/false-positives.md
+  s_f6ac5b1a48044a::t_55d37707170f3b 18-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6d5bd4cf3f7e71e1f64ff94c4ecf2512ea5fec80",
+  "prompts": {},
+  "sessions": {
+    "s_f6ac5b1a48044a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8d0-bfeb-7303-bfe5-b53420e434f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
