@@ -15,6 +15,29 @@
   insert). 패턴: `usePing*`, `useDetect*`, `useCancel*`, `useFocus*`,
   `useSchedule*Notification` — 갱신할 쿼리 자체가 없음.
 
+## `react-doctor/client-localstorage-no-version`
+
+- `CommandPalette.tsx`의 최근 명령과 `SkillsView.tsx`의 환경 순서는 문자열 배열만 저장하는
+  표시 전용 값이다. 두 reader 모두 JSON을 `unknown`으로 읽고 `Array.isArray` + 문자열 필터 +
+  `try/catch`로 낯선/손상된 shape를 빈 배열로 격리하므로 진단이 경고하는 앱 크래시 경로가 없다.
+
+## `react-doctor/server-sequential-independent-await`
+
+- `governance/src/orchestrator/core.ts`의 `autoAccept` → `autoDispatch`는 반환값 의존성 대신 이벤트
+  로그 의존성이 있다. 앞 호출이 acceptance 이벤트를 쓴 뒤 뒤 호출이 최신 로그를 읽어 dispatch하므로
+  병렬화하면 gate 순서와 결정 레일을 깨뜨린다.
+
+## `react-doctor/no-pass-data-to-parent`
+
+- `src/lib/query/agents.ts`의 effect는 자식 데이터를 부모 콜백으로 올리지 않는다. terminal run의
+  마지막 로그 tail을 보장하려고 TanStack Query 캐시를 1회 invalidate하는 폴링 경계다.
+
+## `deslop/unused-file`
+
+- `governance/bridge/boule-mcp.mjs`는 import entry가 아니라 Python bridge와 운영 runbook이
+  `node bridge/boule-mcp.mjs <tool>`로 spawn하는 one-shot MCP CLI다. 정적 import graph에 없지만
+  실제 운영 진입점이므로 삭제하면 governance round-trip이 깨진다.
+
 ## `react-doctor/design-no-three-period-ellipsis`
 
 - JSX 본문의 `"...HEAD"` / `"base...HEAD"` 처럼 git 3-dot diff 문법 표기. 텍스트
