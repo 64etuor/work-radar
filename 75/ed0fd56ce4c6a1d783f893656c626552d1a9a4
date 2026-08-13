@@ -1,0 +1,56 @@
+src/components/board/MatrixCanvas.tsx
+  s_f6ac5b1a48044a::t_011a5356085960 477
+src/lib/localeFormat.ts
+  s_f6ac5b1a48044a::t_011a5356085960 11-14,45
+src/components/okr/WeeklyCheckInPanel.tsx
+  s_f6ac5b1a48044a::t_0b008ccae1230b 2,82,87-104,108-112,116-120,122-124
+src/components/okr/ObjectiveCard.tsx
+  s_f6ac5b1a48044a::t_0b008ccae1230b 2,170,175-203
+src/lib/weekRange.ts
+  s_f6ac5b1a48044a::t_011a5356085960 52
+src/components/okr/MissionStatement.tsx
+  s_f6ac5b1a48044a::t_0b008ccae1230b 2,20,30-37
+src/components/SprintTimer.dom.test.tsx
+  s_f6ac5b1a48044a::t_058de775d913d7 1-7,10-65
+  s_f6ac5b1a48044a::t_1dcaf33bbddc5a 9
+  s_f6ac5b1a48044a::t_267c299420612a 8
+src/components/HermesView.tsx
+  s_f6ac5b1a48044a::t_96b40a5451f7d2 72-76
+src/components/board/useSignalPop.ts
+  s_f6ac5b1a48044a::t_96b40a5451f7d2 7
+src/App.tsx
+  s_f6ac5b1a48044a::t_56f587657a5004 236
+src/components/CmdKnob.tsx
+  s_f6ac5b1a48044a::t_011a5356085960 125
+src/components/okr/SubmissionGuards.dom.test.tsx
+  s_f6ac5b1a48044a::t_d070801a679aa6 85
+  s_f6ac5b1a48044a::t_6122fc356213a5 1-42,44-49,57-84,86-128,130-145,147-148,150-166,170-181,183-184,186-203,205-206
+  s_f6ac5b1a48044a::t_843ffbf76ae724 167-169
+  s_f6ac5b1a48044a::t_e5dd6fb01d199d 43,50-56,129,146,149,182,185,204
+src/lib/timelineLayout.ts
+  s_f6ac5b1a48044a::t_011a5356085960 165,169-170,172,174-175
+src/components/SprintTimer.tsx
+  s_f6ac5b1a48044a::t_e3e74fa7dd044d 89-91
+  s_f6ac5b1a48044a::t_1dcaf33bbddc5a 45-46,88,103-108,127,147,189,200,256,269,398-402
+  s_f6ac5b1a48044a::t_011a5356085960 224-226,277-280,307,309-312,331,333-336,370
+src/components/board/RoutineForm.tsx
+  s_f6ac5b1a48044a::t_011a5356085960 47
+src/lib/weekRange.test.ts
+  s_f6ac5b1a48044a::t_79f8bec1bd35a8 91-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "75ed0fd56ce4c6a1d783f893656c626552d1a9a4",
+  "prompts": {},
+  "sessions": {
+    "s_f6ac5b1a48044a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8d0-bfeb-7303-bfe5-b53420e434f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
