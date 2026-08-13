@@ -1,0 +1,37 @@
+src-tauri/src/skills/remote.rs
+  s_f6ac5b1a48044a::t_a44b582e8bff36 20-22,141-185,286-291,296,310,324-337
+src-tauri/src/news/rss_generic.rs
+  s_f6ac5b1a48044a::t_a44b582e8bff36 70-80
+  s_f6ac5b1a48044a::t_4be8a96c0d77ed 81
+docs/areas/news-feature.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 65-66
+src-tauri/Cargo.toml
+  s_f6ac5b1a48044a::t_274973bdeba309 74
+src-tauri/src/news/mod.rs
+  s_f6ac5b1a48044a::t_274973bdeba309 24-27,36-37,43-51,60-66,70-98,105-109,111-112,114,123-127,129,359,364,369,376,384,392,399,405-406,411-416
+  s_f6ac5b1a48044a::t_4be8a96c0d77ed 69,113,407
+  s_f6ac5b1a48044a::t_3c4639c634f1af 67-68
+src-tauri/src/news/geeknews.rs
+  s_f6ac5b1a48044a::t_f0306ad2fe0e06 9,17,86-90
+  s_f6ac5b1a48044a::t_63b544c08ea98d 169-171
+  s_f6ac5b1a48044a::t_514853c96ed17c 122-128,147-168,172-201
+  s_f6ac5b1a48044a::t_6d8c3655a6a2aa 202
+src-tauri/Cargo.lock
+  s_f6ac5b1a48044a::t_20a8604c97451b 511,513,1121,1123,1127,2423,2425,3343-3352,3562,3564,3574,3576,3585,3587,4060,4062,5833,5835
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "dad6f1325b2af2c52e60a2df029846375576c2a3",
+  "prompts": {},
+  "sessions": {
+    "s_f6ac5b1a48044a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8d0-bfeb-7303-bfe5-b53420e434f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
