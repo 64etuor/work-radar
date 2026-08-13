@@ -3,9 +3,9 @@
 #
 # WHY: login keychain에 만든 self-signed cert는 trust/private-key ACL 상태가 꼬이면
 # `find-identity`에는 보이는데 `codesign`은 "item not found"로 실패할 수 있다. 전용 keychain은
-# 스크립트가 unlock/partition/search-list/trust를 모두 제어할 수 있어 dev 재빌드 서명이 안정적이다.
+# 스크립트가 사용자 제공 비밀번호로 unlock하고 search-list/trust를 관리해 dev 재빌드 서명이 안정적이다.
 #
-# USAGE: `pnpm tauri:dev:setup` (또는 `bash scripts/dev-codesign-setup.sh`)
+# USAGE: `WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup`
 #
 # IDEMPOTENT: 기존 전용 keychain identity도 실제 codesign smoke test로 검증하고, 실패하면 재생성한다.
 
@@ -14,11 +14,17 @@ set -euo pipefail
 CERT_NAME="${WORK_RADAR_DEV_CERT:-Work Radar Dev}"
 IDENTIFIER="${WORK_RADAR_BUNDLE_IDENTIFIER:-co.kr.mirrorless.workradar}"
 KEYCHAIN="${WORK_RADAR_DEV_KEYCHAIN:-$HOME/Library/Keychains/work-radar-dev.keychain-db}"
-KEYCHAIN_PASSWORD="${WORK_RADAR_DEV_KEYCHAIN_PASSWORD:-work-radar-dev}"
+KEYCHAIN_PASSWORD="${WORK_RADAR_DEV_KEYCHAIN_PASSWORD:-}"
 DAYS=3650
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
     echo "❌ macOS 전용 스크립트입니다." >&2
+    exit 1
+fi
+
+if [[ -z "$KEYCHAIN_PASSWORD" ]]; then
+    echo "❌ WORK_RADAR_DEV_KEYCHAIN_PASSWORD에 사용자 선택 비밀번호를 설정하세요." >&2
+    echo "   예: WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup" >&2
     exit 1
 fi
 
@@ -51,7 +57,8 @@ ensure_dev_keychain() {
     if ! security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null 2>&1; then
         echo "❌ 전용 dev keychain unlock 실패: $KEYCHAIN" >&2
         echo "   비밀번호가 바뀐 오래된 keychain일 수 있습니다. 삭제 후 재시도:" >&2
-        echo "   security delete-keychain '$KEYCHAIN' && pnpm tauri:dev:setup" >&2
+        echo "   security delete-keychain '$KEYCHAIN'" >&2
+        echo "   WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup" >&2
         exit 1
     fi
 
@@ -63,24 +70,6 @@ ensure_dev_keychain() {
 identity_hash() {
     security find-identity -p codesigning "$KEYCHAIN" 2>/dev/null \
         | awk -v name="\"$CERT_NAME\"" '$0 ~ name { print $2; exit }'
-}
-
-grant_partition_list() {
-    security set-key-partition-list \
-        -S "apple-tool:,apple:,codesign:" \
-        -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" \
-        >/dev/null 2>&1
-}
-
-ensure_partition_list() {
-    echo "🔓 codesign 접근 권한 부여 중..."
-    if grant_partition_list; then
-        echo "✓ partition list 설정됨."
-        return 0
-    fi
-    echo "❌ partition list 설정 실패 — codesign이 private key를 무인으로 못 씁니다." >&2
-    echo "   삭제 후 재생성: security delete-keychain '$KEYCHAIN' && pnpm tauri:dev:setup" >&2
-    return 1
 }
 
 sign_smoke_test() {
@@ -131,7 +120,7 @@ finish_success() {
     echo "  security find-identity -p codesigning '$KEYCHAIN'"
     echo ""
     echo "이제 dev 부팅:"
-    echo "  pnpm tauri dev"
+    echo "  WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri dev"
 }
 
 ensure_dev_keychain
@@ -139,7 +128,6 @@ ensure_dev_keychain
 existing_hash="$(identity_hash || true)"
 if [[ -n "$existing_hash" ]]; then
     echo "✓ 전용 keychain identity 후보 발견: $existing_hash"
-    ensure_partition_list
     if sign_smoke_test "$existing_hash"; then
         finish_success "$existing_hash"
         exit 0
@@ -182,10 +170,8 @@ openssl pkcs12 -export \
 echo "🔐 전용 dev keychain에 import 중..."
 security import "$TMPDIR/dev.p12" \
     -k "$KEYCHAIN" \
-    -P dev \
-    -A
+    -P dev
 
-ensure_partition_list
 trust_certificate "$TMPDIR/dev.crt"
 ensure_keychain_in_search_list
 
@@ -201,7 +187,8 @@ if ! sign_smoke_test "$new_hash"; then
     echo "진단:" >&2
     security find-identity -p codesigning "$KEYCHAIN" >&2 || true
     echo "전용 keychain을 삭제 후 재시도하세요:" >&2
-    echo "  security delete-keychain '$KEYCHAIN' && pnpm tauri:dev:setup" >&2
+    echo "  security delete-keychain '$KEYCHAIN'" >&2
+    echo "  WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup" >&2
     exit 1
 fi
 

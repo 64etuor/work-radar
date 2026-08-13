@@ -11,29 +11,32 @@
 ## 1회 setup
 
 ```bash
-pnpm tauri:dev:setup
+WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup
 ```
+
+비밀번호는 사용자가 선택해 현재 셸/비밀 저장소로 관리한다. 저장소에는 기본값이 없고 setup과
+각 dev 실행에서 같은 값을 전달해야 한다.
 
 스크립트가 수행:
 
 1. 전용 dev keychain 생성/잠금 해제: `~/Library/Keychains/work-radar-dev.keychain-db`
 2. self-signed code signing cert + private key 생성(CN=`Work Radar Dev`)
 3. 전용 keychain에 identity import
-4. codesign partition list + codeSign trust 등록
-5. `/usr/bin/true` 복사본에 실제 `codesign` smoke test 실행
+4. codeSign trust 등록(무제한 private-key ACL은 부여하지 않음)
+5. `/usr/bin/true` 복사본에 실제 `codesign` smoke test 실행(필요하면 macOS 승인 UI 표시)
 
 완료 조건은 `find-identity`가 아니라 **실제 codesign smoke test 통과**다.
 
 ## 사용
 
 ```bash
-pnpm tauri dev
+WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri dev
 ```
 
 `pnpm tauri dev`는 repo-local wrapper를 통해 macOS에서 자동으로 pre-launch signing runner를 쓴다. 예전 명시적 alias도 유지된다:
 
 ```bash
-pnpm tauri:dev:signed
+WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:signed
 ```
 
 일시적으로 원래 unsigned dev가 필요하면:
@@ -60,7 +63,7 @@ codesign -dv --verbose=2 src-tauri/target/debug/work-radar 2>&1 | grep -E "Autho
 
 ```bash
 security delete-keychain "$HOME/Library/Keychains/work-radar-dev.keychain-db"
-pnpm tauri:dev:setup
+WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup
 ```
 
 기존 login keychain에 남은 `Work Radar Dev` cert/private key는 더 이상 사용하지 않는다. runner는 전용 keychain의 identity hash만 사용한다.
@@ -71,9 +74,9 @@ pnpm tauri:dev:setup
 
 ## Troubleshooting
 
-| 증상                                       | 원인 / 대응                                                                                                                                      |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `전용 dev keychain에서 사용할 수 없습니다` | `pnpm tauri:dev:setup` 실행.                                                                                                                     |
-| `unlock 실패`                              | 전용 keychain이 이전 비밀번호로 생성됨. `security delete-keychain "$HOME/Library/Keychains/work-radar-dev.keychain-db" && pnpm tauri:dev:setup`. |
-| `codesign smoke test 실패`                 | setup이 실패 상태를 감지한 것. 출력된 진단을 확인하고 전용 keychain 삭제 후 재생성.                                                              |
-| 앱 첫 토큰 접근 때 1회 prompt              | 기존 토큰 ACL이 옛 바이너리에 묶임. `Always Allow` 1회 또는 토큰 재등록.                                                                         |
+| 증상                                       | 원인 / 대응                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `전용 dev keychain에서 사용할 수 없습니다` | 비밀번호 env를 전달해 setup 또는 dev 명령 재실행.                                                      |
+| `unlock 실패`                              | 전용 keychain이 다른 비밀번호로 생성됨. 삭제는 명시적으로 결정한 뒤 같은 사용자 선택 비밀번호로 setup. |
+| `codesign smoke test 실패`                 | setup이 실패 상태를 감지한 것. 출력된 진단을 확인하고 전용 keychain 삭제 후 재생성.                    |
+| 앱 첫 토큰 접근 때 1회 prompt              | 기존 토큰 ACL이 옛 바이너리에 묶임. `Always Allow` 1회 또는 토큰 재등록.                               |

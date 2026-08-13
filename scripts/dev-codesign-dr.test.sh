@@ -17,6 +17,10 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "SKIP: macOS 아님"
   exit 0
 fi
+if [[ -z "$KEYCHAIN_PASSWORD" ]]; then
+  echo "SKIP: WORK_RADAR_DEV_KEYCHAIN_PASSWORD 미설정"
+  exit 0
+fi
 if ! ensure_keychain_available; then
   echo "SKIP: 전용 dev keychain 없음 — pnpm tauri:dev:setup 후 재실행"
   exit 0
@@ -32,9 +36,6 @@ trap 'rm -rf "$TMP"' EXIT
 cp /usr/bin/true "$TMP/a"
 cp /usr/bin/false "$TMP/b"
 
-security set-key-partition-list \
-  -S "apple-tool:,apple:,codesign:" \
-  -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null 2>&1 || true
 codesign --force --sign "$signing_id" --identifier "$IDENTIFIER" "$TMP/a"
 codesign --force --sign "$signing_id" --identifier "$IDENTIFIER" "$TMP/b"
 

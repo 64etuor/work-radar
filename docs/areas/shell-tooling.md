@@ -107,8 +107,11 @@ macOS 키체인 ACL은 앱의 **코드서명 신원**(designated requirement)에
 
 **가드:**
 
-- 최초 1회 `pnpm tauri:dev:setup`(전용 keychain + self-signed identity, 멱등).
-- 키체인 다이얼로그에서는 **"항상 허용"**(항목당 1회) — "허용"은 매번 다시 묻는다.
+- 최초 1회 사용자 선택 비밀번호를 env로 전달해
+  `WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup`
+  (전용 keychain + self-signed identity, 멱등). 비밀번호는 저장소나 스크립트에 저장하지 않는다.
+- private key import는 무제한 ACL을 주지 않는다. macOS 키체인 다이얼로그에서 사용자가 직접
+  허용 범위를 정하며, 스크립트는 `set-key-partition-list`로 그 결정을 우회하지 않는다.
 - 외부에서 바이너리를 직접 exec하는 소비자(예: Hermes의 `work-radar --mcp-stdio`)는
   `scripts/exec-signed.sh <binary> [args...]`로 감싸야 같은 보장을 받는다.
 - escape hatch: `WORK_RADAR_UNSIGNED_DEV=1`(서명 생략 — 프롬프트 재발 감수).

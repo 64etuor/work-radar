@@ -55,6 +55,7 @@ export LOG
 export PATH="$FAKE_BIN:$PATH"
 export WORK_RADAR_FORCE_CODESIGN=1
 export WORK_RADAR_DEV_KEYCHAIN="$TEST_DIR/work-radar-dev.keychain-db"
+export WORK_RADAR_DEV_KEYCHAIN_PASSWORD="test-only-password"
 touch "$WORK_RADAR_DEV_KEYCHAIN"
 
 cat > "$FAKE_BIN/security" <<'FAKE_SECURITY'
@@ -96,6 +97,7 @@ sed -i '' 's/app:/testbin:/' "$APP_DIR/work_radar-abc123" 2>/dev/null || sed -i 
 : > "$LOG"
 "$SCRIPT" "$APP_DIR/work-radar" --mcp-stdio
 assert_contains "codesign:--force --sign ABCDEF1234567890 --identifier co.kr.mirrorless.workradar $APP_DIR/work-radar" "$LOG"
+assert_not_contains "set-key-partition-list" "$LOG"
 assert_contains "app:--mcp-stdio" "$LOG"
 assert_order "codesign:" "app:" "$LOG"
 

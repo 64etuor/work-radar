@@ -13,7 +13,7 @@ CERT_NAME="${WORK_RADAR_DEV_CERT:-Work Radar Dev}"
 IDENTIFIER="${WORK_RADAR_BUNDLE_IDENTIFIER:-co.kr.mirrorless.workradar}"
 BIN_NAME="${WORK_RADAR_BIN_NAME:-work-radar}"
 KEYCHAIN="${WORK_RADAR_DEV_KEYCHAIN:-$HOME/Library/Keychains/work-radar-dev.keychain-db}"
-KEYCHAIN_PASSWORD="${WORK_RADAR_DEV_KEYCHAIN_PASSWORD:-work-radar-dev}"
+KEYCHAIN_PASSWORD="${WORK_RADAR_DEV_KEYCHAIN_PASSWORD:-}"
 
 is_macos() {
   [[ "${WORK_RADAR_FORCE_CODESIGN:-0}" == "1" ]] || [[ "$(uname -s)" == "Darwin" ]]
@@ -39,6 +39,9 @@ ensure_keychain_in_search_list() {
 }
 
 ensure_keychain_available() {
+  if [[ -z "$KEYCHAIN_PASSWORD" ]]; then
+    return 1
+  fi
   if [[ ! -f "$KEYCHAIN" ]]; then
     return 1
   fi
@@ -56,7 +59,7 @@ print_setup_hint() {
 ❌ 코드서명 identity '$CERT_NAME'를 전용 dev keychain에서 사용할 수 없습니다.
 
 한 번 setup을 실행하세요:
-  pnpm tauri:dev:setup
+  WORK_RADAR_DEV_KEYCHAIN_PASSWORD='<user-chosen-password>' pnpm tauri:dev:setup
 
 진단:
   security find-identity -p codesigning '$KEYCHAIN'
@@ -86,13 +89,6 @@ sign_binary() {
   fi
 
   echo "🔏 codesign before launch: $bin" >&2
-  # partition-list self-heal: codesign 이 dev 키체인의 개인키를 무인으로 쓰도록 보장한다.
-  # 이게 없으면 키체인이 unlock 돼 있어도 codesign 이 키 ACL 때문에 매 실행 키체인 암호를
-  # 요구한다(setup 이 한 번 설정하지만 OS 리셋/구버전 setup 이면 풀린다). idempotent·빠름·
-  # 실패는 비치명(그 경우 아래 codesign 이 기존과 동일하게 동작 — 회귀 없음).
-  security set-key-partition-list \
-    -S "apple-tool:,apple:,codesign:" \
-    -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null 2>&1 || true
   if ! codesign --force --sign "$signing_id" --identifier "$IDENTIFIER" "$bin"; then
     echo "❌ codesign failed with identity '$CERT_NAME' ($signing_id)." >&2
     echo "   Run: pnpm tauri:dev:setup" >&2

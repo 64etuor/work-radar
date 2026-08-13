@@ -31,6 +31,7 @@ export LOG
 export PATH="$FAKE_BIN:$PATH"
 export WORK_RADAR_FORCE_CODESIGN=1
 export WORK_RADAR_DEV_KEYCHAIN="$TEST_DIR/work-radar-dev.keychain-db"
+export WORK_RADAR_DEV_KEYCHAIN_PASSWORD="test-only-password"
 touch "$WORK_RADAR_DEV_KEYCHAIN"
 
 cat > "$FAKE_BIN/security" <<'FAKE_SECURITY'
@@ -84,6 +85,7 @@ chmod +x "$FAKE_BIN/tauri"
 assert_contains "cargo:build --no-default-features --color always" "$LOG"
 assert_contains "security:find-identity -p codesigning $WORK_RADAR_DEV_KEYCHAIN" "$LOG"
 assert_contains "codesign:--force --sign ABCDEF1234567890 --identifier co.kr.mirrorless.workradar $TEST_DIR/target/debug/work-radar" "$LOG"
+assert_not_contains "set-key-partition-list" "$LOG"
 assert_contains "app:--smoke value" "$LOG"
 
 : > "$LOG"
