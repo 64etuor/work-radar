@@ -14,6 +14,7 @@ export default defineConfig(async () => ({
   plugins: [
     react({
       babel: {
+        inputSourceMap: false,
         // React Compiler — 자동 메모이제이션 (React 19 기본 타깃)
         plugins: ["babel-plugin-react-compiler"],
       },

@@ -77,7 +77,7 @@ test("R2 does not flag url(#fragment) ids that look like hex", async () => {
   const root = await makeFixture({
     "src/g.tsx": [
       'export const H = () => <svg className="fill-[url(#fade01)]" />;',
-      "export const I = () => <div className=\"bg-[url('/sprite.svg#abc123')]\">x</div>;",
+      "export const I = () => <div className=\"bg-[url('/sprite.svg" + "#abc123')]\">x</div>;",
     ].join("\n"),
   });
   assert.deepEqual(rules(collectViolations(root).filter((x) => x.rule === "R2")), []);

@@ -52,8 +52,9 @@
     "radix-ui": "^1.4.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-is": "^19.2.0",
     "react-markdown": "^10.1.0",
-    "recharts": "2.15.4",
+    "recharts": "3.10.1",
     "remark-gfm": "^4.0.1",
     "shiki": "^4.1.0",
     "tailwind-merge": "^3.0.0",
@@ -67,13 +68,13 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "eslint": "^10.4.0",
+    "eslint": "^10.8.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-simple-import-sort": "^13.0.0",
     "globals": "^17.6.0",
-    "happy-dom": "^20.9.0",
+    "happy-dom": "^20.11.1",
     "husky": "^9",
     "lint-staged": "^17.0.5",
     "prettier": "^3.8.3",
@@ -81,8 +82,17 @@
     "tailwindcss": "^4.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.59.4",
-    "vite": "^7.0.4",
+    "vite": "^7.3.5",
     "vitest": "^4.1.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "@babel/core": "7.29.6",
+      "brace-expansion": "5.0.9",
+      "esbuild": "0.28.1",
+      "nanoid": "3.3.17",
+      "postcss": "8.5.23"
+    }
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs}": [
