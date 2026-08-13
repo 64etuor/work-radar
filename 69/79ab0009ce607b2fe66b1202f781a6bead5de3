@@ -1,0 +1,135 @@
+src-tauri/src/mcp/tools/gmail.rs
+  s_f6ac5b1a48044a::t_16fdd242c775e9 1,10,29,34,46-47
+governance/test/conductor/attemptFeedback.test.ts
+  s_f6ac5b1a48044a::t_d1b424f869860b 112-118
+governance/test/orchestrator/dispatch/dispatch.test.ts
+  s_f6ac5b1a48044a::t_d1b424f869860b 376,388,398,541-542,574-575,581-584,590,604-610,619-620,634-635,649
+  s_f6ac5b1a48044a::t_99b67c788ffbfe 517-518
+governance/src/conductor/completion.ts
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 215,339
+  s_f6ac5b1a48044a::t_a6a9bc3cc394bf 1-2,16,129,132-137,143-146
+  s_f6ac5b1a48044a::t_d1483509573b7e 29-50,52,147
+  s_0108d68fb5a424::t_25300c0dc503bc 148
+governance/test/conductor/completion.test.ts
+  s_f6ac5b1a48044a::t_2f446c05a51558 37,42,266-289
+  s_f6ac5b1a48044a::t_d1483509573b7e 2,5,12,64,75-109,290
+  s_f6ac5b1a48044a::t_6fd93e0fd149b4 38
+  s_f6ac5b1a48044a::t_364a13dbb3e8d8 194,250,463,477,483-486,643,649-652
+  s_f6ac5b1a48044a::t_396b2659a5890f 110
+  s_f6ac5b1a48044a::t_2fc66f424dadf4 291
+governance/src/conductor/envelope.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 7,70
+docs/superpowers/specs/2026-07-10-mcp-surface-expansion-design.md
+  s_f6ac5b1a48044a::t_da69fefbf0c078 10-12
+governance/src/orchestrator/core.ts
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 141
+docs/adr/0012-mcp-local-writes-and-calendar-read.md
+  s_f6ac5b1a48044a::t_da69fefbf0c078 12-15
+governance/test/conductor/conductor.test.ts
+  s_f6ac5b1a48044a::t_688441ecef54e6 236,247,257-258
+src-tauri/src/mcp/tools/notion.rs
+  s_f6ac5b1a48044a::t_16fdd242c775e9 1,10,27,31,42-43
+src-tauri/src/external_actions/mod.rs
+  s_f6ac5b1a48044a::t_be2ae73cf5c665 1,3
+src-tauri/src/mcp/tools/github.rs
+  s_f6ac5b1a48044a::t_16fdd242c775e9 1,10,43,46,58-59,62,65,77-78
+docs/areas/decision-rails.md
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 32,35-36
+docs/areas/bookkeeping-cfo-contract.md
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 26-28
+governance/docs/STATUS.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 9,28-32
+docs/areas/mcp-server-conventions.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 46,58,206-207,211,261-264,277-278
+governance/src/conductor/redispatch.ts
+  s_f6ac5b1a48044a::t_d1b424f869860b 11,80,82,89-90
+  s_0108d68fb5a424::t_6fcad726918389 91-92
+governance/test/conductor/stepPromptCheck.test.ts
+  s_f6ac5b1a48044a::t_364a13dbb3e8d8 30,41,44,47,65
+governance/src/mcp/config.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 123-125,130,132
+governance/src/conductor/resume.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 126
+governance/src/backends/resolve.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 53
+governance/test/plan/handlers.test.ts
+  s_f6ac5b1a48044a::t_688441ecef54e6 160,175
+governance/src/conductor/adapter.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 18,372
+  s_f6ac5b1a48044a::t_75bd05beb95772 279-283,285-289,291-299
+governance/src/conductor/backend.ts
+  s_f6ac5b1a48044a::t_d1b424f869860b 49,51,54-61
+  s_f6ac5b1a48044a::t_428fe096a07307 75
+  s_f6ac5b1a48044a::t_99b67c788ffbfe 108
+governance/src/plan/handlers.ts
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 41,109
+src-tauri/src/mcp/surface_tests.rs
+  s_f6ac5b1a48044a::t_effdfdc4f683e4 1,8,20-22,27,34-39,43-48,52-56,60-68,72-77
+  s_f6ac5b1a48044a::t_1211abf3e92406 24-25,41,50,58,70,79,81-85
+governance/test/backends/resolve.test.ts
+  s_f6ac5b1a48044a::t_688441ecef54e6 97,99
+src-tauri/src/mcp/mod.rs
+  s_f6ac5b1a48044a::t_be2ae73cf5c665 5,8,13
+governance/test/conductor/evaluateLive.test.ts
+  s_f6ac5b1a48044a::t_1235ed348ff92e 116
+  s_f6ac5b1a48044a::t_364a13dbb3e8d8 21
+docs/plans/2026-07-22-hermes-finance-mcp.md
+  s_f6ac5b1a48044a::t_da69fefbf0c078 3-6
+governance/src/conductor/conductor.ts
+  s_f6ac5b1a48044a::t_a6a9bc3cc394bf 134
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 12,123-124
+src-tauri/src/mcp/tools/calendar.rs
+  s_f6ac5b1a48044a::t_effdfdc4f683e4 1,17,150-151,154,169-170,181,321,333
+governance/test/conductor/handlers.test.ts
+  s_f6ac5b1a48044a::t_0672f8ecea4d7e 49-60,919-922,966,989
+  s_f6ac5b1a48044a::t_4b8da002ae9c00 256,281-282
+  s_f6ac5b1a48044a::t_688441ecef54e6 285,298,306,695-698,702-703,1073,1079
+  s_f6ac5b1a48044a::t_99b67c788ffbfe 353-354,360-363,376,394,531-532,535-536,538,709
+governance/docs/runbooks/2026-06-07-live-loop-smoke.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 57-60,98,101-103,113,133,137
+governance/src/orchestrator/autoAccept.ts
+  s_f6ac5b1a48044a::t_a6a9bc3cc394bf 103
+governance/test/orchestrator/autoAccept.test.ts
+  s_f6ac5b1a48044a::t_688441ecef54e6 26,102
+governance/src/conductor/spawn.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 51
+governance/test/orchestrator/dispatch/config.test.ts
+  s_f6ac5b1a48044a::t_2ded94fce83f7e 23-26,29-33
+src-tauri/src/hermes_agent/acp_client.rs
+  s_f6ac5b1a48044a::t_effdfdc4f683e4 377,405,677,690,747
+governance/src/conductor/prompt.ts
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 13-14,18-19
+governance/src/conductor/evaluateLive.ts
+  s_f6ac5b1a48044a::t_beeb06a2ae842e 26-28
+src-tauri/src/mcp/write_routing.rs
+  s_f6ac5b1a48044a::t_be2ae73cf5c665 3-5,14,16-17,20
+governance/test/orchestrator/tick.test.ts
+  s_f6ac5b1a48044a::t_2f446c05a51558 214
+  s_f6ac5b1a48044a::t_688441ecef54e6 149
+governance/test/snapshot/snapshot.test.ts
+  s_f6ac5b1a48044a::t_011a5356085960 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "6979ab0009ce607b2fe66b1202f781a6bead5de3",
+  "prompts": {},
+  "sessions": {
+    "s_0108d68fb5a424": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8bb-991e-7ff3-8338-d250dcd307cc",
+        "model": "gpt-5.5"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    },
+    "s_f6ac5b1a48044a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8d0-bfeb-7303-bfe5-b53420e434f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
