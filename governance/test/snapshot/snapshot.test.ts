@@ -113,7 +113,7 @@ describe("buildControlRoomSnapshot", () => {
   });
 
   it("emits the expected camelCase JSON contract keys", () => {
-    const json = JSON.parse(JSON.stringify(buildControlRoomSnapshot(multiAxisEvents())));
+    const json = structuredClone(buildControlRoomSnapshot(multiAxisEvents()));
     expect(Object.keys(json).sort()).toEqual([
       "generatedAt",
       "handoffs",

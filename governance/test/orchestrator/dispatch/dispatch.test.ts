@@ -373,6 +373,7 @@ describe("autoDispatch", () => {
     const policy = policyWithExecutor([
       { provider: "codex", model: "gpt-5-codex-max" },
       { provider: "claude", model: "claude-opus-4-1" },
+      { provider: "command", command: "codex", model: "external-fallback" },
     ], {
       routing: { executor: { standard: { provider: "codex", model: "gpt-5-codex-max" } } },
     });
@@ -384,7 +385,7 @@ describe("autoDispatch", () => {
 
     expect(summary.executed).toBe(1);
     expect(spawns).toHaveLength(2);
-    expect(spawns[1]).toMatchObject({ taskId, executor: "claude", attemptIndex: 1 });
+    expect(spawns[1]).toMatchObject({ taskId, executor: "codex", attemptIndex: 1 });
     const all = await readAllEvents(ws);
     expect(all.filter((e) => e.frontmatter.type === "step_bound")).toHaveLength(1);
     expect(all.filter((e) => e.frontmatter.type === "session_spawned")).toHaveLength(2);
@@ -394,7 +395,7 @@ describe("autoDispatch", () => {
       .sort((a, b) => a.attemptIndex - b.attemptIndex);
     expect(attempts).toEqual([
       { attemptIndex: 0, backend: { provider: "codex", model: "gpt-5-codex-max" } },
-      { attemptIndex: 1, backend: { provider: "claude", model: "claude-opus-4-1" } },
+      { attemptIndex: 1, backend: { provider: "command", model: "external-fallback" } },
     ]);
     expect(typesOf(all)).not.toContain("task_completed");
     expect(typesOf(all).filter((x) => x.startsWith("decision_"))).toEqual([]);
@@ -513,7 +514,8 @@ describe("autoDispatch", () => {
     const policy = policyWithExecutor([
       { provider: "codex", model: "gpt-5-codex-max" },
       { provider: "claude", model: "claude-sonnet-4-5" },
-      { provider: "command", command: "codex", model: "external-stub" },
+      { provider: "command", command: "codex", model: "external-stub-1" },
+      { provider: "command", command: "codex", model: "external-stub-2" },
     ]);
     await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, viability: viableAll() }, "type2", at(), RAND);
     const taskId = await taskIdOfStep("step a");
@@ -536,7 +538,8 @@ describe("autoDispatch", () => {
     const spawns: SpawnSessionSpec[] = [];
     const policy = policyWithExecutor(
       Array.from({ length: 12 }, (_, i) => ({
-        provider: "claude",
+        provider: i === 0 ? "codex" : "command",
+        ...(i === 0 ? {} : { command: "codex" }),
         model: `attempt-${i}`,
       })),
     );
@@ -568,23 +571,23 @@ describe("autoDispatch", () => {
     ]);
     const spawns: SpawnSessionSpec[] = [];
     const policy = policyWithExecutor([
-      { provider: "claude", model: "claude-opus-4-1" },
-      { provider: "codex", model: "gpt-5-codex-small" },
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "command", command: "codex", model: "external-small" },
     ]);
     const budget = {
       caps: { runCostCapUsd: 1.21 },
       priceTable: {
-        claude: {
-          "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
-        },
         codex: {
-          "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+          "gpt-5-codex-max": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        },
+        command: {
+          "external-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
         },
       } satisfies PriceTable,
     };
 
     await autoDispatch(ws, { adapter: recordingAdapter(spawns), policy, budget, viability: viableAll() }, "type2", at(), RAND);
-    expect(spawns[0]!.executor).toBe("claude");
+    expect(spawns[0]!.executor).toBe("codex");
     await seedTaskCompleted(await taskIdOfStep("frontier first"));
 
     const summary = await autoDispatch(
@@ -598,6 +601,13 @@ describe("autoDispatch", () => {
     expect(summary.executed).toBe(1);
     expect(spawns).toHaveLength(2);
     expect(spawns[1]).toMatchObject({ executor: "codex", attemptIndex: 0 });
+    const attempts = (await readAllEvents(ws)).filter(
+      (event) => event.frontmatter.type === "executor_attempt_started",
+    );
+    expect(JSON.parse(attempts[1]!.body).backend).toEqual({
+      provider: "command",
+      model: "external-small",
+    });
   });
 
   it("LW4: retry re-derivation excludes the task's own reserves so attemptIndex can advance through the chain", async () => {
@@ -606,7 +616,8 @@ describe("autoDispatch", () => {
     const policy = policyWithExecutor([
       { provider: "codex", model: "gpt-5-codex-max" },
       { provider: "claude", model: "claude-opus-4-1" },
-      { provider: "command", command: "codex", model: "external-stub" },
+      { provider: "command", command: "codex", model: "external-stub-1" },
+      { provider: "command", command: "codex", model: "external-stub-2" },
     ], {
       routing: { executor: { standard: { provider: "codex", model: "gpt-5-codex-max" } } },
     });
@@ -620,7 +631,8 @@ describe("autoDispatch", () => {
           "claude-opus-4-1": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
         },
         command: {
-          "external-stub": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+          "external-stub-1": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
+          "external-stub-2": { estimatedTokens: 10_000, costPerStepUsd: 0.4 },
         },
       } satisfies PriceTable,
     };
@@ -634,7 +646,7 @@ describe("autoDispatch", () => {
 
     expect(third.executed).toBe(1);
     expect(spawns.map((spawn) => spawn.attemptIndex ?? 0)).toEqual([0, 1, 2]);
-    expect(spawns.map((spawn) => spawn.executor)).toEqual(["codex", "codex", "claude"]);
+    expect(spawns.map((spawn) => spawn.executor)).toEqual(["codex", "codex", "codex"]);
     expect(typesOf(await readAllEvents(ws))).not.toContain("task_completed");
   });
 

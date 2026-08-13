@@ -4,7 +4,7 @@ import type { Provider } from "../backends/config.ts";
 
 /** Which CLI executor a Conductor-spawned session runs (L3, master plan 2026-06-07). Both run on
  *  the SAME worktree + autonomy-envelope substrate and close the loop the same way (the session
- *  calls complete_task / escalate over the executor-role MCP). Default "claude". */
+ *  calls complete_task / escalate over the executor-role MCP). Default "codex". */
 export type ExecutorKind = "claude" | "codex";
 
 export interface SelectedBackendRecord {
@@ -67,7 +67,7 @@ export function buildEnvelope(input: BuildEnvelopeInput): AutonomyEnvelope {
     stepIndex: input.stepIndex,
     taskId: input.taskId,
     worktreePath: input.worktreePath,
-    executor: input.executor ?? "claude",
+    executor: input.executor ?? "codex",
     ...(input.selectedBackend ? { selectedBackend: input.selectedBackend } : {}),
     allowedPathGlobs: input.allowedPathGlobs ?? ["**"],
     allowedType2Actions: input.allowedType2Actions ?? ["edit", "test", "lint"],

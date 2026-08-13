@@ -46,16 +46,19 @@ export async function selectViableExecutorBackend(
   return exhaustedTerminal("executor");
 }
 
-export async function selectViableExecutorBackendAtIndex(
+export async function selectNextViableExecutorBackend(
   chain: BackendChain,
-  index: number,
+  previous: BackendSpec | SelectedBackendRecord | null,
   probes: ExecutorViabilityProbes,
 ): Promise<SelectedExecutorBackend | Terminal> {
-  const spec = chain.chain[index];
-  if (!spec) return exhaustedTerminal("executor");
-  const executor = await viableExecutorKind(spec, probes);
-  if (!executor) return exhaustedTerminal("executor");
-  return { executor, backend: spec };
+  const previousIndex = previous
+    ? chain.chain.findIndex((spec) => sameBackend(previous, spec))
+    : -1;
+  for (const spec of chain.chain.slice(previousIndex + 1)) {
+    const executor = await viableExecutorKind(spec, probes);
+    if (executor) return { executor, backend: spec };
+  }
+  return exhaustedTerminal("executor");
 }
 
 async function viableExecutorKind(
@@ -69,6 +72,7 @@ async function viableExecutorKind(
   }
   const executor = executorKindForBackend(spec);
   if (!executor) return null;
+  if (executor === "claude") return null;
   const command = spec.provider === "command" ? spec.command : executor;
   if (!command || !(await probes.commandExists(command))) return null;
   if (executor !== "codex") return executor;
@@ -101,6 +105,7 @@ export function sameBackend(a: BackendSpec | SelectedBackendRecord | null, b: Ba
   if (!a) return false;
   if (a.provider !== b.provider) return false;
   if (a.model !== b.model) return false;
+  if (a.provider === "command" && !("command" in a)) return true;
   const command = "command" in a ? a.command : undefined;
   return command === b.command;
 }

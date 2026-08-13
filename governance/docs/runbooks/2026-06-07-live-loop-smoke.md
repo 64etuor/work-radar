@@ -54,9 +54,10 @@ Policy fail-closes to **work/strict** if `boule.config.json` is missing/corrupt 
 4. **attention 래치 해제** — `attention_required=1`이면 due-scan이 영구 제외한다. pending
    `needs_human`을 해소한 뒤 **Tick now**가 비-attention 결과로 끝나야 래치가 리셋된다(전용
    해제 버튼은 P1에서).
-5. **plan 투입** — MCP 세션(`claude --mcp-config <repo>/.boule/mcp.json` 또는 `boule run --repo`)에서
-   `propose_spec` → `propose_plan`. **모든 step에 `check.command` 또는 `check.artifact`** — check 없는
-   step은 자동 완료 인증이 불가능해 `needs_human`에 박힌다(evaluator rung 배선은 P2).
+5. **plan 투입** — MCP 세션에서 `boule run --repo`를 통해 `propose_spec` → `propose_plan`.
+   자동 완료가 필요한 step은 worktree 안의 **상대 경로 `check.artifact`**를 선언한다. 파일은 regular
+   file이고 해당 step에서 새로 생성/변경돼야 한다. command-only, 절대경로, traversal, symlink,
+   기존 파일은 인증되지 않으며 check 없는 step은 `needs_human`으로 간다.
 6. **수락** — `autonomyLevel=full`이면 다음 tick이 auto-accept; 아니면 `accept_spec`/`accept_plan` 수동.
 7. **babysit** — `halted_decision` ⇒ MCP `choose`로 해소(Telegram 자동 도달은 P3 전까지 수동
    `bridge/boule_sync_telegram.py sync-once`); `needs_human` ⇒ 원인 수정 후 Tick now; `stalled` ⇒ 재dispatch.
@@ -94,33 +95,12 @@ The **1-step plan**: "Create `LOOP_OK.md` in the worktree with the line `loop cl
 The success criterion is a real session that (a) creates the file in its worktree, then (b) calls
 `complete_task(taskId)` so `task_completed` lands in the SSOT.
 
-## 3. L1 — First claude loop-closure (single step, live)
-
-### 3.0 Precondition — pre-trust the worktrees root (one-time, per machine)
-
-A spawned `claude` session in a **fresh** worktree hits the interactive **"trust this folder?"**
-dialog (even under `--permission-mode bypassPermissions` / `--dangerously-skip-permissions`), and a
-background cmux workspace cannot answer it → the session hangs and the loop never closes. Trust
-**cascades to children**, so pre-trust the (stable, gitignored) worktrees ROOT once. Trust is keyed
-by **realpath** (`/tmp`→`/private/tmp` on macOS):
-
-```bash
-python3 - "$BOULE_CONDUCTOR_WORKTREES_ROOT" <<'PY'
-import json, os, sys
-root = os.path.realpath(sys.argv[1])
-p = os.path.expanduser("~/.claude.json"); d = json.load(open(p))
-d.setdefault("projects", {})[root] = {"allowedTools": [], "hasTrustDialogAccepted": True}
-json.dump(d, open(p, "w"), indent=2); print("trusted", root)
-PY
-```
-
-Reversible: delete that `projects[<root>]` entry. This is an operator/environment precondition —
-governance does NOT mutate `~/.claude.json` itself (it stays decoupled from the claude CLI's config).
-
-### 3.1 Run
+## 3. L1 — First sandboxed Codex loop-closure (single step, live)
 
 Arm conductor live mode pointed at a dedicated governance workspace; accept a 1-step plan; conduct
-one step; observe the spawned claude session close the task.
+one step; observe the spawned workspace-sandboxed Codex session close the task. Claude is
+fail-closed unavailable as an autonomous executor until the adapter can enforce an OS filesystem
+sandbox equivalent to Codex `workspace-write`; reviewer-only Claude use is unaffected.
 
 ```bash
 export BOULE_WORKSPACE="$SMOKE/governance/workspace"     # dedicated derived workspace
@@ -130,7 +110,7 @@ export BOULE_CONDUCTOR_WORKTREES_ROOT="$SMOKE/.boule-worktrees"
 # (the spawned session inherits the SCOPED executor-role MCP from .boule/mcp.json — verdict tools absent)
 
 # 1) propose_spec / propose_plan(intent, steps=["Create LOOP_OK.md ..."]) / accept_spec / accept_plan
-# 2) conduct_plan(planId)  → mints task_*/step_bound/session_spawned + spawns a real cmux claude session
+# 2) conduct_plan(planId)  → mints task_*/step_bound/session_spawned + spawns a real cmux codex session
 # 3) watch: conductor_status(planId) shows the step bound + task active
 # 4) the spawned session does the work + calls complete_task → task_completed
 # 5) conduct_plan(planId) again → cursor advances / plan done
@@ -150,11 +130,11 @@ absent (executor role strips them). Confirm via the session's tool list.
 - Stall: kill a spawned session → with `BOULE_OBSERVER_MODE=live`, `observe_sessions` emits
   `session_crashed`; `stalled_tasks` (L2 helper) surfaces the active task whose session died.
 
-## 5. L3 — Codex peer executor
+## 5. L3 — Codex executor
 
 Set the step/plan executor to `codex` (envelope `executor: "codex"`, or `BOULE_CONDUCTOR_EXECUTOR=codex`).
 `conduct_plan` spawns `codex exec` in the worktree instead of `claude`; loop closure verified the same
-way (§3). Codex needs no folder-trust pre-seed (§3.0 is claude-only).
+way (§3).
 
 **Codex MCP round-trip (C2-codex) — live-confirmed wiring:** codex attaches the executor-role MCP via
 `-c mcp_servers.boule-governance.{command,args,env}` (live: it lists `complete_task` and calls it). The

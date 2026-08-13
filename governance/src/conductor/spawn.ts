@@ -48,7 +48,7 @@ export async function conductPlan(
 
   const k = state.cursor!; // canAdvance guarantees non-null
   const step = state.steps[k]!;
-  let executor: ExecutorKind = deps.executor ?? "claude";
+  let executor: ExecutorKind = deps.executor ?? "codex";
   let selectedBackend: SelectedBackendRecord | undefined;
   const policy = deps.policy;
   if (policy?.backends?.executor !== undefined) {

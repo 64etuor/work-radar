@@ -6,7 +6,7 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 
 갱신 규칙: 트랙이 랜딩/중단될 때 이 파일을 같은 커밋에서 갱신하고 `Updated:`를 찍는다.
 
-**Updated: 2026-06-12**
+**Updated: 2026-08-13**
 
 ## 현재 실행 큐
 
@@ -24,6 +24,11 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 | P5b | housekeep launchd 스케줄·구 workspace 아카이브 결정(=동결 유지) | ✅ 2026-06-12 |
 
 **큐 소진(2026-06-12)** — P0–P5 전부 랜딩. 다음 트랙은 새 plan을 이 표에 등록하고 시작한다.
+
+2026-08-13 보안 경화: 자율 executor 기본은 OS `workspace-write` sandbox를 강제하는 Codex이며,
+Claude executor는 동등한 sandbox가 생길 때까지 fail-closed 비활성이다. deterministic 완료 판정은
+worktree 안에서 이번 step이 생성/변경한 regular-file 상대 경로 artifact만 인정한다. 계획 입력의
+임의 command 실행과 절대/탈출/symlink/기존 artifact 자기인증은 제거됐다.
 
 ## Landed tracks (최신 위, 날짜=랜딩일)
 
@@ -51,6 +56,5 @@ plan 문서는 착수 시점 스냅샷(`plans/README.md`)이다. 이 분리(fron
 - **Go-Live 라이브 스모크**: 래치된 프로젝트 → 사유 확인 → 해제 → 체크리스트 green → Tick now 성공 1회 관찰(P1 done-criteria; 런북 §0.7 의식 참조).
 - **launchd 실설치**: `boule schedule install --repo <repo>` (+ 필요 시 `--kind housekeep`) — 사용자 발동(ADR-0006).
 - **evaluator rung 라이브 1회 실증**: backends.evaluator 구성 후 task_completed 인증 + 음성 경로 관찰(P2).
-- **claude stream-json 1-shot 스모크**: `claude -p --output-format stream-json --verbose` 플래그 조합이 현 CLI에서 유효한지 1회 확인(P4 critic open question; 실패해도 fail-closed).
 - **실 폰 Telegram escalation 왕복 스모크**: inbound 경로는 `.boule/workspace`로 수정됨(2026-06-12) — sync-once → 탭 → resume 관찰(P3).
 - `feat/governance-boule-p1` PARKED 브랜치 처분 결정 (Boule v1 메인트리 ~85커밋, 미푸시).

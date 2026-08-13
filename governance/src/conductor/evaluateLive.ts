@@ -23,11 +23,9 @@ const STEP_CLOSE = "STEP>>>";
  *  enclosed in a delimited DATA block (canonical §7 prompt-injection posture, mirroring
  *  defaultReviewPrompt): a prompt-injected executor must not be able to instruct its own judge. */
 export function defaultEvaluatePrompt(req: EvaluationRequest): string {
-  const checkContext = req.check?.command
-    ? `declared check.command (the deterministic contract): ${req.check.command}`
-    : req.check?.artifact
-      ? `declared check.artifact (the deterministic contract): ${req.check.artifact}`
-      : "no deterministic check contract is declared for this step";
+  const checkContext = req.check?.artifact
+    ? `declared check.artifact (the deterministic contract): ${req.check.artifact}`
+    : "no deterministic check contract is declared for this step";
   return [
     "You are a STRICT completion judge for one autonomous coding step. Decide whether the step's",
     "work is COMPLETE based on the evidence below. Be skeptical: missing tests, partial diffs, or",

@@ -1,10 +1,8 @@
-//! External Action Gate (Phase 0). non-Hermes 외부 mutation 제안의 단일 초크포인트.
+//! External Action Gate (Phase 0). 외부 mutation 제안의 단일 초크포인트.
 //!
-//! INVARIANT #1/#2 기계화: non-Hermes 제안자(MCP/codex)는 `store::enqueue`로 proposal만 만들고,
+//! INVARIANT #1/#2 기계화: 제안자(MCP/codex/Hermes)는 `store::enqueue`로 proposal만 만들고,
 //! 실행은 사용자 승인 경로(`store::approve`)가 mint하는 `Acceptance` 토큰을 요구하는
 //! `ExternalConnector::execute`에서만 일어난다. 토큰 생성자는 private → 승인 없이 실행 불가.
-//! Work Radar가 Hermes ACP 세션에 주입한 MCP 서버는 Hermes permission card를 사람 게이트로 간주하는
-//! 별도 직접 실행 예외가 있다(`mcp` 모듈, `WORK_RADAR_MCP_CALLER=hermes`).
 
 pub mod audit;
 mod gate;

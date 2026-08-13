@@ -27,7 +27,7 @@ function capturingAdapter(prompts: string[]): ConductorAdapter {
 }
 
 async function promptFor(
-  step: string | { text: string; check?: { command?: string; artifact?: string; kind?: "human" } },
+  step: string | { text: string; check?: { artifact?: string; kind?: "human" } },
 ): Promise<string> {
   const prompts: string[] = [];
   const { planId } = await proposePlan(dir, { intent: "I", steps: [step] }, at(0), 0.1);
@@ -38,13 +38,13 @@ async function promptFor(
 }
 
 describe("step-prompt completion-certification injection (P2c) — the executor is told its contract", () => {
-  it("a machine-checked step gets its check command AND artifact verbatim", async () => {
+  it("a machine-checked step gets its worktree artifact verbatim", async () => {
     const p = await promptFor({
       text: "implement the slice",
-      check: { command: "pnpm vitest run --silent", artifact: "out/report.json" },
+      check: { artifact: "out/report.json" },
     });
     expect(p).toContain("## Completion certification");
-    expect(p).toContain("pnpm vitest run --silent");
+    expect(p).toContain("fresh regular file");
     expect(p).toContain("out/report.json");
   });
 
@@ -62,7 +62,7 @@ describe("step-prompt completion-certification injection (P2c) — the executor 
   });
 
   it("the certification section coexists with the envelope + escalate contract (appended, not replacing)", async () => {
-    const p = await promptFor({ text: "implement", check: { command: "true" } });
+    const p = await promptFor({ text: "implement", check: { artifact: "done.txt" } });
     expect(p).toContain("## Autonomy envelope");
     expect(p).toContain("## Required final action");
     expect(p).toContain("## Completion certification");

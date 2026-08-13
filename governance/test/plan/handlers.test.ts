@@ -157,7 +157,7 @@ describe("checklessStepWarning — human-accept warning for steps a machine cann
   it("names the checkless step indices on a successful accept", async () => {
     const { planId } = await proposePlan(
       dir,
-      { intent: "I", steps: ["no check", { text: "checked", check: { command: "true" } }, "also no check"] },
+      { intent: "I", steps: ["no check", { text: "checked", check: { artifact: "proof.txt" } }, "also no check"] },
       at(0),
       0.1,
     );
@@ -172,7 +172,7 @@ describe("checklessStepWarning — human-accept warning for steps a machine cann
       {
         intent: "I",
         steps: [
-          { text: "a", check: { command: "true" } },
+          { text: "a", check: { artifact: "a.txt" } },
           { text: "b", check: { artifact: "out.txt" } },
         ],
       },

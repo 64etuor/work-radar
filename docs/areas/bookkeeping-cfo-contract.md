@@ -23,9 +23,9 @@ source_of_truth_scope: CFO Bot(Hermes) ↔ Work Radar 가계부 판단 파이프
   MCP save/read 툴 스키마에 해당 필드가 **존재하지 않는다**(거부됨). Hermes는 추출·정제 후
   **사람이 검토 가능한 짧은 sanitized 필드만** 보낸다.
 - **로컬 읽기·쓰기 툴은 모든 MCP caller에 개방**(ADR-0012). 각 호스트의 tool-call 승인 UI가
-  사람 게이트이며, Work Radar 안의 Hermes 세션에는 `WORK_RADAR_MCP_CALLER=hermes`와 동일 app-data
-  DB 경로를 고정한 내장 MCP descriptor가 자동 주입된다. caller env는 외부 서비스 direct-write
-  라우팅 표식이지 로컬 SQLite 권한 경계가 아니다.
+  사람 게이트이며, Work Radar 안의 Hermes 세션에는 동일 app-data DB 경로를 고정한 내장 MCP
+  descriptor가 자동 주입된다. caller env/provenance는 권한 경계가 아니며, 외부 서비스 write는
+  모든 caller가 proposal 큐만 사용한다.
 - **읽기 결과는 sanitized 메타데이터만 제공**(2026-07-04 사용자 결정 — 다른 로컬 에이전트가
   `--mcp-stdio`를 직접 spawn해 원장을 읽는다). sanitized 메타데이터만: note(사용자 내용/메모)·
   자산·결제 메타는 싣되 소스 원문 `description`·raw body·token은 DTO 타입에 존재하지 않는다.

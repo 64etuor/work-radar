@@ -23,7 +23,7 @@ async function seed() {
   const { specId } = await proposeSpec(dir, { title: "S", summary: "sum" }, at(0), 0.1);
   const { planId } = await proposePlan(
     dir,
-    { intent: "I", steps: [{ text: "a", check: { command: "true" } }], specId },
+    { intent: "I", steps: [{ text: "a", check: { artifact: "proof.txt" } }], specId },
     at(1),
     0.2,
   );
@@ -99,7 +99,7 @@ describe("checkless authoring gate — auto-accept requires EVERY step machine-c
   it("full + a checkless step => plan NOT auto-accepted, ONE reasoned verdict-free action_denied", async () => {
     const { planId } = await proposePlan(
       dir,
-      { intent: "I", steps: [{ text: "a", check: { command: "true" } }, "b has no check"] },
+      { intent: "I", steps: [{ text: "a", check: { artifact: "proof.txt" } }, "b has no check"] },
       at(1),
       0.2,
     );

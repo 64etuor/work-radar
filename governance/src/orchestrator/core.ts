@@ -138,7 +138,7 @@ export async function runOrchestrationCore(
     const details = completion.needsHumanDetails.map(
       (d) =>
         `needs_human: plan ${d.planId} step ${d.stepIndex} task ${d.taskId} — ${d.reason}` +
-        (d.checkCommand ? ` (check: ${d.checkCommand})` : ""),
+        (d.checkArtifact ? ` (artifact: ${d.checkArtifact})` : ""),
     );
     return {
       ...base,

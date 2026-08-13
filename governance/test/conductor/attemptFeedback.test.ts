@@ -109,7 +109,13 @@ describe("redispatch prompt failure feedback (P4c integration)", () => {
     forbiddenDecisionClasses: ["scope"],
     allowedType2Actions: ["edit"],
     backends: {
-      executor: { chain: [{ provider: "codex" }, { provider: "claude" }] },
+      executor: {
+        chain: [
+          { provider: "codex" },
+          { provider: "claude" },
+          { provider: "command", command: "codex", model: "fallback" },
+        ],
+      },
     },
   };
   const viability = {

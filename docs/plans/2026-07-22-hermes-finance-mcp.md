@@ -1,5 +1,9 @@
 # Hermes Finance MCP Implementation Plan
 
+> 2026-08-13 보안 정정으로 `WORK_RADAR_MCP_CALLER=hermes` 주입과 외부 서비스 direct-write 분기는
+> 폐기됐다. 이 문서는 당시 구현 계획의 스냅샷이며 현재 실행 계약은
+> `docs/areas/mcp-server-conventions.md`를 따른다.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Show transaction direction in both bookkeeping tables and give in-app Hermes sessions a

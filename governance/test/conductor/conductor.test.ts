@@ -233,7 +233,7 @@ describe("check:{kind:'human'} parsing + machineUncertifiableSteps (P2a authorin
     expect(parsePlanStepRecords(body)).toEqual([{ text: "review the docs", check: { kind: "human" } }]);
   });
 
-  it("machineUncertifiableSteps: checkless and explicit-human steps are listed; command/artifact steps are not", () => {
+  it("machineUncertifiableSteps: only worktree artifacts are machine-certifiable", () => {
     const body = [
       "I",
       "",
@@ -244,6 +244,7 @@ describe("check:{kind:'human'} parsing + machineUncertifiableSteps (P2a authorin
     ].join("\n");
     expect(machineUncertifiableSteps(body)).toEqual([
       { stepIndex: 0, explicitHuman: false },
+      { stepIndex: 1, explicitHuman: false },
       { stepIndex: 2, explicitHuman: true },
     ]);
   });
@@ -253,8 +254,8 @@ describe("check:{kind:'human'} parsing + machineUncertifiableSteps (P2a authorin
     expect(machineUncertifiableSteps(body)).toEqual([{ stepIndex: 0, explicitHuman: true }]);
   });
 
-  it("an all-machine-checked plan yields no entries", () => {
-    const body = 'I\n\n1. a <!-- boule:check {"command":"true"} -->\n2. b <!-- boule:check {"artifact":"x"} -->';
+  it("an all-artifact-checked plan yields no entries", () => {
+    const body = 'I\n\n1. a <!-- boule:check {"artifact":"a.out"} -->\n2. b <!-- boule:check {"artifact":"x"} -->';
     expect(machineUncertifiableSteps(body)).toEqual([]);
   });
 });

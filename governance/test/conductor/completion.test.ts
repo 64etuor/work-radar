@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { proposePlan, acceptPlan } from "../../src/plan/handlers.js";
 import { conductPlan } from "../../src/conductor/handlers.js";
 import { stubAdapter } from "../../src/conductor/adapter.js";
 import {
   completeReportedDone,
   evaluateCompletionGate,
+  artifactIsFreshRegularFile,
   type EvaluateFn,
   type CompletionDeps,
   type CompletionRunOptions,
@@ -32,13 +34,12 @@ afterEach(async () => {
 });
 
 const passDeps: CompletionDeps = {
-  pathExists: async (path) => path.endsWith("/done.txt"),
-  runCommand: async () => ({ status: 0 }),
+  artifactIsFreshRegularFile: async (artifact, worktree) =>
+    artifact === "done.txt" && worktree.length > 0,
 };
 
 const failDeps: CompletionDeps = {
-  pathExists: async () => false,
-  runCommand: async () => ({ status: 2 }),
+  artifactIsFreshRegularFile: async () => false,
 };
 
 const evaluatorPolicy: ResolvedPolicy = {
@@ -60,7 +61,7 @@ const evaluatorPolicy: ResolvedPolicy = {
 };
 
 async function activeStep(
-  step: string | { text: string; check?: { command?: string; artifact?: string; kind?: "human" } },
+  step: string | { text: string; check?: { artifact?: string; kind?: "human" } },
   base = 0,
 ) {
   const { planId } = await proposePlan(dir, { intent: "I", steps: [step] }, at(base), 0.1);
@@ -70,6 +71,42 @@ async function activeStep(
   const session = all.find((e) => e.frontmatter.type === "session_spawned")!;
   return { planId, taskId: r.advanced!.taskId, sessionId: session.frontmatter.id };
 }
+
+describe("artifactIsFreshRegularFile", () => {
+  it("accepts only a changed regular file inside the worktree", async () => {
+    expect(spawnSync("git", ["-C", dir, "init", "-q"]).status).toBe(0);
+    await writeFile(join(dir, "proof.txt"), "baseline\n");
+    expect(spawnSync("git", ["-C", dir, "add", "proof.txt"]).status).toBe(0);
+    expect(
+      spawnSync("git", [
+        "-C",
+        dir,
+        "-c",
+        "user.name=Boule Test",
+        "-c",
+        "user.email=boule@example.invalid",
+        "commit",
+        "-qm",
+        "baseline",
+      ]).status,
+    ).toBe(0);
+
+    expect(await artifactIsFreshRegularFile("proof.txt", dir)).toBe(false);
+    await writeFile(join(dir, "proof.txt"), "changed\n");
+    expect(await artifactIsFreshRegularFile("proof.txt", dir)).toBe(true);
+
+    const outside = await mkdtemp(join(tmpdir(), "boule-artifact-outside-"));
+    try {
+      await writeFile(join(outside, "outside.txt"), "outside\n");
+      await symlink(join(outside, "outside.txt"), join(dir, "proof-link"));
+      expect(await artifactIsFreshRegularFile("proof-link", dir)).toBe(false);
+      expect(await artifactIsFreshRegularFile(join(outside, "outside.txt"), dir)).toBe(false);
+      expect(await artifactIsFreshRegularFile("../outside.txt", dir)).toBe(false);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
 
 async function crashSession(sessionId: string, second = 21): Promise<void> {
   await seed({
@@ -154,7 +191,7 @@ describe("evaluateCompletionGate", () => {
         sessionTerminal: true,
         hasHint: true,
         stepPrompt: "implement slice",
-        check: { command: "pnpm test" },
+        check: { artifact: "out/report.json" },
         worktreeDiff: "diff",
         worktreePath: "/wt",
       },
@@ -210,19 +247,7 @@ describe("evaluateCompletionGate", () => {
     expect(r.decision).toBe("needs_human");
   });
 
-  it("hint + terminal + command nonzero / artifact missing => needs_human (R5)", async () => {
-    const command = await evaluateCompletionGate(
-      {
-        taskId: "t",
-        sessionId: "s",
-        taskActive: true,
-        sessionTerminal: true,
-        hasHint: true,
-        check: { command: "pnpm test" },
-        worktreePath: "/wt",
-      },
-      failDeps,
-    );
+  it("requires human certification when the declared artifact is not satisfied", async () => {
     const artifact = await evaluateCompletionGate(
       {
         taskId: "t",
@@ -235,8 +260,33 @@ describe("evaluateCompletionGate", () => {
       },
       failDeps,
     );
-    expect(command.decision).toBe("needs_human");
     expect(artifact.decision).toBe("needs_human");
+  });
+
+  it("rejects absolute and traversal artifact paths before touching the filesystem", async () => {
+    let calls = 0;
+    const deps: CompletionDeps = {
+      artifactIsFreshRegularFile: async () => {
+        calls++;
+        return true;
+      },
+    };
+    for (const artifact of ["/tmp/forged", "../outside", "nested/../../outside"]) {
+      const result = await evaluateCompletionGate(
+        {
+          taskId: "t",
+          sessionId: "s",
+          taskActive: true,
+          sessionTerminal: true,
+          hasHint: true,
+          check: { artifact },
+          worktreePath: "/wt",
+        },
+        deps,
+      );
+      expect(result.decision).toBe("needs_human");
+    }
+    expect(calls).toBe(0);
   });
 
   it("no hint, or session not terminal => wait with no completion attempt", async () => {
@@ -410,7 +460,7 @@ describe("completeReportedDone", () => {
   it("needs_human carries the per-task diagnosis (taskId/step/check/reason)", async () => {
     const { planId, taskId, sessionId } = await activeStep({
       text: "step a",
-      check: { command: "pnpm test" },
+      check: { artifact: "out/report.json" },
     });
     await reportTaskDone(dir, { taskId }, at(20), 0.4);
     await crashSession(sessionId);
@@ -424,13 +474,16 @@ describe("completeReportedDone", () => {
         stepIndex: 0,
         taskId,
         reason: expect.any(String),
-        checkCommand: "pnpm test",
+        checkArtifact: "out/report.json",
       },
     ]);
   });
 
   it("hint + terminal + failed check => needs_human, task stays open (R5)", async () => {
-    const { taskId, sessionId } = await activeStep({ text: "step a", check: { command: "pnpm test" } });
+    const { taskId, sessionId } = await activeStep({
+      text: "step a",
+      check: { artifact: "out/report.json" },
+    });
     await reportTaskDone(dir, { taskId }, at(20), 0.4);
     await crashSession(sessionId);
 
@@ -587,12 +640,15 @@ describe("fail-closed evaluator negative paths (INVARIANT #1 critical — never 
         taskActive: true,
         sessionTerminal: true,
         hasHint: true,
-        check: { command: "pnpm test" },
+        check: { artifact: "out/report.json" },
         worktreePath: "/wt/step0",
       },
       failDeps,
       { policy: evaluatorPolicy, evaluate },
     );
-    expect(seen).toEqual({ check: { command: "pnpm test" }, worktreePath: "/wt/step0" });
+    expect(seen).toEqual({
+      check: { artifact: "out/report.json" },
+      worktreePath: "/wt/step0",
+    });
   });
 });

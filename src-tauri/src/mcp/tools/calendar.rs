@@ -1,4 +1,4 @@
-//! Google Calendar 툴 — write는 non-Hermes proposal / Hermes 직접 실행(`write_routing`).
+//! Google Calendar 툴 — write는 모든 caller가 승인 proposal을 생성한다(`write_routing`).
 //!
 //! **`wr_calendar_list_events`는 MCP 표면의 유일한 read-only outbound다**(ADR-0012 §3).
 //! 캘린더 이벤트는 로컬 DB에 없다 — `calendar_events_cache()`는 프로세스 내 60초 TTL 캐시라
@@ -14,8 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::commands::calendar::fetch_calendar_events_range_inner;
 use crate::external_actions::ExternalAction;
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::write_routing::{HermesMcpExecutor, LiveHermesMcpExecutor};
-use crate::mcp::{mcp_caller_from_env, mcp_tool_error, parse_iso_date, McpCaller, WrServer};
+use crate::mcp::{mcp_tool_error, parse_iso_date, WrServer};
 
 /// 조회 윈도우 상한(일). 무제한 히스토리 덤프를 막는다(§7 최소권한).
 const MAX_WINDOW_DAYS: i64 = 62;
@@ -148,36 +147,15 @@ impl WrServer {
         }))
     }
 
-    /// Google Calendar 이벤트 생성을 기본적으로 **제안만** 한다 — 실행 안 함(사용자 승인 후 Rust
-    /// 커넥터가 실행). 예외: work-radar Hermes가 ACP permission card로 이미 사용자 확인을 받은
-    /// 세션(`WORK_RADAR_MCP_CALLER=hermes`)에서는 즉시 생성한다. project_id를 검증해 credential_ref를
-    /// 해석하고(#11), proposal 경로는 안정 멱등 키로 enqueue한다.
+    /// Google Calendar 이벤트 생성은 **제안만** 한다. project_id를 검증해 credential_ref를
+    /// 해석하고(#11), 안정 멱등 키로 enqueue한다.
     #[tool(
         name = "wr_calendar_create_event",
-        description = "Create a Google Calendar event only when called by work-radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated; start/end accept RFC3339 or YYYY-MM-DD for all-day."
+        description = "Propose a Google Calendar event for Work Radar approval. This tool never executes the external write directly; project_id is validated and start/end accept RFC3339 or YYYY-MM-DD for all-day."
     )]
     pub async fn calendar_create_event(
         &self,
         Parameters(p): Parameters<CalendarCreateEventParams>,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.calendar_create_event_for_caller(p, mcp_caller_from_env())
-            .await
-    }
-
-    pub(crate) async fn calendar_create_event_for_caller(
-        &self,
-        p: CalendarCreateEventParams,
-        caller: McpCaller,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.calendar_create_event_for_caller_with_executor(p, caller, &LiveHermesMcpExecutor)
-            .await
-    }
-
-    pub(crate) async fn calendar_create_event_for_caller_with_executor<E: HermesMcpExecutor>(
-        &self,
-        p: CalendarCreateEventParams,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Calendar 이벤트 생성: {}", p.title);
         let action = ExternalAction::CalendarCreateEvent {
@@ -188,15 +166,8 @@ impl WrServer {
             all_day: p.all_day,
             description: p.description,
         };
-        self.route_write_for_caller(
-            "wr_calendar_create_event",
-            &p.project_id,
-            action,
-            &summary,
-            caller,
-            executor,
-        )
-        .await
+        self.enqueue_external_write_proposal(&p.project_id, action, &summary)
+            .await
     }
 }
 
@@ -207,7 +178,7 @@ mod tests {
     use crate::commands::shared::test_support::{fresh_db, project_input};
     use crate::external_actions::store;
     use crate::mcp::tools::schema_test_support::{expect, prop_names, required_fields};
-    use crate::mcp::{McpCaller, WrServer};
+    use crate::mcp::WrServer;
     use crate::models::ProjectKind;
     use rmcp::handler::server::wrapper::Parameters;
 
@@ -347,7 +318,7 @@ mod tests {
             description: Some("주간 동기화".into()),
         };
         let first = server
-            .calendar_create_event_for_caller(params(), McpCaller::Other)
+            .calendar_create_event(Parameters(params()))
             .await
             .unwrap();
         let id1 = first.0.action_id.clone();
@@ -359,7 +330,7 @@ mod tests {
         );
         // 동일 제안 재호출 → 안정 키로 dedup(같은 id, 큐 1건).
         let second = server
-            .calendar_create_event_for_caller(params(), McpCaller::Other)
+            .calendar_create_event(Parameters(params()))
             .await
             .unwrap();
         assert_eq!(
@@ -367,35 +338,6 @@ mod tests {
             "동일 내용 = 동일 멱등 키 = 같은 id"
         );
         assert_eq!(store::list_pending(&db).await.unwrap().len(), 1);
-    }
-
-    /// Hermes-origin Calendar 호출은 승인 큐에 enqueue하지 않는다. 알 수 없는 project_id도 즉시 거부된다.
-    #[tokio::test]
-    async fn hermes_calendar_create_event_rejects_unknown_project_without_enqueue() {
-        let db = fresh_db().await;
-        let server = WrServer { db: db.clone() };
-        let res = server
-            .calendar_create_event_for_caller(
-                CalendarCreateEventParams {
-                    project_id: "does-not-exist".into(),
-                    calendar_id: "primary".into(),
-                    title: "회의".into(),
-                    start: "2026-06-04T10:00:00+09:00".into(),
-                    end: "2026-06-04T11:00:00+09:00".into(),
-                    all_day: false,
-                    description: None,
-                },
-                McpCaller::Hermes,
-            )
-            .await;
-        assert!(
-            res.is_err(),
-            "Hermes direct 경로도 unknown project_id는 거부"
-        );
-        assert!(
-            store::list_pending(&db).await.unwrap().is_empty(),
-            "Hermes direct 경로는 승인 큐에 enqueue하지 않음"
-        );
     }
 
     #[test]

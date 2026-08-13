@@ -38,7 +38,7 @@ export interface PlanStepInput {
   text: string;
   difficulty?: Difficulty;
   /** kind:"human" = explicit "a human certifies this step" (see conductor.ts PlanStepCheck). */
-  check?: { command?: string; artifact?: string; kind?: "human" };
+  check?: { artifact?: string; kind?: "human" };
 }
 export interface ProposePlanInput { intent: string; steps: Array<string | PlanStepInput>; specId?: string; }
 export interface ProposePlanResult { planId: string; }
@@ -50,11 +50,9 @@ function normalizeStep(input: string | PlanStepInput): PlanStepInput | null {
   }
   const text = input.text?.trim();
   if (!text) return null;
-  const command = input.check?.command?.trim();
   const artifact = input.check?.artifact?.trim();
   const kind = input.check?.kind === "human" ? ("human" as const) : undefined;
   const check = {
-    ...(command ? { command } : {}),
     ...(artifact ? { artifact } : {}),
     ...(kind ? { kind } : {}),
   };
@@ -108,7 +106,7 @@ export async function checklessStepWarning(workspaceDir: string, planId: string)
   if (silent.length === 0) return null;
   const indices = silent.map((s) => s.stepIndex).join(", ");
   return (
-    `WARNING: step(s) ${indices} have no check contract (check.command/check.artifact) — ` +
+    `WARNING: step(s) ${indices} have no check.artifact contract — ` +
     `completion will require human certification (the step parks at needs_human until an operator certifies)`
   );
 }

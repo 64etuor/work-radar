@@ -146,7 +146,7 @@ describe("runTick — gates + bounded conduct + stable outcomes", () => {
     // P2a: auto-accept requires a machine check contract on EVERY step.
     await proposePlan(
       dir,
-      { intent: "I", steps: [{ text: "a", check: { command: "true" } }], specId },
+      { intent: "I", steps: [{ text: "a", check: { artifact: "proof.txt" } }], specId },
       at(1),
       0.2,
     ); // NOT accepted
@@ -211,8 +211,7 @@ describe("runTick — evaluator rung wiring (deps.completionOptions, ADR-0010 la
   // Fakes WITHOUT commitStepOutput (stub worktree paths are not real git trees) and with a
   // failing deterministic check, so any completion MUST come from the evaluator rung.
   const failingCompletionDeps: CompletionDeps = {
-    pathExists: async () => false,
-    runCommand: async () => ({ status: 1 }),
+    artifactIsFreshRegularFile: async () => false,
   };
 
   async function reportedDoneStep(): Promise<string> {

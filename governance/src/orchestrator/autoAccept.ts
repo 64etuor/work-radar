@@ -100,7 +100,7 @@ function checklessDenyReason(steps: MachineUncertifiableStep[]): string {
   const indices = steps.map((s) => s.stepIndex).join(", ");
   return (
     `auto-accept denied: step(s) ${indices} have no machine-certifiable check ` +
-    `(need check.command or check.artifact; check:{"kind":"human"} = explicit human certification) — ` +
+    `(need a worktree-relative check.artifact; check:{"kind":"human"} = explicit human certification) — ` +
     `human accept_plan required`
   );
 }

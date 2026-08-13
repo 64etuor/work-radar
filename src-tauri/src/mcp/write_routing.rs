@@ -1,124 +1,30 @@
 //! 외부 서비스 write 툴이 공유하는 라우팅 시임 — **proposal-only 계약의 단일 관문**.
 //!
-//! non-Hermes caller는 `store::enqueue_with_idempotency`(제안)만 탄다. Hermes caller는 이미 ACP
-//! permission card로 사람 확인을 받았으므로 기존 Rust 커넥터를 직접 호출한다. 어느 경로도
-//! `store::{approve,reject}`나 `Acceptance::mint`에 닿지 않는다(후자는 타입-월로 컴파일 차단).
+//! 모든 MCP caller는 `store::enqueue_with_idempotency`(제안)만 탄다. caller가 제공하는 환경 변수나
+//! 세션 표식은 인증 수단이 아니므로 직접 실행 예외가 없다. 이 모듈은 `store::{approve,reject}`나
+//! `Acceptance::mint`에 닿지 않는다(후자는 타입-월로 컴파일 차단).
 //!
 //! 로컬 SQLite write(신호 캡처/가계부/타임라인 노트 등)는 이 모듈을 거치지 않는다 — 외부 변경이
 //! 아니므로 Acceptance 게이트 대상이 아니다(decision-rails INVARIANT #2).
 
 use rmcp::handler::server::wrapper::Json;
 
-use crate::calendar::{execute_calendar_action, HttpCalendarProvider};
 use crate::commands::projects;
 use crate::error::AppError;
-use crate::external_actions::{store, ExecOutcome, ExternalAction};
-use crate::github::{execute_github_action, github_provider_for_cref};
-use crate::gmail::{execute_gmail_action, HttpGmailProvider};
+use crate::external_actions::{store, ExternalAction};
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::{mcp_tool_error, McpCaller, WrServer};
-use crate::models::{Project, ProjectKind};
-use crate::notion::{execute_notion_action, notion_token_for_cref, HttpNotionWriter};
-
-/// 커넥터 실행 시임 — 테스트가 실 네트워크 없이 Hermes 직접 실행 경로를 검증하도록 분리한다.
-#[allow(async_fn_in_trait)]
-pub(crate) trait HermesMcpExecutor {
-    async fn execute(
-        &self,
-        project: &Project,
-        action: &ExternalAction,
-    ) -> Result<ExecOutcome, AppError>;
-}
-
-pub(crate) struct LiveHermesMcpExecutor;
-
-impl HermesMcpExecutor for LiveHermesMcpExecutor {
-    async fn execute(
-        &self,
-        project: &Project,
-        action: &ExternalAction,
-    ) -> Result<ExecOutcome, AppError> {
-        match action {
-            ExternalAction::Noop { .. } => Ok(ExecOutcome::default()),
-            ExternalAction::GithubIssueComment { .. }
-            | ExternalAction::GithubCreateIssue { .. } => {
-                let writer = github_provider_for_cref(&project.credential_ref)?;
-                execute_github_action(&writer, action).await
-            }
-            ExternalAction::NotionCreatePage { .. } => {
-                let token = notion_token_for_cref(&project.credential_ref)?;
-                execute_notion_action(&HttpNotionWriter::new()?, &token, action).await
-            }
-            ExternalAction::CalendarCreateEvent { .. } => {
-                let access =
-                    crate::commands::calendar::access_token_for_cref(&project.credential_ref)
-                        .await
-                        .map_err(|e| AppError::terminal("calendar.access_token", e))?
-                        .ok_or_else(|| {
-                            AppError::not_found(
-                                "calendar.not_connected",
-                                "미연결 — 먼저 Google Calendar를 연결하세요",
-                            )
-                        })?;
-                execute_calendar_action(&HttpCalendarProvider::new()?, &access, action).await
-            }
-            ExternalAction::GmailSendEmail { .. } => {
-                let access = crate::gmail::access_token_for_cref(&project.credential_ref)
-                    .await?
-                    .ok_or_else(|| {
-                        AppError::not_found(
-                            "gmail.not_connected",
-                            "Google 계정 미연결 — 먼저 Google 계정을 연결하세요(메일 발송 권한 포함)",
-                        )
-                    })?;
-                execute_gmail_action(&HttpGmailProvider::new()?, &access, action).await
-            }
-        }
-    }
-}
+use crate::mcp::{mcp_tool_error, WrServer};
+use crate::models::ProjectKind;
 
 impl WrServer {
-    pub(crate) async fn route_write_for_caller<E: HermesMcpExecutor>(
+    pub(crate) async fn enqueue_external_write_proposal(
         &self,
-        tool: &str,
         project_id: &str,
         action: ExternalAction,
         op_summary: &str,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        if caller == McpCaller::Hermes {
-            return self
-                .execute_hermes_write(tool, project_id, action, executor)
-                .await;
-        }
         self.enqueue_write_proposal(project_id, action, op_summary)
             .await
-    }
-
-    /// Hermes-only direct write path. The human gate is Hermes' ACP permission card; this still
-    /// resolves identity from the DB project row and tokens from keychain only.
-    async fn execute_hermes_write<E: HermesMcpExecutor>(
-        &self,
-        tool: &str,
-        project_id: &str,
-        action: ExternalAction,
-        executor: &E,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        let project = projects::fetch_project(&self.db, project_id)
-            .await
-            .map_err(|e| mcp_tool_error(tool, &AppError::from(e)))?
-            .ok_or_else(|| {
-                rmcp::ErrorData::invalid_params(format!("unknown project_id: {project_id}"), None)
-            })?;
-        let outcome = executor
-            .execute(&project, &action)
-            .await
-            .map_err(|e| mcp_tool_error(tool, &e))?;
-        Ok(Json(ProposeResult {
-            action_id: outcome.external_ref.unwrap_or_default(),
-            status: "succeeded".into(),
-        }))
     }
 
     /// 외부 write 제안의 공통 경로(서비스 무관 — GitHub/Notion/… 공유): project_id 검증(#11) →

@@ -43,18 +43,9 @@ MCP 툴 본문은 `external_actions::store::{enqueue,list_pending,status}`만 �
 SQLite read/write(신호 캡처·가계부·타임라인 노트·루틴 체크·OKR check-in)는 외부 변경이 아니므로
 Acceptance 게이트 대상이 아니고(INVARIANT #2가 명시), **caller를 가리지 않는다.** 사람 게이트는
 각 MCP 호스트의 승인 UI다 — Hermes는 ACP permission card, Claude Code/Codex는 호스트 자체의
-tool-call 승인. `WORK_RADAR_MCP_CALLER`는 다른 호스트가 자기 config에 똑같이 넣을 수 있는 env라
-게이트로서 실질 보안을 더하지 않으면서 정당한 사용만 막았다.
+tool-call 승인.
 
 대신 **무엇을 로컬 write로 노출하는지**가 경계다 — 캡처 레인 + 관측 기록만(아래 §1.1).
-
-**좁은 예외 — Work Radar Hermes MCP.** work-radar가 Hermes ACP 세션에
-`work-radar --mcp-stdio` 서버를 주입하면서 `WORK_RADAR_MCP_CALLER=hermes`를 함께 준 경우,
-Hermes가 호출하는 **외부 서비스** write tool은 Work Radar 승인 큐를 한 번 더 거치지 않는다.
-이때 사람 게이트는 Hermes의 ACP `session/request_permission` 카드다. GitHub/Notion/Calendar/Gmail
-write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keychain 토큰 해석 경로만
-재사용한다. 다른 MCP caller, env 없는 `--mcp-stdio`의 **외부 서비스** write는 기존 proposal-only
-계약을 유지한다. `McpCaller`는 오직 이 분기를 위해 존재한다(`mcp/write_routing.rs`).
 
 ## 1. 툴 표면 — 좁게 고정
 
@@ -64,10 +55,9 @@ write는 기존 Rust connector와 `project_id` → DB `credential_ref` → keych
 | WRITE = enqueue만 (`wr_propose_*` → `store::enqueue`)                   | `mutate_db` / `raw_sql` / admin·migration·repair      |
 | 상태 폴링 (`wr_action_status`, 단건 조회 — 폴링 종료는 클라이언트 책임) | `run_shell` / `fetch_url` / 임의 file read / env dump |
 
-- **read 표면은 Phase별로 확장되지만 외부 서비스 write 툴 계약(non-Hermes = enqueue만)은 불변.**
+- **read 표면은 Phase별로 확장되지만 외부 서비스 write 툴 계약(enqueue만)은 불변.**
 - 툴 목록은 **startup 시 고정** — 런타임 동적 registration 금지(rug pull 방어).
   `WrServer::tool_router()`가 도메인 라우터를 합성한 결과가 단일 진실원이다.
-- Hermes-origin 직접 실행 예외는 위 표면 안의 고정 동작이며, 동적 tool mutation이 아니다.
 - **로컬 SQLite 툴은 read·write 모두 전 caller 개방(ADR-0012).** DTO는 sanitized — 가계부는
   note(내용)/자산/결제 메타까지 싣되 **소스 원문 `description`·raw email body·token은 표면에
   없다**(타입으로 강제).
@@ -213,12 +203,12 @@ work-radar는 반대로:
 
 ## 7. 네트워크·토큰·다중서버 — 능력을 주지 않는다
 
-- **caller가 목적지를 정하는 네트워크는 없다(ADR-0012로 개정).** 옛 문구는 "네트워크 없음"이었으나,
-  Hermes write 커넥터(`wr_calendar_create_event` → Google POST)가 land한 시점에 이미 사실이 아니었다.
+- **caller가 목적지를 정하는 네트워크는 없다(ADR-0012로 개정).** 옛 문구 "네트워크 없음"은
+  고정 provider read가 추가된 뒤 더 이상 정확하지 않다.
   정확한 명제는 이것이다:
   - 허용: **이미 연결된 provider로의 고정 엔드포인트 호출**. 도메인·경로는 코드 상수이고 caller
     입력이 URL에 닿지 않는다. 예: `wr_calendar_list_events`(read-only outbound, 윈도우 ≤62일),
-    커넥터 write.
+    read-only 조회. 외부 write는 이 MCP 프로세스가 실행하지 않고 proposal 큐로 보낸다.
   - 금지: `fetch_url`/`import_from_url`/`sync_remote`/webhook/OAuth proxy/임의 API 호출.
     **caller가 host/path/query/URL을 지정하는 필드는 스키마에 존재하지 않는다.**
   - 새 outbound provider 추가 = ADR. HTTPS only + private/link-local/localhost block +
@@ -268,11 +258,10 @@ session_id/input_hash`) — "이 proposal이 왜 생겼나"를 사용자가 추�
 
 ## 강제 계약 (durable — 라이브 phasing/현황은 plan/spec)
 
-- **외부 서비스 write 툴 본문 = `store::enqueue`만(non-Hermes).** 커넥터별 PR로 GitHub/Notion/
-  Calendar/Gmail write 툴이 추가돼도 non-Hermes MCP caller는 §1·§2·§8을 그대로 상속 —
-  `execute`/`approve` 경로 없음. 단, Work Radar Hermes MCP 예외는 Hermes permission card를 사람
-  결정으로 간주하여 승인 큐를 거치지 않고 기존 Rust connector로 실행한다. 분기는
-  `mcp/write_routing.rs` 한 곳(`route_write_for_caller`).
+- **외부 서비스 write 툴 본문 = `store::enqueue`만.** GitHub/Notion/Calendar/Gmail 툴을 포함한
+  모든 MCP caller는 §1·§2·§8을 그대로 상속하며 `execute`/`approve` 경로가 없다. caller가 주는 env나
+  provenance는 인증 입력이 될 수 없다. `mcp/write_routing.rs::enqueue_external_write_proposal`이
+  단일 관문이다.
 - **로컬 SQLite 툴은 caller 무관**(ADR-0012). 경계는 §1.1의 캡처-레인 allowlist / 결정-레일 denylist다.
 - **read 표면은 Phase별로 확장**하되 토큰/payload 본문 미노출(§6·§7)은 불변.
 - **모듈 경계:** 도메인마다 `mcp/tools/<domain>.rs`가 자기 DTO·핸들러·스키마 테스트를 소유하고,
@@ -285,8 +274,8 @@ session_id/input_hash`) — "이 proposal이 왜 생겼나"를 사용자가 추�
 
 - `src-tauri/src/mcp/mod.rs` — `WrServer` + `tool_router()` 합성(표면의 단일 진실원) + 공용 헬퍼.
 - `src-tauri/src/mcp/tools/<domain>.rs` — 도메인별 DTO·핸들러·스키마 테스트.
-- `src-tauri/src/mcp/write_routing.rs` — 외부 서비스 write의 proposal/direct 분기(단일 관문).
-- `src-tauri/src/mcp/surface_tests.rs` — 툴 이름 스냅샷 + 결정-레일 denylist + Hermes 직접 실행.
+- `src-tauri/src/mcp/write_routing.rs` — 외부 서비스 write의 proposal enqueue 단일 관문.
+- `src-tauri/src/mcp/surface_tests.rs` — 툴 이름 스냅샷 + 결정-레일 denylist + caller 우회 방지.
 - `src-tauri/src/mcp/run.rs` — `--mcp-stdio` 진입.
 - `src-tauri/src/external_actions/` — `store::{enqueue,list_pending,status}`, `gate`
   (`Acceptance` 토큰 type-wall — MCP의 proposal-only 보장이 의존하는 경계).

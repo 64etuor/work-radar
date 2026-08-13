@@ -36,7 +36,6 @@ export function registerPlanTools(ctx: ToolContext): void {
               difficulty: z.enum(["trivial", "standard", "hard"]).optional(),
               check: z
                 .object({
-                  command: z.string().optional(),
                   artifact: z.string().optional(),
                   // explicit "a human certifies this step" (suppresses the accept warning;
                   // still demotes the plan from auto-accept and routes to needs_human).

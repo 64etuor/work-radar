@@ -1,4 +1,4 @@
-//! GitHub write 툴 — non-Hermes는 proposal, Hermes는 커넥터 직접 실행(`write_routing`).
+//! GitHub write 툴 — 모든 caller가 승인 proposal을 생성한다(`write_routing`).
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};
@@ -7,8 +7,7 @@ use serde::Deserialize;
 
 use crate::external_actions::ExternalAction;
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::write_routing::{HermesMcpExecutor, LiveHermesMcpExecutor};
-use crate::mcp::{mcp_caller_from_env, McpCaller, WrServer};
+use crate::mcp::WrServer;
 
 /// GitHub 코멘트 제안 파라미터(`wr_github_comment`). proposer는 **project_id만** 준다 — 서버가
 /// 실재성을 검증해 credential_ref를 해석한다(#11: raw project_ref/credential_ref 신뢰 금지).
@@ -41,30 +40,14 @@ pub struct GithubCreateIssueParams {
 
 #[tool_router(router = tool_router_github, vis = "pub(crate)")]
 impl WrServer {
-    /// GitHub 이슈/PR 코멘트. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는
-    /// Hermes permission card를 사람 게이트로 간주해 기존 Rust connector로 직접 실행한다.
-    /// project_id를 검증해 credential_ref를 해석한다(#11).
+    /// GitHub 이슈/PR 코멘트 제안을 생성한다. project_id를 검증해 credential_ref를 해석한다(#11).
     #[tool(
         name = "wr_github_comment",
-        description = "Create a GitHub issue/PR comment when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
+        description = "Propose a GitHub issue/PR comment for Work Radar approval. This tool never executes the external write directly; project_id is validated."
     )]
     pub async fn github_comment(
         &self,
         Parameters(p): Parameters<GithubCommentParams>,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.github_comment_for_caller_with_executor(
-            p,
-            mcp_caller_from_env(),
-            &LiveHermesMcpExecutor,
-        )
-        .await
-    }
-
-    pub(crate) async fn github_comment_for_caller_with_executor<E: HermesMcpExecutor>(
-        &self,
-        p: GithubCommentParams,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("GitHub {}#{} 코멘트", p.repo, p.issue_number);
         let action = ExternalAction::GithubIssueComment {
@@ -72,40 +55,18 @@ impl WrServer {
             issue_number: p.issue_number,
             body: p.body,
         };
-        self.route_write_for_caller(
-            "wr_github_comment",
-            &p.project_id,
-            action,
-            &summary,
-            caller,
-            executor,
-        )
-        .await
+        self.enqueue_external_write_proposal(&p.project_id, action, &summary)
+            .await
     }
 
-    /// GitHub 이슈 생성. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는 직접 실행한다.
-    /// project_id를 검증해 credential_ref를 해석한다(#11).
+    /// GitHub 이슈 생성 제안을 만든다. project_id를 검증해 credential_ref를 해석한다(#11).
     #[tool(
         name = "wr_github_create_issue",
-        description = "Create a GitHub issue when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
+        description = "Propose a GitHub issue for Work Radar approval. This tool never executes the external write directly; project_id is validated."
     )]
     pub async fn github_create_issue(
         &self,
         Parameters(p): Parameters<GithubCreateIssueParams>,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.github_create_issue_for_caller_with_executor(
-            p,
-            mcp_caller_from_env(),
-            &LiveHermesMcpExecutor,
-        )
-        .await
-    }
-
-    pub(crate) async fn github_create_issue_for_caller_with_executor<E: HermesMcpExecutor>(
-        &self,
-        p: GithubCreateIssueParams,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("GitHub {} 이슈 생성: {}", p.repo, p.title);
         let action = ExternalAction::GithubCreateIssue {
@@ -113,15 +74,8 @@ impl WrServer {
             title: p.title,
             body: p.body,
         };
-        self.route_write_for_caller(
-            "wr_github_create_issue",
-            &p.project_id,
-            action,
-            &summary,
-            caller,
-            executor,
-        )
-        .await
+        self.enqueue_external_write_proposal(&p.project_id, action, &summary)
+            .await
     }
 }
 

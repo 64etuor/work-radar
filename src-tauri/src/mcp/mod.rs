@@ -2,18 +2,15 @@
 //!
 //! 외부 AI 에이전트(Claude Code / Codex / Hermes)가 `work-radar --mcp-stdio`로 spawn해 등록한다.
 //! - read 툴  = DB 조회(메타만 — 토큰/payload 본문 미노출).
-//! - write tool = 기본적으로 `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint`
+//! - 외부 서비스 write tool = `store::enqueue`만 호출(제안 생성). 커넥터 `execute`/`Acceptance::mint`
 //!   경로 **없음** — 모듈 경계 + Task 1.0 토큰 type-wall(`pub(in crate::external_actions)`)로 컴파일 강제.
-//! - 예외: work-radar Hermes가 ACP `session/request_permission`으로 먼저 사용자 확인을 받은 뒤 호출하는
-//!   write tool은 `WORK_RADAR_MCP_CALLER=hermes`일 때 Work Radar 승인 큐를 한 번 더 거치지 않고 실행한다.
 //!
-//! non-Hermes 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
-//! Hermes-marked MCP 경로만 Hermes permission card 이후 기존 Rust 커넥터를 직접 호출한다.
+//! 승인/실행은 work-radar GUI(같은 DB의 승인 패널)와 Rust 커넥터(Phase 2~5)가 담당한다.
 //!
 //! ## 모듈 지도
 //!
 //! - `tools/` — 도메인별 툴 표면. 각 모듈이 자기 DTO·정제 로직·스키마 테스트를 소유한다.
-//! - `write_routing` — 외부 서비스 write의 proposal/direct 분기(단일 관문).
+//! - `write_routing` — 외부 서비스 write의 proposal-only 단일 관문.
 //! - `run` — `--mcp-stdio` 진입점.
 //!
 //! **툴 추가 = 해당 도메인 모듈 + `WrServer::tool_router()` + `surface_tests`의 이름 스냅샷.**
@@ -82,24 +79,6 @@ impl WrServer {
 
 #[tool_handler]
 impl ServerHandler for WrServer {}
-
-/// **외부 서비스 write에만** 쓰이는 분기 축(`write_routing`). 로컬 SQLite read/write는 caller를
-/// 보지 않는다(ADR-0012) — `WORK_RADAR_MCP_CALLER`는 다른 호스트가 흉내낼 수 있는 env라 게이트로서
-/// 실질 보안을 더하지 않았고, 사람 게이트는 각 MCP 호스트의 승인 UI다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum McpCaller {
-    /// Work Radar가 주입한 Hermes ACP 세션 — permission card가 이미 사람 확인을 받았다.
-    Hermes,
-    /// 그 외 모든 MCP 호스트 — 외부 서비스 write는 승인 큐(proposal)로 간다.
-    Other,
-}
-
-pub(crate) fn mcp_caller_from_env() -> McpCaller {
-    match std::env::var("WORK_RADAR_MCP_CALLER") {
-        Ok(v) if v.trim().eq_ignore_ascii_case("hermes") => McpCaller::Hermes,
-        _ => McpCaller::Other,
-    }
-}
 
 /// Serialize a closed serde enum to its wire string (e.g. BookkeepingDirection → "expense").
 pub(crate) fn enum_wire_string<T: Serialize>(value: &T) -> String {

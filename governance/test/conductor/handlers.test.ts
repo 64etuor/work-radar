@@ -46,18 +46,18 @@ describe("SESSION_DENIED_TOOLS — executor sessions cannot reach the gate-openi
       expect(SESSION_DENIED_TOOLS).toContain(`mcp__boule-governance__${t}`);
     }
   });
-  it("the claude executor invocation passes the full denylist (incl. auto_dispatch)", () => {
-    const c = buildSessionCommand(
-      "claude",
-      { worktreePath: "/wt/s0", taskId: "evt_t0" },
-      {
-        serverEntrypoint: "/install/governance/src/mcp/server.ts",
-        governanceWorkspace: "/ws",
-        completeEntrypoint: "/install/governance/src/cli/boule.ts",
-      },
-    );
-    expect(c).toContain("mcp__boule-governance__auto_dispatch");
-    expect(c).toContain("mcp__boule-governance__accept_plan");
+  it("refuses an autonomous claude executor without an enforceable OS sandbox", () => {
+    expect(() =>
+      buildSessionCommand(
+        "claude",
+        { worktreePath: "/wt/s0", taskId: "evt_t0" },
+        {
+          serverEntrypoint: "/install/governance/src/mcp/server.ts",
+          governanceWorkspace: "/ws",
+          completeEntrypoint: "/install/governance/src/cli/boule.ts",
+        },
+      ),
+    ).toThrow(/claude executor is disabled.*OS sandbox/i);
   });
 });
 
@@ -253,7 +253,7 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     expect(spawns[0]!.executor).toBe("codex");
   });
 
-  it("falls forward once during pre-flight when the ideal codex backend lacks auth", async () => {
+  it("stalls before worktree creation when only the unsandboxed claude fallback remains", async () => {
     const planId = await setupActivePlanWithSteps([{ text: "hard step", difficulty: "hard" }]);
     const spawns: SpawnSessionSpec[] = [];
     const policy = policyWithExecutor(
@@ -278,12 +278,11 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
       0.3,
     );
 
-    expect(r.ok).toBe(true);
-    expect(spawns).toHaveLength(1);
-    expect(spawns[0]!.executor).toBe("claude");
+    expect(r).toEqual({ ok: false, reason: "executor:stall", advanced: null });
+    expect(spawns).toHaveLength(0);
   });
 
-  it("keeps no-backends configured behavior identical: single claude executor and no selectedBackend audit field", async () => {
+  it("defaults to the sandboxed codex executor with no selectedBackend audit field", async () => {
     const planId = await setupActivePlanWithSteps([{ text: "legacy step", difficulty: "hard" }]);
     const spawns: SpawnSessionSpec[] = [];
 
@@ -296,7 +295,7 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     );
 
     expect(r.ok).toBe(true);
-    expect(spawns[0]!.executor).toBe("claude");
+    expect(spawns[0]!.executor).toBe("codex");
     const all = await readAllEvents(dir);
     expect(spawnedBodies(all)[0]).toEqual({
       surface: "stub-0",
@@ -304,7 +303,7 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
         /^\.boule-worktrees\/stub-evt_20260602_120000_[a-z0-9]+-step0$/,
       ),
       envelopeHash: expect.any(String),
-      envelope: expect.objectContaining({ executor: "claude" }),
+      envelope: expect.objectContaining({ executor: "codex" }),
     });
     expect(spawnedBodies(all)[0]).not.toHaveProperty("selectedBackend");
   });
@@ -351,17 +350,17 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     ]);
     const spawns: SpawnSessionSpec[] = [];
     const policy = policyWithExecutor([
-      { provider: "claude", model: "claude-opus-4-1" },
-      { provider: "codex", model: "gpt-5-codex-small" },
+      { provider: "codex", model: "gpt-5-codex-max" },
+      { provider: "command", command: "codex", model: "external-small" },
     ]);
     const budget = {
       caps: { runCostCapUsd: 1.21 },
       priceTable: {
-        claude: {
-          "claude-opus-4-1": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
-        },
         codex: {
-          "gpt-5-codex-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
+          "gpt-5-codex-max": { estimatedTokens: 40_000, costPerStepUsd: 1.2 },
+        },
+        command: {
+          "external-small": { estimatedTokens: 2_000, costPerStepUsd: 0.01 },
         },
       },
     };
@@ -374,7 +373,7 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
       0.3,
     );
     expect(first.ok).toBe(true);
-    expect(spawns[0]!.executor).toBe("claude");
+    expect(spawns[0]!.executor).toBe("codex");
     expect((await completeTask(dir, { taskId: first.advanced!.taskId }, at(30), 0.4)).ok).toBe(
       true,
     );
@@ -392,7 +391,7 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     expect(spawns[1]!.executor).toBe("codex");
     const secondSpawn = spawnedBodies(await readAllEvents(dir))[1];
     expect(secondSpawn).toMatchObject({
-      selectedBackend: { provider: "codex", model: "gpt-5-codex-small" },
+      selectedBackend: { provider: "command", model: "external-small" },
     });
   });
 
@@ -529,14 +528,14 @@ describe("conductPlan — LW1 pre-flight executor selection", () => {
     };
 
     await expect(selectViableExecutorBackend(chain, probes)).resolves.toEqual({
-      executor: "claude",
-      backend: { provider: "claude", model: "claude-opus-4-1" },
+      role: "executor",
+      outcome: "stall",
     });
     await expect(selectViableExecutorBackend(chain, probes)).resolves.toEqual({
-      executor: "claude",
-      backend: { provider: "claude", model: "claude-opus-4-1" },
+      role: "executor",
+      outcome: "stall",
     });
-    expect(calls).toEqual(["cmd:codex", "auth", "cmd:claude", "cmd:codex", "auth", "cmd:claude"]);
+    expect(calls).toEqual(["cmd:codex", "auth", "cmd:codex", "auth"]);
   });
 });
 
@@ -693,25 +692,21 @@ describe("makeLiveAdapter — git + cmux command SEQUENCE (US-005, injected fake
     // The TYPED launch line is a short `sh <script>` — the ~2KB wrapper itself goes into
     // .boule/run-step.sh (typed lines >MAX_CANON arrive truncated during the shell-startup race).
     expect(calls[2]!.args[4]).toBe(`sh '${wt.path}/.boule/run-step.sh'\n`);
-    // the claude invocation (in the run-step.sh script) runs against the scoped executor-role
-    // config + denies verdict tools
-    const claudeCmd = writes.find((w) => w.path.endsWith("run-step.sh"))!.data;
-    expect(claudeCmd).toContain("--mcp-config");
-    expect(claudeCmd).toContain("--strict-mcp-config");
-    expect(claudeCmd).toContain("--disallowedTools");
-    expect(claudeCmd).toContain("mcp__boule-governance__choose");
-    expect(claudeCmd).toContain("mcp__boule-governance__approve");
-    expect(claudeCmd).toContain(`$(cat ${wt.path}/.boule/step-prompt.md)`);
+    const codexCmd = writes.find((w) => w.path.endsWith("run-step.sh"))!.data;
+    expect(codexCmd).toContain("codex exec --json --sandbox workspace-write");
+    expect(codexCmd).toContain("BOULE_SESSION_ROLE=\"executor\"");
+    expect(codexCmd).toContain(`$(cat ${wt.path}/.boule/step-prompt.md)`);
     // Regression guard (live wedge 2026-06-10): cmux new-workspace --command translates a literal
     // two-char "\n" sequence into Enter, splitting the wrapper across shell lines. The generated
     // command must never embed one; the stderr digest uses '[:cntrl:]' instead.
-    expect(claudeCmd).not.toContain("\\n");
-    expect(claudeCmd).toContain("tr '[:cntrl:]' ' '");
+    expect(codexCmd).not.toContain("\\n");
+    expect(codexCmd).toContain("tr '[:cntrl:]' ' '");
     // envelope + prompt + scoped MCP config + launch script written into the worktree's .boule dir
     expect(writes.map((w) => w.path)).toEqual([
       `${wt.path}/.boule/envelope.json`,
       `${wt.path}/.boule/step-prompt.md`,
       `${wt.path}/.boule/mcp.json`,
+      "/repo/governance/workspace/codex-home/config.toml",
       `${wt.path}/.boule/run-step.sh`,
     ]);
     const mcpJson = writes.find((w) => w.path.endsWith("mcp.json"))!.data;
@@ -921,26 +916,10 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     codexHome: "/repo/governance/workspace/codex-home",
   };
 
-  it("claude (default) builds the scoped-mcp.json + strict + verdict denylist invocation", () => {
-    const c = buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
-    expect(c).toContain("claude -p --mcp-config"); // -p = one-shot: REPL would wedge the loop
-    expect(c).toContain("--strict-mcp-config");
-    // unattended autonomy within the worktree sandbox (see buildSessionCommand)
-    expect(c).toContain("--permission-mode bypassPermissions");
-    expect(c).toContain("--disallowedTools");
-    expect(c).toContain("mcp__boule-governance__approve");
-    // `--` must precede the positional prompt so the variadic --disallowedTools can't swallow it
-    expect(c).toMatch(/--disallowedTools .*-- "\$\(cat \/wt\/s0\/\.boule\/step-prompt\.md\)"/);
-    expect(c).toContain("$(cat /wt/s0/.boule/step-prompt.md)");
-    expect(c).not.toContain("codex");
-    expect(c).not.toContain("complete-task");
-    expect(c).toContain("record-attempt");
-    expect(c).toContain("report-exit");
-    expect(c).toContain("--attempt 0");
-    expect(c).toContain("--exit-code");
-    expect(c).toContain('git -C "/wt/s0" status --porcelain');
-    // claude uses the operator's own profile (its hooks are the app's) — NO CODEX_HOME isolation
-    expect(c).not.toContain("CODEX_HOME");
+  it("fails closed for claude instead of emitting bypassPermissions", () => {
+    expect(() =>
+      buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps),
+    ).toThrow(/claude executor is disabled.*OS sandbox/i);
   });
 
   it("codex builds a workspace-write (NOT danger-full) exec attaching the executor-role MCP via -c", () => {
@@ -984,7 +963,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
   });
 
   it("P4b wrapper: stdout tee-capture preserves the EXECUTOR's exit code and threads usage args", () => {
-    for (const executor of ["claude", "codex"] as const) {
+    for (const executor of ["codex"] as const) {
       const c = buildSessionCommand(executor, { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
       // stdout captured to a file WHILE staying visible in the pane
       expect(c).toContain('| tee "$__boule_stdout"');
@@ -1007,10 +986,7 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     }
   });
 
-  it("P4b: claude runs stream-json so usage exists in stdout; codex runs --json", () => {
-    const claude = buildSessionCommand("claude", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
-    // --verbose is REQUIRED by the claude CLI for stream-json under -p
-    expect(claude).toContain("--output-format stream-json --verbose");
+  it("P4b: codex runs --json for bounded usage evidence", () => {
     const codex = buildSessionCommand("codex", { worktreePath: "/wt/s0", taskId: "evt_t0" }, cmdDeps);
     expect(codex).toContain("codex exec --json");
     expect(codex).not.toContain("stream-json");
@@ -1094,13 +1070,13 @@ describe("L3 — codex peer executor (buildSessionCommand + spawn branch + envel
     expect(body.envelope.executor).toBe("codex");
   });
 
-  it("conductPlan defaults to claude in the envelope when executor omitted", async () => {
+  it("conductPlan defaults to codex in the envelope when executor omitted", async () => {
     const planId = await setupActivePlan();
     await conductPlan(dir, { planId }, { adapter: stubAdapter }, at(10), 0.3);
     const all = await readAllEvents(dir);
     const spawned = all.find((e) => e.frontmatter.type === "session_spawned")!;
     const body = JSON.parse(spawned.body) as { envelope: { executor: string } };
-    expect(body.envelope.executor).toBe("claude");
+    expect(body.envelope.executor).toBe("codex");
   });
 });
 

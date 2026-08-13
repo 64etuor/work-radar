@@ -8,7 +8,7 @@ import {
   budgetContextFromJournal,
   isTerminal,
   sameBackend,
-  selectViableExecutorBackendAtIndex,
+  selectNextViableExecutorBackend,
   selectedBackendRecord,
   FAIL_CLOSED_VIABILITY,
   type ConductorEnvelopeDefaults,
@@ -77,24 +77,17 @@ export async function redispatchExecutorAttempt(
   }
 
   const nextAttempt = currentAttempt + 1;
-  if (nextAttempt >= chainOrTerminal.chain.length) {
-    await writeExecutorStall(workspaceDir, step.taskId, "executor chain exhausted", now, rand);
-    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
-  }
-
-  const nextSpec = chainOrTerminal.chain[nextAttempt]!;
-  if (sameBackend(step.attempts.latestStartedBackend, nextSpec)) {
-    await writeExecutorStall(workspaceDir, step.taskId, "executor retry would repeat the same backend", now, rand);
-    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
-  }
-
-  const selected = await selectViableExecutorBackendAtIndex(
+  const selected = await selectNextViableExecutorBackend(
     chainOrTerminal,
-    nextAttempt,
+    step.attempts.latestStartedBackend,
     deps.viability ?? FAIL_CLOSED_VIABILITY,
   );
   if (isTerminal(selected)) {
     await writeExecutorStall(workspaceDir, step.taskId, "next executor backend is not viable", now, rand);
+    return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
+  }
+  if (sameBackend(step.attempts.latestStartedBackend, selected.backend)) {
+    await writeExecutorStall(workspaceDir, step.taskId, "executor retry would repeat the same backend", now, rand);
     return { kind: "stalled", stepIndex: step.stepIndex, taskId: step.taskId, reason: "executor:stall" };
   }
 

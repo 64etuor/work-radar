@@ -1063,9 +1063,6 @@ mod tests {
         assert!(bad.is_err(), "invalid direction rejected");
     }
 
-    /// ADR-0012: 로컬 SQLite read/write는 caller를 가리지 않는다. `WORK_RADAR_MCP_CALLER`는 흉내
-    /// 가능한 env라 게이트로서 실질 보안을 더하지 않았고, 사람 게이트는 각 MCP 호스트의 승인 UI다.
-    /// 외부 서비스 write의 proposal/direct 분기는 이 변경과 무관하다(surface_tests가 지킨다).
     #[tokio::test]
     async fn bookkeeping_reads_and_local_writes_open_to_any_caller() {
         let db = fresh_db().await;

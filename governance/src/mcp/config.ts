@@ -120,16 +120,16 @@ export interface ConductorConfig {
   cmuxCmd: string;
   /** gitignored root for per-step worktrees (NEVER the user tree); used only by the live adapter. */
   worktreesRoot: string;
-  /** which CLI executor a spawned session runs (L3). "codex" only when BOULE_CONDUCTOR_EXECUTOR=codex;
-   *  anything else fails closed to "claude" (the original behavior). Run-level default; per-step
+  /** which CLI executor a spawned session runs (L3). "claude" is preserved only when explicitly
+   *  requested, where the live adapter refuses it until an OS sandbox exists. All other values use
+   *  the workspace-sandboxed codex executor. Run-level default; per-step
    *  override is a follow-up (needs a plan-step schema field). */
   executor: ExecutorKind;
 }
 
-/** Parse BOULE_CONDUCTOR_EXECUTOR: exact "codex" (case-insensitive, trimmed) ⇒ codex; else claude.
- *  Fail-closed: an unrecognized value never silently switches executor. */
+/** Parse BOULE_CONDUCTOR_EXECUTOR. Autonomous execution defaults to the sandboxed codex path. */
 export function parseConductorExecutor(raw: string | undefined): ExecutorKind {
-  return (raw ?? "").trim().toLowerCase() === "codex" ? "codex" : "claude";
+  return (raw ?? "").trim().toLowerCase() === "claude" ? "claude" : "codex";
 }
 
 type DecisionClass = AutonomyEnvelope["forbiddenDecisionClasses"][number];

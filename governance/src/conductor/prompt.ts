@@ -10,13 +10,13 @@ export function completionCertificationLines(check?: PlanStepCheck): string[] {
   if (check?.kind === "human") {
     return [
       head,
-      "This step declares check: human — completion requires human certification. No command or",
-      "artifact will auto-complete it: finish the work, call complete_task, and an operator certifies.",
+      "This step declares check: human — completion requires human certification. No artifact",
+      "will auto-complete it: finish the work, call complete_task, and an operator certifies.",
     ];
   }
   const contract: string[] = [];
-  if (check?.command) contract.push(`- this command must exit 0 (run in your worktree): ${check.command}`);
-  if (check?.artifact) contract.push(`- this artifact must exist (worktree-relative): ${check.artifact}`);
+  if (check?.artifact)
+    contract.push(`- this artifact must be a fresh regular file (worktree-relative): ${check.artifact}`);
   if (contract.length > 0) {
     return [
       head,

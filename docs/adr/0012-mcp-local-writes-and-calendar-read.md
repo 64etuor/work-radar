@@ -9,6 +9,10 @@ supersedes:
 
 # 0012. MCP 로컬 write를 전 caller에 개방하고, 캘린더 read-only outbound를 허용한다
 
+> 2026-08-13 보안 정정: 외부 서비스 write의 Hermes 직접 실행 예외와 `McpCaller`는 폐기됐다.
+> 현재 정본은 `docs/areas/mcp-server-conventions.md`이며, 모든 MCP 외부 write는 caller와 무관하게
+> proposal 큐에서 사람의 Acceptance를 기다린다. 아래 본문은 당시 결정 기록으로 보존한다.
+
 ## Context and Problem Statement
 
 **Scope**: `src-tauri/src/mcp/**`, `docs/areas/mcp-server-conventions.md`,

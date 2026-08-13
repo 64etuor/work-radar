@@ -1,4 +1,4 @@
-//! Notion write 툴 — non-Hermes는 proposal, Hermes는 커넥터 직접 실행(`write_routing`).
+//! Notion write 툴 — 모든 caller가 승인 proposal을 생성한다(`write_routing`).
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};
@@ -7,8 +7,7 @@ use serde::Deserialize;
 
 use crate::external_actions::ExternalAction;
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::write_routing::{HermesMcpExecutor, LiveHermesMcpExecutor};
-use crate::mcp::{mcp_caller_from_env, McpCaller, WrServer};
+use crate::mcp::WrServer;
 
 /// Notion 페이지 생성 제안 파라미터(`wr_notion_create_page`). project_id만 받아 서버가 검증한다(#11).
 /// db_id는 원시 ID/URL을 허용한다 — 커넥터가 정규화한다(repo와 동일하게 *내용*이지 자격증명 아님).
@@ -25,45 +24,23 @@ pub struct NotionCreatePageParams {
 
 #[tool_router(router = tool_router_notion, vis = "pub(crate)")]
 impl WrServer {
-    /// Notion DB 페이지 생성. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는
-    /// 직접 실행한다. project_id를 검증해 credential_ref를 해석한다(#11). 사람-origin 카드 승격(앱 내부)과는
+    /// Notion DB 페이지 생성 제안을 만든다. project_id를 검증해 credential_ref를 해석한다(#11). 사람-origin 카드 승격(앱 내부)과는
     /// 별개 경로다(spec §4 이중 경로 — 이건 외부 에이전트 제안용).
     #[tool(
         name = "wr_notion_create_page",
-        description = "Create a Notion page when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated; db_id accepts a raw ID or share URL."
+        description = "Propose a Notion page for Work Radar approval. This tool never executes the external write directly; project_id is validated and db_id accepts a raw ID or share URL."
     )]
     pub async fn notion_create_page(
         &self,
         Parameters(p): Parameters<NotionCreatePageParams>,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.notion_create_page_for_caller_with_executor(
-            p,
-            mcp_caller_from_env(),
-            &LiveHermesMcpExecutor,
-        )
-        .await
-    }
-
-    pub(crate) async fn notion_create_page_for_caller_with_executor<E: HermesMcpExecutor>(
-        &self,
-        p: NotionCreatePageParams,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Notion 페이지 생성: {}", p.title);
         let action = ExternalAction::NotionCreatePage {
             db_id: p.db_id,
             title: p.title,
         };
-        self.route_write_for_caller(
-            "wr_notion_create_page",
-            &p.project_id,
-            action,
-            &summary,
-            caller,
-            executor,
-        )
-        .await
+        self.enqueue_external_write_proposal(&p.project_id, action, &summary)
+            .await
     }
 }
 

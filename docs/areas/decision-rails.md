@@ -29,13 +29,11 @@ Today 승격(`target:"today"`)은 로컬 SQLite 액션이라 Acceptance 불요(�
 캘린더 이벤트 생성은 사용자 폼=사람 결정이므로 acceptance 대기 제거(Phase 19 결정).
 
 > **MCP 서버 경계.** 외부 AI가 spawn하는 `work-radar --mcp-stdio` MCP 서버는 #1/#2를
-> MCP 표면에서 mechanize한다 — non-Hermes **외부 서비스** write 툴은 `store::enqueue`(proposal)만 호출.
+> MCP 표면에서 mechanize한다 — 모든 **외부 서비스** write 툴은 `store::enqueue`(proposal)만 호출.
 > `Acceptance::mint`은 `pub(in crate::external_actions)` 타입-월 + trybuild로 mcp에서 컴파일-차단
 > (토큰 위조 불가). `store::{approve,reject}`는 현재 `pub(crate)`라 컴파일이 아닌 **durable 규칙으로
-> 금지**(mcp는 호출 안 함; 경화는 mcp-server-conventions §핵심불변). 단, Work Radar가 Hermes ACP
-> 세션에 주입한 MCP 서버(`WORK_RADAR_MCP_CALLER=hermes`)는 Hermes permission card를 사람 게이트로
-> 간주해 Work Radar 승인 큐를 한 번 더 거치지 않고 기존 Rust connector를 실행한다.
-> 토큰은 여전히 project_id→credential_ref→keychain으로만 해석한다.
+> 금지**(mcp는 호출 안 함; 경화는 mcp-server-conventions §핵심불변). caller env/provenance는
+> 인증 입력이 아니며 Hermes를 포함해 외부 write direct 실행 예외는 없다.
 >
 > **로컬 SQLite write는 이 게이트 밖이다(ADR-0012).** 외부 변경이 아니므로 Acceptance 불요이고,
 > caller를 가리지 않는다. 대신 #1이 **어떤 로컬 write를 노출하는지**로 강제된다 — 캡처 레인

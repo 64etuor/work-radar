@@ -1,4 +1,4 @@
-//! Gmail write 툴 — non-Hermes는 proposal, Hermes는 커넥터 직접 실행(`write_routing`).
+//! Gmail write 툴 — 모든 caller가 승인 proposal을 생성한다(`write_routing`).
 
 use rmcp::handler::server::wrapper::{Json, Parameters};
 use rmcp::{tool, tool_router};
@@ -7,8 +7,7 @@ use serde::Deserialize;
 
 use crate::external_actions::ExternalAction;
 use crate::mcp::tools::queue::ProposeResult;
-use crate::mcp::write_routing::{HermesMcpExecutor, LiveHermesMcpExecutor};
-use crate::mcp::{mcp_caller_from_env, McpCaller, WrServer};
+use crate::mcp::WrServer;
 
 /// Gmail 발송 파라미터(`wr_gmail_send`). project_id만 받아 서버가 검증한다(#11).
 /// to/subject/body는 발송 *내용* — 자격증명 아님(승인 후 keychain 토큰으로 Rust가 실행).
@@ -27,27 +26,16 @@ pub struct GmailSendParams {
 
 #[tool_router(router = tool_router_gmail, vis = "pub(crate)")]
 impl WrServer {
-    /// Gmail 발송. non-Hermes는 approval proposal만 만들고, Hermes-marked MCP caller는 직접 실행한다.
-    /// project_id를 검증해 credential_ref를 해석한다(#11).
+    /// Gmail 발송 제안을 만든다. project_id를 검증해 credential_ref를 해석한다(#11).
     /// C1: op_summary에 수신자+제목을 담아 승인 패널 preview가 정확한 대상을 사람에게 노출한다
     /// (chain-of-custody #2/#5). 수신자는 preview 컬럼에만 — audit detail(ref=…,bytes=…)에는 안 담긴다(US-004).
     #[tool(
         name = "wr_gmail_send",
-        description = "Send a Gmail message when called by Work Radar Hermes after its permission card; otherwise propose it for Work Radar approval. project_id is validated."
+        description = "Propose a Gmail message for Work Radar approval. This tool never sends mail directly; project_id is validated."
     )]
     pub async fn gmail_send(
         &self,
         Parameters(p): Parameters<GmailSendParams>,
-    ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
-        self.gmail_send_for_caller_with_executor(p, mcp_caller_from_env(), &LiveHermesMcpExecutor)
-            .await
-    }
-
-    pub(crate) async fn gmail_send_for_caller_with_executor<E: HermesMcpExecutor>(
-        &self,
-        p: GmailSendParams,
-        caller: McpCaller,
-        executor: &E,
     ) -> Result<Json<ProposeResult>, rmcp::ErrorData> {
         let summary = format!("Gmail 발송 → {}: {}", p.to, p.subject);
         let action = ExternalAction::GmailSendEmail {
@@ -55,15 +43,8 @@ impl WrServer {
             subject: p.subject,
             body: p.body,
         };
-        self.route_write_for_caller(
-            "wr_gmail_send",
-            &p.project_id,
-            action,
-            &summary,
-            caller,
-            executor,
-        )
-        .await
+        self.enqueue_external_write_proposal(&p.project_id, action, &summary)
+            .await
     }
 }
 

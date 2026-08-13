@@ -15,7 +15,7 @@ export interface SpawnSessionSpec {
   /** the bound task — the codex completion wrapper passes it to `report-exit` on clean exit. */
   taskId: string;
   prompt: string;
-  /** which CLI to launch (claude|codex). Omitted ⇒ "claude" (backward-compatible). */
+  /** which CLI to launch (claude|codex). Omitted ⇒ sandboxed "codex". */
   executor?: ExecutorKind;
   /** Supervised executor attempt index; omitted keeps legacy attempt 0 behavior. */
   attemptIndex?: number;
@@ -276,66 +276,27 @@ export function buildSessionCommand(
     codexHome?: string;
   },
 ): string {
-  const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
-  if (executor === "codex") {
-    // The governance server lives at the Boule INSTALL, not under the target repo (a designated
-    // local repo has no governance/ dir) — derive it from the injected entrypoint, never repoRoot.
-    const serverPath = deps.serverEntrypoint;
-    // CODEX_HOME='<clean home>' redirects codex's profile (config.toml/auth/hooks/plugins) to a
-    // conductor-owned hooks-free dir, so the operator's oh-my-codex/cmux hooks NEVER load (the
-    // hijack root cause). The prefix env assignment applies to `codex exec` ONLY — the trailing
-    // `&& node … report-exit` (boule CLI) does NOT inherit it. Required: materialized beforehand.
-    if (!deps.codexHome) {
-      throw new Error(
-        "buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)",
-      );
-    }
-    // approval_policy="never" lets the headless exec session call its MCP tools (complete_task /
-    // escalate) WITHOUT a per-call approval gate — under the default policy codex blocks the MCP
-    // round-trip in non-interactive exec (live smoke: "complete_task (failed)" on a PermissionRequest).
-    // Autonomy stays sandboxed: --sandbox workspace-write confines writes to the worktree cwd; this
-    // is NEVER --dangerously-bypass-approvals-and-sandbox (which removes the sandbox).
-    // `--json` = machine-readable JSONL on stdout incl. token-count events — the wrapper tail's
-    // usage capture (P4b) parses them so the attempt records real usage instead of "unknown"
-    // (budget would otherwise reserve max). The pane shows the same JSONL stream via tee.
-    const codexCommand =
-      `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
-      `codex exec --json --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
-      `-C "${spec.worktreePath}" ` +
-      `-c 'mcp_servers.boule-governance.command="node"' ` +
-      `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
-      `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}",BOULE_TASK_ID="${spec.taskId}"}' ` +
-      `${promptCat}`;
-    return withAttemptEvidenceTail(codexCommand, spec, deps, "codex");
+  if (executor === "claude") {
+    throw new Error(
+      "conductor: claude executor is disabled because its unattended mode has no enforceable OS sandbox",
+    );
   }
-  const denied = SESSION_DENIED_TOOLS.map((t) => `"${t}"`).join(" ");
-  // bypassPermissions = unattended autonomy: without it the session blocks on the first Write/MCP
-  // permission prompt in a non-interactive pane → the loop never closes.
-  // ⚠ claude↔codex SANDBOX ASYMMETRY: bypassPermissions only removes approval prompts — it is NOT an
-  // OS filesystem sandbox. The worktree is merely claude's cwd, NOT an enforced boundary, so a
-  // misbehaving/prompt-injected claude session CAN write absolute paths outside it. (codex, below,
-  // gets real FS confinement via --sandbox workspace-write.) What holds for claude regardless of
-  // this flag: verdict isolation is STRUCTURAL (executor-role MCP omits verdict tools, plus
-  // --strict-mcp-config + the denylist), and external writes route through the External Action Gate
-  // (L4). OS-level FS confinement for claude is a deferred follow-up (plan §9.6).
-  // `--` terminates option parsing so the variadic `--disallowedTools <tools...>` cannot swallow
-  // the positional prompt (without it, claude launches with NO prompt and sits idle → loop hangs).
-  // `-p` (--print) = ONE-SHOT: without it claude starts an interactive REPL that processes the
-  // prompt and then WAITS FOR INPUT forever — the attempt-evidence tail (record-attempt →
-  // report-exit → session close) never runs and the completion gate wedges on a non-terminal
-  // session (live run 2026-06-10, surface:18). Mirrors codex's one-shot `codex exec`; the cmux
-  // pane still shows the run's output (observability is the pane, not the REPL).
-  // `--output-format stream-json --verbose` (verbose is REQUIRED by the CLI for stream-json under
-  // -p): plain `-p` text output carries NO usage data, so attempts could never record real token
-  // spend (P4b). The final `{"type":"result",…}` JSONL event carries usage + total_cost_usd, which
-  // the wrapper tail's captured stdout hands to record-attempt. The pane shows the JSONL via tee.
-  const claudeCommand =
-    `claude -p --mcp-config "${spec.worktreePath}/.boule/mcp.json" --strict-mcp-config ` +
-    `--output-format stream-json --verbose ` +
-    `--permission-mode bypassPermissions ` +
-    `--disallowedTools ${denied} ` +
-    `-- ${promptCat}`;
-  return withAttemptEvidenceTail(claudeCommand, spec, deps, "claude");
+  const promptCat = `"$(cat ${spec.worktreePath}/.boule/step-prompt.md)"`;
+  const serverPath = deps.serverEntrypoint;
+  if (!deps.codexHome) {
+    throw new Error(
+      "buildSessionCommand: codex requires deps.codexHome (clean hooks-free profile)",
+    );
+  }
+  const codexCommand =
+    `CODEX_HOME=${shellQuote(deps.codexHome)} ` +
+    `codex exec --json --sandbox workspace-write --skip-git-repo-check -c approval_policy="never" ` +
+    `-C "${spec.worktreePath}" ` +
+    `-c 'mcp_servers.boule-governance.command="node"' ` +
+    `-c 'mcp_servers.boule-governance.args=["--experimental-strip-types","${serverPath}"]' ` +
+    `-c 'mcp_servers.boule-governance.env={BOULE_SESSION_ROLE="executor",BOULE_WORKSPACE="${deps.governanceWorkspace}",BOULE_TASK_ID="${spec.taskId}"}' ` +
+    `${promptCat}`;
+  return withAttemptEvidenceTail(codexCommand, spec, deps, "codex");
 }
 
 /** Extract the first `<kind>:<n>` ref from cmux stdout. cmux prints `OK <ref>` on success and
@@ -408,7 +369,7 @@ export function makeLiveAdapter(deps: LiveAdapterDeps): ConductorAdapter {
       // The executor invocation (claude|codex). Both run against the SCOPED executor-role MCP
       // (verdict tools structurally absent), so a spawned session can escalate/complete_task but
       // cannot self-resolve (structural INVARIANT #1). See buildSessionCommand.
-      const executor = spec.executor ?? "claude";
+      const executor = spec.executor ?? "codex";
       // Per-repo clean codex profile (gitignored, reusable across ticks). Built ONLY for codex so the
       // operator's oh-my-codex/cmux hooks can't hijack the spawned session (the root cause of empty
       // codex returns inside a cmux surface). Claude needs none (its hooks are the app's own).

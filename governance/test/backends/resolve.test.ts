@@ -94,9 +94,9 @@ describe("resolveBackendChain", () => {
     });
   });
 
-  it("omitted role backends resolve to the legacy single-backend defaults", () => {
+  it("omitted role backends resolve to safe single-backend defaults", () => {
     expect(resolveBackendChain("executor", {}, BASE_POLICY)).toEqual({
-      chain: [{ provider: "claude" }],
+      chain: [{ provider: "codex" }],
     });
     expect(resolveBackendChain("reviewer", {}, BASE_POLICY)).toEqual({
       chain: [

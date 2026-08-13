@@ -50,7 +50,7 @@ const PROVIDER_ORDER: Record<Difficulty, Provider[]> = {
 };
 
 const LEGACY_DEFAULT_BACKENDS: Record<Role, BackendChain> = {
-  executor: { chain: [{ provider: "claude" }] },
+  executor: { chain: [{ provider: "codex" }] },
   reviewer: {
     chain: [
       {

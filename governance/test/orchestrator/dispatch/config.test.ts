@@ -20,17 +20,17 @@ describe("parseAutoMode (opt-in, fail-closed to off)", () => {
   });
 });
 
-describe("parseConductorExecutor (L3 — fail-closed to claude)", () => {
-  it("returns codex only for exactly codex, ignoring case and surrounding space", () => {
-    expect(parseConductorExecutor("codex")).toBe("codex");
-    expect(parseConductorExecutor("  CODEX ")).toBe("codex");
+describe("parseConductorExecutor (L3 — safe default is sandboxed codex)", () => {
+  it("preserves an explicit claude request for the live adapter to reject", () => {
+    expect(parseConductorExecutor("claude")).toBe("claude");
+    expect(parseConductorExecutor("  CLAUDE ")).toBe("claude");
   });
 
-  it("defaults to claude for unset, blank, or junk values", () => {
-    expect(parseConductorExecutor(undefined)).toBe("claude");
-    expect(parseConductorExecutor("")).toBe("claude");
-    expect(parseConductorExecutor("claude")).toBe("claude");
-    expect(parseConductorExecutor("gemini")).toBe("claude");
+  it("defaults to codex for unset, blank, codex, or junk values", () => {
+    expect(parseConductorExecutor(undefined)).toBe("codex");
+    expect(parseConductorExecutor("")).toBe("codex");
+    expect(parseConductorExecutor("codex")).toBe("codex");
+    expect(parseConductorExecutor("gemini")).toBe("codex");
   });
 });
 

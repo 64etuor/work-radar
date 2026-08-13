@@ -18,7 +18,7 @@ const REQ: EvaluationRequest = {
   stepPrompt: "implement the slice",
   worktreeDiff: "diff --git a/x b/x",
   backend: { provider: "codex", model: "judge" },
-  check: { command: "pnpm test" },
+  check: { artifact: "out/report.json" },
   worktreePath: "/wt/step0",
 };
 
@@ -113,7 +113,7 @@ describe("defaultEvaluatePrompt", () => {
   it("contains step prompt + check contract + worktree path inside a delimited untrusted block, and demands the strict JSON shape", () => {
     const p = defaultEvaluatePrompt(REQ);
     expect(p).toContain("implement the slice");
-    expect(p).toContain("pnpm test");
+    expect(p).toContain("out/report.json");
     expect(p).toContain("/wt/step0");
     expect(p).toContain("diff --git a/x b/x");
     expect(p).toContain('{"complete"');

@@ -7,6 +7,9 @@ source_of_truth_scope: work-radar MCP 표면 확장(캘린더 read / OKR / brain
 
 # MCP Surface Expansion — 캘린더 · OKR · Braindump · 루틴/Today
 
+> 2026-08-13 보안 정정으로 `McpCaller`와 Hermes 외부 direct-write 예외는 폐기됐다. 이 설계의
+> caller 정책 절은 역사적 스냅샷이며 현재 정본은 `docs/areas/mcp-server-conventions.md`다.
+
 ## 1. 문제
 
 `work-radar --mcp-stdio`가 노출하는 16개 툴은 도메인 커버리지가 심하게 비대칭이다.

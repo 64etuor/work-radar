@@ -123,7 +123,7 @@ export async function resumeChosenEscalation(
       return { kind: "no_action", reason: "session spawn cap reached" };
     }
 
-    const executor = deps.executor ?? "claude";
+    const executor = deps.executor ?? "codex";
     const nextAttempt = (step.attempts.currentAttemptIndex ?? -1) + 1;
     const stepTextWithDecision =
       `${step.text}\n\n## Resolved decision (human-chosen)\n` +

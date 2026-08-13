@@ -1,5 +1,5 @@
-import { access } from "node:fs/promises";
-import { isAbsolute, join } from "node:path";
+import { lstat, realpath } from "node:fs/promises";
+import { isAbsolute, relative, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import type { BackendSpec } from "../backends/config.ts";
 import { runWithFallback, type AttemptError } from "../backends/fallback.ts";
@@ -13,8 +13,7 @@ import { completeTask } from "../task/handlers.ts";
 import type { ResolvedPolicy } from "../repo/config.ts";
 
 export interface CompletionDeps {
-  pathExists(path: string): Promise<boolean>;
-  runCommand(command: string, cwd: string | null): Promise<{ status: number | null }>;
+  artifactIsFreshRegularFile(artifact: string, worktreePath: string): Promise<boolean>;
   /** Step chaining (optional dep — fakes without it keep legacy no-chain behavior): after the
    *  completion gate passes, commit the step worktree's changes and advance the plan branch
    *  (`planBranchName`) so the next step's worktree sees them. `committed:false` = clean tree
@@ -27,19 +26,30 @@ export interface CompletionDeps {
   }): Promise<{ ok: true; committed: boolean } | { ok: false; error: string }>;
 }
 
+export async function artifactIsFreshRegularFile(
+  artifact: string,
+  worktreePath: string,
+): Promise<boolean> {
+  try {
+    if (!safeRelativeArtifactPath(artifact)) return false;
+    const worktreeReal = await realpath(worktreePath);
+    const candidate = resolve(worktreeReal, artifact);
+    const candidateReal = await realpath(candidate);
+    const inside = relative(worktreeReal, candidateReal);
+    if (inside.startsWith("..") || isAbsolute(inside)) return false;
+    const stat = await lstat(candidate);
+    if (stat.isSymbolicLink() || !stat.isFile()) return false;
+    const status = spawnSync("git", ["-C", worktreeReal, "status", "--porcelain", "--", artifact], {
+      encoding: "utf8",
+    });
+    return status.status === 0 && status.stdout.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 const nodeCompletionDeps: CompletionDeps = {
-  async pathExists(path) {
-    try {
-      await access(path);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  async runCommand(command, cwd) {
-    const r = spawnSync(command, { cwd: cwd ?? undefined, shell: true, stdio: "ignore" });
-    return { status: r.status };
-  },
+  artifactIsFreshRegularFile,
   async commitStepOutput({ worktreePath, planId, stepIndex }) {
     // All ops are -C <worktree> (detached HEAD) — the user tree is never touched (INVARIANT #6).
     // .boule/ and node_modules are gitignored, so add -A stages only real step output.
@@ -116,29 +126,24 @@ async function evaluateDeterministicCheck(
   input: CompletionGateInput,
   deps: CompletionDeps,
 ): Promise<{ verdict: EvaluationVerdict; rationale: string }> {
-  if (!input.check?.command && !input.check?.artifact) {
+  if (!input.check?.artifact) {
     return { verdict: "fail", rationale: "no deterministic check contract" };
   }
-
-  if (input.check.command) {
-    try {
-      const r = await deps.runCommand(input.check.command, input.worktreePath);
-      if (r.status === 0) return { verdict: "pass", rationale: "check.command exited 0" };
-    } catch {
-      // fall through to artifact, if present; otherwise fail closed below.
-    }
-  }
-
-  if (input.check.artifact) {
-    const artifactPath = isAbsolute(input.check.artifact)
-      ? input.check.artifact
-      : join(input.worktreePath ?? "", input.check.artifact);
-    if (await deps.pathExists(artifactPath)) {
-      return { verdict: "pass", rationale: "check.artifact exists" };
-    }
+  if (
+    input.worktreePath &&
+    safeRelativeArtifactPath(input.check.artifact) &&
+    (await deps.artifactIsFreshRegularFile(input.check.artifact, input.worktreePath))
+  ) {
+    return { verdict: "pass", rationale: "fresh regular-file artifact exists inside worktree" };
   }
 
   return { verdict: "fail", rationale: "deterministic check was not satisfied" };
+}
+
+function safeRelativeArtifactPath(artifact: string): boolean {
+  if (!artifact || isAbsolute(artifact)) return false;
+  const normalized = relative(".", resolve(".", artifact));
+  return normalized !== "" && !normalized.startsWith("..") && !isAbsolute(normalized);
 }
 
 export async function evaluateCompletionGate(
@@ -207,7 +212,7 @@ export interface NeedsHumanDetail {
   stepIndex: number;
   taskId: string;
   reason: string;
-  checkCommand: string | null;
+  checkArtifact: string | null;
 }
 
 export interface CompletionPassSummary {
@@ -331,7 +336,7 @@ export async function completeReportedDone(
           stepIndex: step.stepIndex,
           taskId: step.taskId!,
           reason,
-          checkCommand: step.check?.command ?? null,
+          checkArtifact: step.check?.artifact ?? null,
         });
       };
       if (result.decision === "needs_human") {

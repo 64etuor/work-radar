@@ -7,10 +7,9 @@ import type { AttemptOutcomeClass } from "../backends/attemptClass.ts";
 import type { BackendSpec } from "../backends/config.ts";
 
 export interface PlanStepCheck {
-  command?: string;
   artifact?: string;
   /** Explicit "a HUMAN certifies this step" declaration. It dominates a co-declared
-   *  command/artifact: the completion gate routes the step straight to needs_human (no machine —
+   *  artifact: the completion gate routes the step straight to needs_human (no machine —
    *  deterministic or LLM — may certify it), and it still demotes the plan from auto-accept
    *  (a full-auto plan that needs a human mid-flight should be human-accepted). What it buys the
    *  author: the human-accept warning is suppressed (the requirement is declared, not forgotten). */
@@ -90,13 +89,10 @@ function parsePlanStepLine(line: string): PlanStepRecord {
   try {
     const raw: unknown = JSON.parse(checkMarker[1]!);
     const rec = recordOf(raw);
-    const command =
-      typeof rec.command === "string" && rec.command.trim() ? rec.command.trim() : undefined;
     const artifact =
       typeof rec.artifact === "string" && rec.artifact.trim() ? rec.artifact.trim() : undefined;
     const kind = rec.kind === "human" ? ("human" as const) : undefined;
     const check = {
-      ...(command ? { command } : {}),
       ...(artifact ? { artifact } : {}),
       ...(kind ? { kind } : {}),
     };
@@ -124,8 +120,8 @@ export interface MachineUncertifiableStep {
   explicitHuman: boolean;
 }
 
-/** Steps NO machine can certify at completion time: checkless steps (no check.command/artifact)
- *  and explicit check:{kind:"human"} steps (kind dominates a co-declared command/artifact).
+/** Steps NO machine can certify at completion time: steps without check.artifact
+ *  and explicit check:{kind:"human"} steps (kind dominates a co-declared artifact).
  *  Input to the P2a authoring gate — auto-accept requires this list to be EMPTY, so a plan can
  *  never silently dead-end at needs_human after a full-auto acceptance (live 2026-06-10). */
 export function machineUncertifiableSteps(planBody: string): MachineUncertifiableStep[] {
@@ -135,7 +131,7 @@ export function machineUncertifiableSteps(planBody: string): MachineUncertifiabl
       out.push({ stepIndex, explicitHuman: true });
       return;
     }
-    if (!step.check?.command && !step.check?.artifact) {
+    if (!step.check?.artifact) {
       out.push({ stepIndex, explicitHuman: false });
     }
   });
