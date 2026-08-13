@@ -1,5 +1,5 @@
 import { Edit3 } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 import type { Mission } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ export function MissionStatement({ mission }: { mission: Mission | null }) {
   const savedStatement = mission?.statement ?? "";
   const [editing, setEditing] = useState(false);
   const [statement, setStatement] = useState(savedStatement);
+  const submittingRef = useRef(false);
 
   const cancel = () => {
     setStatement(savedStatement);
@@ -26,9 +27,14 @@ export function MissionStatement({ mission }: { mission: Mission | null }) {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanStatement = statement.trim();
-    if (!cleanStatement) return;
-    await setMission.mutateAsync({ statement: cleanStatement, note: mission?.note ?? null });
-    setEditing(false);
+    if (!cleanStatement || submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      await setMission.mutateAsync({ statement: cleanStatement, note: mission?.note ?? null });
+      setEditing(false);
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   if (editing) {

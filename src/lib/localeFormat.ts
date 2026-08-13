@@ -8,6 +8,10 @@
 export const APP_LOCALE = "ko-KR";
 
 const weekdayFormat = new Intl.DateTimeFormat(APP_LOCALE, { weekday: "short" });
+const monthDayFormat = new Intl.DateTimeFormat(APP_LOCALE, {
+  month: "long",
+  day: "numeric",
+});
 
 /** 2024-01-01(월요일) 기준 파생 — 요일 라벨 배열 하드코딩 중복 제거. */
 function weekdayLabel(offsetFromMonday: number): string {
@@ -38,7 +42,5 @@ export const WEEKDAY_SHORT_BY_CODE: Record<string, string> = {
 /** 월-일 라벨 ("7월 10일" ko / "July 10" en — 로케일 파생). */
 export function formatMonthDay(month: number, day: number): string {
   // 연도는 표기에 쓰이지 않는다 — 2/29까지 유효하도록 윤년(2000) 고정.
-  return new Intl.DateTimeFormat(APP_LOCALE, { month: "long", day: "numeric" }).format(
-    new Date(2000, month - 1, day),
-  );
+  return monthDayFormat.format(new Date(2000, month - 1, day));
 }

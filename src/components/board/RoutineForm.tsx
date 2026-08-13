@@ -44,7 +44,7 @@ export function RoutineForm({ initial, defaults, isEdit, onSubmit, onCancel }: P
 
   const [title, setTitle] = useState(initial?.title ?? defaults?.title ?? "");
   const [freq, setFreq] = useState<RoutineFreq>(initial?.freq ?? "daily");
-  const [days, setDays] = useState<Set<Weekday>>(new Set(initial?.weekdays ?? []));
+  const [days, setDays] = useState<Set<Weekday>>(() => new Set(initial?.weekdays ?? []));
   const [time, setTime] = useState(initial?.timeOfDay ?? "");
   const [offset, setOffset] = useState(
     initial?.reminderOffsetMin != null ? String(initial.reminderOffsetMin) : "",

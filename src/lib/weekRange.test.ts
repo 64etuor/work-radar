@@ -88,4 +88,9 @@ describe("bucketByWeekOffset", () => {
     const map = bucketByWeekOffset([{ date: oldestStart, value: "edge" }], today);
     expect(map.get(-(WEEKS_WINDOW - 1))).toEqual(["edge"]);
   });
+
+  it("잘못된 날짜 항목은 크래시하지 않고 버린다", () => {
+    const map = bucketByWeekOffset([{ date: "not-a-date", value: "invalid" }], today);
+    expect([...map.values()].flat()).toEqual([]);
+  });
 });

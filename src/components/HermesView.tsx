@@ -69,12 +69,11 @@ export default function HermesView() {
   const [sidebarOpen, setSidebarOpen] = useState(
     () => localStorage.getItem("hermes.sidebarOpen") !== "false",
   );
-  const toggleSidebar = () =>
-    setSidebarOpen((v) => {
-      const next = !v;
-      localStorage.setItem("hermes.sidebarOpen", String(next));
-      return next;
-    });
+  useEffect(() => {
+    localStorage.setItem("hermes.sidebarOpen", String(sidebarOpen));
+  }, [sidebarOpen]);
+
+  const toggleSidebar = () => setSidebarOpen((open) => !open);
 
   const removeSession = async (id: string) => {
     if (!confirmDeleteSession(useHermesTabsStore.getState().tabs.get(id))) return;

@@ -162,15 +162,17 @@ export function computeLayout(blocks: TimedBlock[], anchorDate?: string): Layout
     p.visual.leftPct < q.visual.leftPct + q.visual.widthPct &&
     q.visual.leftPct < p.visual.leftPct + p.visual.widthPct;
   for (const box of out) {
+    const boxTopPx = box.visual.topPx;
     let nextTopPx = Infinity;
     for (const other of out) {
       if (other === box) continue;
-      if (other.visual.topPx <= box.visual.topPx) continue; // 아래쪽(시작이 더 늦은) 블록만
+      const otherTopPx = other.visual.topPx;
+      if (otherTopPx <= boxTopPx) continue; // 아래쪽(시작이 더 늦은) 블록만
       if (!horizontallyOverlaps(box, other)) continue;
-      if (other.visual.topPx < nextTopPx) nextTopPx = other.visual.topPx;
+      if (otherTopPx < nextTopPx) nextTopPx = otherTopPx;
     }
-    if (nextTopPx !== Infinity && box.visual.topPx + box.visual.heightPx > nextTopPx) {
-      box.visual.heightPx = nextTopPx - box.visual.topPx;
+    if (nextTopPx !== Infinity && boxTopPx + box.visual.heightPx > nextTopPx) {
+      box.visual.heightPx = nextTopPx - boxTopPx;
     }
   }
   return out;

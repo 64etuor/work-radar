@@ -42,10 +42,6 @@ export function useTypewriter(fullText: string, opts: Opts = {}): string {
     if (revealedLen >= fullText.length) return;
     const id = window.setInterval(() => {
       setRevealedLen((prev) => {
-        if (prev >= fullText.length) {
-          window.clearInterval(id);
-          return prev;
-        }
         return Math.min(prev + charsPerTick, fullText.length);
       });
     }, intervalMs);

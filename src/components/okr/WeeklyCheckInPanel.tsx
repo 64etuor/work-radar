@@ -1,5 +1,5 @@
 import { ClipboardCheck } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 import type { KeyResult, Objective, OkrCheckIn, OkrConfidence, OkrMilestone } from "@/bindings";
 import { Button } from "@/components/ui/button";
@@ -79,43 +79,50 @@ function CheckInDraft({ item, weekStart }: { item: PendingCheckIn; weekStart: st
   const [milestones, setMilestones] = useState<OkrMilestone[]>(kr.milestones);
   const [confidence, setConfidence] = useState<OkrConfidence>("on_track");
   const [note, setNote] = useState("");
+  const submittingRef = useRef(false);
   const pending = updateKeyResult.isPending || upsertCheckIn.isPending;
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (kr.kind === "metric") {
-      const nextCurrent = parseNullableNumber(current);
-      if (nextCurrent !== kr.currentValue) {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      if (kr.kind === "metric") {
+        const nextCurrent = parseNullableNumber(current);
+        if (nextCurrent !== kr.currentValue) {
+          await updateKeyResult.mutateAsync({
+            id: kr.id,
+            title: kr.title,
+            kind: "metric",
+            currentValue: nextCurrent,
+            targetValue: kr.targetValue,
+            unit: kr.unit,
+            milestones: [],
+            sortRank: kr.sortRank,
+          });
+        }
+      } else if (JSON.stringify(milestones) !== JSON.stringify(kr.milestones)) {
         await updateKeyResult.mutateAsync({
           id: kr.id,
           title: kr.title,
-          kind: "metric",
-          currentValue: nextCurrent,
-          targetValue: kr.targetValue,
-          unit: kr.unit,
-          milestones: [],
+          kind: "milestone",
+          currentValue: null,
+          targetValue: null,
+          unit: null,
+          milestones,
           sortRank: kr.sortRank,
         });
       }
-    } else if (JSON.stringify(milestones) !== JSON.stringify(kr.milestones)) {
-      await updateKeyResult.mutateAsync({
-        id: kr.id,
-        title: kr.title,
-        kind: "milestone",
-        currentValue: null,
-        targetValue: null,
-        unit: null,
-        milestones,
-        sortRank: kr.sortRank,
+      await upsertCheckIn.mutateAsync({
+        keyResultId: kr.id,
+        weekStart,
+        confidence,
+        note: note.trim() || null,
       });
+      setNote("");
+    } finally {
+      submittingRef.current = false;
     }
-    await upsertCheckIn.mutateAsync({
-      keyResultId: kr.id,
-      weekStart,
-      confidence,
-      note: note.trim() || null,
-    });
-    setNote("");
   };
 
   return (

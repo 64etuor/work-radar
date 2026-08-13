@@ -42,6 +42,8 @@ export function SprintTimer() {
   const configQ = useSprintConfig();
   const statusQ = useSprintStatus();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const meterRef = useRef<HTMLButtonElement | null>(null);
+  const restoreFocusAfterCloseRef = useRef(false);
   const [editorState, setEditorState] = useState<"closed" | "opening" | "open" | "closing">(
     "closed",
   );
@@ -83,8 +85,10 @@ export function SprintTimer() {
     setEditorState((state) => (state === "closed" ? "opening" : state));
   };
 
-  const closeEditor = () => {
-    setEditorState((state) => (state === "closed" ? state : "closing"));
+  const closeEditor = (restoreFocus = false) => {
+    if (editorState === "closed") return;
+    restoreFocusAfterCloseRef.current ||= restoreFocus;
+    setEditorState("closing");
   };
 
   useEffect(() => {
@@ -94,6 +98,12 @@ export function SprintTimer() {
       editorState === "opening" ? EDITOR_OPEN_ANIMATION_MS : EDITOR_CLOSE_ANIMATION_MS,
     );
     return () => window.clearTimeout(id);
+  }, [editorState]);
+
+  useEffect(() => {
+    if (editorState !== "closed" || !restoreFocusAfterCloseRef.current) return;
+    restoreFocusAfterCloseRef.current = false;
+    meterRef.current?.focus();
   }, [editorState]);
 
   const handleClickOutside = useEffectEvent(() => closeEditor());
@@ -114,6 +124,7 @@ export function SprintTimer() {
   const renderMeter = (extraClass = "", disabled = false) =>
     configured && meter ? (
       <button
+        ref={meterRef}
         type="button"
         className={`sprint-meter${extraClass}`}
         title="스프린트 일정 편집"
@@ -133,6 +144,7 @@ export function SprintTimer() {
       </button>
     ) : (
       <button
+        ref={meterRef}
         type="button"
         className={`sprint-meter is-empty${extraClass}`}
         title="스프린트 일정 설정"
@@ -174,7 +186,7 @@ type EditorProps = {
   config: SprintConfig | null;
   opening?: boolean;
   closing?: boolean;
-  onClose: () => void;
+  onClose: (restoreFocus?: boolean) => void;
 };
 
 const DEFAULT_CONFIG: SprintConfig = {
@@ -185,7 +197,7 @@ const DEFAULT_CONFIG: SprintConfig = {
 };
 
 function SprintEditor({ config, opening = false, closing = false, onClose }: EditorProps) {
-  const handleEscape = useEffectEvent(() => onClose());
+  const handleEscape = useEffectEvent(() => onClose(true));
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") handleEscape();
@@ -209,6 +221,9 @@ function SprintEditor({ config, opening = false, closing = false, onClose }: Edi
 function SprintEditorFields({ config, onClose }: EditorProps) {
   const fieldId = useId();
   const intervalId = `${fieldId}-interval`;
+  const intervalLabelId = `${fieldId}-interval-label`;
+  const weekdayLabelId = `${fieldId}-weekday-label`;
+  const timeLabelId = `${fieldId}-time-label`;
 
   const setConfig = useSetSprintConfig();
   const clearConfig = useClearSprintConfig();
@@ -238,7 +253,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
       {
         onSuccess: () => {
           pushSuccess("스프린트 일정 저장됨 · 주간 목표 자동 동기화");
-          onClose();
+          onClose(true);
         },
         // 저장 실패는 조용히 삼키지 않는다 — 토스트로 표면화하고 에디터는 열어 둔다(재시도 가능).
         onError: (e) => pushMutationError("sprint", e, "스프린트 저장"),
@@ -251,7 +266,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
     clearConfig.mutate(undefined, {
       onSuccess: () => {
         pushSuccess("스프린트 해제됨");
-        onClose();
+        onClose(true);
       },
       onError: (e) => pushMutationError("sprint", e, "스프린트 해제"),
     });
@@ -259,8 +274,10 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
 
   return (
     <div className="sprint-editor-grid">
-      <label className="sprint-field" htmlFor={intervalId}>
-        <span className="sprint-lbl">길이</span>
+      <div className="sprint-field" role="group" aria-labelledby={intervalLabelId}>
+        <span id={intervalLabelId} className="sprint-lbl">
+          길이
+        </span>
         <div className="sprint-stepper">
           <Button
             variant="outline"
@@ -287,10 +304,12 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             +
           </Button>
         </div>
-      </label>
+      </div>
 
-      <label className="sprint-field">
-        <span className="sprint-lbl">요일</span>
+      <div className="sprint-field" role="group" aria-labelledby={weekdayLabelId}>
+        <span id={weekdayLabelId} className="sprint-lbl">
+          요일
+        </span>
         <div className="sprint-wd-row">
           {WEEKDAYS.map((wd) => (
             <Button
@@ -309,10 +328,12 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             </Button>
           ))}
         </div>
-      </label>
+      </div>
 
-      <label className="sprint-field">
-        <span className="sprint-lbl">시각</span>
+      <div className="sprint-field" role="group" aria-labelledby={timeLabelId}>
+        <span id={timeLabelId} className="sprint-lbl">
+          시각
+        </span>
         <div className="sprint-time-selectors">
           <select
             className="sprint-time-select"
@@ -346,7 +367,7 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
             ))}
           </select>
         </div>
-      </label>
+      </div>
 
       <label className="sprint-field sprint-goal-field" htmlFor={`${fieldId}-goal`}>
         <span className="sprint-lbl">스프린트/주간 목표</span>
@@ -374,7 +395,11 @@ function SprintEditorFields({ config, onClose }: EditorProps) {
           </Button>
         )}
         <span className="sprint-actions-spacer" />
-        <Button variant="outline" className="h-7 rounded-full px-2.5 text-xs" onClick={onClose}>
+        <Button
+          variant="outline"
+          className="h-7 rounded-full px-2.5 text-xs"
+          onClick={() => onClose(true)}
+        >
           취소
         </Button>
         <Button

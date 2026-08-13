@@ -122,6 +122,7 @@ export function CmdKnob({
         </div>
         <button
           type="button"
+          tabIndex={-1}
           className="cmd-knob-stick"
           data-dragging={knob.dragging || undefined}
           style={{

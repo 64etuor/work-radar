@@ -49,7 +49,7 @@ export function bucketByWeekOffset<T>(
     const monday = parseLocalISODate(mondayOf(date)).getTime();
     const offset = Math.round((monday - thisMonday) / weekMs);
     if (offset > 0 || offset < -(WEEKS_WINDOW - 1)) continue;
-    map.get(offset)!.push(value);
+    map.get(offset)?.push(value);
   }
   return map;
 }

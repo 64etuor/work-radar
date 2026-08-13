@@ -4,12 +4,8 @@ import type { WorkSignal } from "@/bindings";
 
 export function useSignalPop(signals: WorkSignal[]) {
   const [poppedIds, setPoppedIds] = useState<Set<string>>(new Set());
-  const knownIdsRef = useRef<Set<string>>(null!);
+  const knownIdsRef = useRef(new Set<string>());
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  if (knownIdsRef.current === null) {
-    knownIdsRef.current = new Set();
-  }
 
   const markPopped = (ids: string | string[]) => {
     const next = Array.isArray(ids) ? ids : [ids];

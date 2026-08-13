@@ -474,6 +474,7 @@ function useMatrixCanvasView({
             <button
               type="button"
               className="menu-btn"
+              aria-label={`${s.title} 메뉴 열기`}
               onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();

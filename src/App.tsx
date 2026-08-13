@@ -233,7 +233,7 @@ export default function App() {
         // 셸까지 새면 의도치 않게 보드로 튕겼다. 창 숨김도 종전에 제거됨(Cmd+W로 닫음).
       }
     });
-  }, [view, paletteOpen, setPaletteOpen, navigateView]);
+  }, [paletteOpen, setPaletteOpen]);
 
   return (
     <div

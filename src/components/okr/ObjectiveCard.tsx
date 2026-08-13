@@ -1,5 +1,5 @@
 import { Archive, Edit3, Flag, Plus } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useRef, useState } from "react";
 
 import type {
   KeyResultKind,
@@ -167,34 +167,40 @@ function AddKeyResultForm({ objective, onClose }: { objective: Objective; onClos
   const [target, setTarget] = useState("");
   const [unit, setUnit] = useState("");
   const [milestones, setMilestones] = useState("");
+  const submittingRef = useRef(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const cleanTitle = title.trim();
-    if (!cleanTitle) return;
-    await createKeyResult.mutateAsync({
-      objectiveId: objective.id,
-      title: cleanTitle,
-      kind,
-      currentValue: kind === "metric" ? parseNullableNumber(current) : null,
-      targetValue: kind === "metric" ? parseNullableNumber(target) : null,
-      unit: kind === "metric" ? unit.trim() || null : null,
-      milestones:
-        kind === "milestone"
-          ? milestones
-              .split("\n")
-              .map((line) => line.trim())
-              .filter(Boolean)
-              .map((label) => ({ label, done: false }))
-          : [],
-      sortRank: objective.keyResults.length,
-    });
-    setTitle("");
-    setCurrent("");
-    setTarget("");
-    setUnit("");
-    setMilestones("");
-    onClose();
+    if (!cleanTitle || submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      await createKeyResult.mutateAsync({
+        objectiveId: objective.id,
+        title: cleanTitle,
+        kind,
+        currentValue: kind === "metric" ? parseNullableNumber(current) : null,
+        targetValue: kind === "metric" ? parseNullableNumber(target) : null,
+        unit: kind === "metric" ? unit.trim() || null : null,
+        milestones:
+          kind === "milestone"
+            ? milestones
+                .split("\n")
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .map((label) => ({ label, done: false }))
+            : [],
+        sortRank: objective.keyResults.length,
+      });
+      setTitle("");
+      setCurrent("");
+      setTarget("");
+      setUnit("");
+      setMilestones("");
+      onClose();
+    } finally {
+      submittingRef.current = false;
+    }
   };
 
   return (
