@@ -1,0 +1,37 @@
+package.json
+  s_f6ac5b1a48044a::t_36b5dcd8dbe844 22
+scripts/dev-codesign-setup.sh
+  s_f6ac5b1a48044a::t_c3e4edf7414cf6 17,25-30,173
+  s_f6ac5b1a48044a::t_23dee8fcaf1d09 6,8,60-61,123,190-191
+docs/reference/dev-codesign-setup.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 14,17-19,25-26,33,39,66,77-80
+  s_f6ac5b1a48044a::t_a60da0868b600c 81-82
+docs/areas/shell-tooling.md
+  s_f6ac5b1a48044a::t_225e1ec5123773 110-114
+scripts/dev-codesign-security.test.sh
+  s_f6ac5b1a48044a::t_36b5dcd8dbe844 1-15
+scripts/dev-codesign-dr.test.sh
+  s_f6ac5b1a48044a::t_c3e4edf7414cf6 20-23
+scripts/exec-signed.test.sh
+  s_f6ac5b1a48044a::t_36b5dcd8dbe844 58,100
+scripts/dev-codesign-lib.sh
+  s_f6ac5b1a48044a::t_c3e4edf7414cf6 16,42-44,62
+scripts/dev-codesign-runner.test.sh
+  s_f6ac5b1a48044a::t_36b5dcd8dbe844 34,88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.19",
+  "base_commit_sha": "4c88feb148a4a799e0d2d2bb691906e6364d5229",
+  "prompts": {},
+  "sessions": {
+    "s_f6ac5b1a48044a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ff8d0-bfeb-7303-bfe5-b53420e434f7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "64etuor <130260521+64etuor@users.noreply.github.com>"
+    }
+  }
+}
