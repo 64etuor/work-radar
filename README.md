@@ -1,31 +1,30 @@
 # Work Radar
 
-흩어진 업무 신호(Notion 백로그·안건, GitHub PR, 일정, Hermes, braindump)를 먼저
-**아이젠하워 매트릭스**로 모으고, 사람이 직접 판단해 Notion 백로그·안건·일정·실행
-작업으로 **수동 승격**하는 개인/팀 업무 관제 데스크톱 앱.
+캘린더·GitHub PR·Notion 백로그·AI 에이전트 작업처럼 흩어진 업무 신호를 **한 화면에 모으는 데스크톱 앱**.
+AI는 제안만 하고, 무엇을 할지 정하고 외부에 반영하는 일은 **사람이 승인**한다.
 
-> 핵심 철학: "자동으로 업무를 만들어주는 앱"이 아니라,
-> "판단해야 할 것들을 매트릭스에 모아 수동으로 정리하게 해주는 앱."
-> 자동화(Codex)는 **결정 레일에 절대 들어가지 않고**, 제안/실행 레일에만 붙는다.
+![Capture Board](https://yanghapark.com/projects/work-radar/work-radar-01-capture-board-2026-06-15.png)
+
+## 주요 기능
+
+- **Capture Board** — 들어온 신호를 아이젠하워 매트릭스로 분류하고, 직접 판단해 백로그·안건·일정으로 승격
+- **Today Timeline** — 오늘 할 일을 시간 위에 배치, Google Calendar와 양방향 동기화
+- **PR Radar · Worktree Diff** — 여러 저장소의 PR을 상태별(CI 실패·리뷰 대기·머지 가능)로 분류
+- **Jobs (Agent)** — Codex 실행마다 시간·턴 수·비용 상한과 강제 종료, 결과는 수락/거절 기록으로 남김
+- **승인 게이트** — GitHub·Notion·캘린더에 쓰는 작업은 모두 사람 승인 후 실행
 
 ## 상태
 
-**활발히 개발 중 (dogfooding).** `PLAN.md`의 Phase 0–20이 `dev`에 머지됨 —
-스켈레톤·Capture Board·Notion 승격·GitHub PR Radar·Worktree·Agent(Codex) 스파인·
-Google Calendar(read/write)·Today/Timeline/Weekly·트레이 상주·Routines·회고 등.
-레포는 Private(`64etuor/work-radar`). 작업 브랜치는 `dev`(직접 push), `main`은
-PR로만 머지한다(husky pre-push가 main 직접 push 차단).
-
-> 코드는 `src-tauri/`(Rust 백엔드)와 `src/`(Vite + React 프론트)에 있다.
-> 단계별 진행 이력과 현재 상태 요약은 `docs/HANDOFF.md`를 본다.
+**개발 중 · 직접 쓰면서 만드는 중 (dogfooding).** `PLAN.md`의 Phase 0–20이 `dev`에 머지되어 있다.
+코드는 `src-tauri/`(Rust 백엔드)와 `src/`(Vite + React 프론트)에 있고, 진행 이력은 `docs/HANDOFF.md`에 정리돼 있다.
 
 ## 스택
 
-- **Shell:** Tauri 2.x (상주 + 전역 핫키 + 경량 footprint)
-- **Backend:** Rust — tokio · sqlx(SQLite) + migrations · reqwest(Notion·Google Calendar REST) · octocrab(GitHub) · keyring · tracing
-- **Frontend:** Vite + React + TS · Tailwind v4 · shadcn/ui · cmdk(팔레트) · TanStack Query · Zustand
-- **IPC 타입안전:** tauri-specta (Rust→TS 타입 생성, `src/bindings.ts`)
-- **자동화 엔진:** Codex CLI (`codex exec`) via `tokio::process`, git worktree 격리
+- **Shell:** Tauri 2
+- **Backend:** Rust — tokio · sqlx(SQLite) · reqwest(Notion·Google Calendar) · octocrab(GitHub) · keyring
+- **Frontend:** Vite + React + TypeScript · Tailwind v4 · shadcn/ui · TanStack Query · Zustand
+- **IPC 타입 안전:** tauri-specta (Rust → TS 타입 생성)
+- **자동화:** Codex CLI, git worktree 격리 · MCP 게이트웨이
 
 ## 시작하기
 
@@ -40,7 +39,7 @@ pnpm tauri dev        # 앱 부팅(개발 모드) — 통합 동작 확인의 �
 ```
 
 > 참고: 외부 통합(Notion·GitHub·Google·Codex 등)은 전부 **선택**이고 앱 내 설정으로
-> 연결한다. 아무 통합 없이도 부팅·사용 가능하다. LICENSE는 아직 미지정(공개 배포 전
+> 연결한다. 아무 통합 없이도 부팅·사용 가능하다. LICENSE는 아직 미지정(
 > 결정 필요 — `docs/SETUP.md` §7).
 
 Rust 단위 테스트 / 린트:
